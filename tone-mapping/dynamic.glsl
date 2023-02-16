@@ -22,21 +22,8 @@
 //!STORAGE
 
 //!BUFFER TEMPORAL_MAX
-//!VAR uint L_max_1
-//!VAR uint L_max_2
-//!VAR uint L_max_3
-//!VAR uint L_max_4
-//!VAR uint L_max_5
-//!VAR uint L_max_6
-//!VAR uint L_max_7
+//!VAR uint L_max_t[32]
 //!STORAGE
-00000000
-00000000
-00000000
-00000000
-00000000
-00000000
-00000000
 
 //!HOOK OUTPUT
 //!BIND FRAME_DATA
@@ -116,42 +103,31 @@ void hook() {
 //!COMPUTE 1 1
 //!DESC metering (temporal max, average)
 
+#define len 8
+
 void hook() {
-    if (5 <
-        L_max_1 +
-        L_max_2 +
-        L_max_3 +
-        L_max_4 +
-        L_max_5 +
-        L_max_6 +
-        L_max_7
-    ) {
-        const float t_peak = 8.0 / (
-            1.0 / L_max +
-            1.0 / L_max_1 +
-            1.0 / L_max_2 +
-            1.0 / L_max_3 +
-            1.0 / L_max_4 +
-            1.0 / L_max_5 +
-            1.0 / L_max_6 +
-            1.0 / L_max_7
-        );
-        L_max_7 = L_max_6;
-        L_max_6 = L_max_5;
-        L_max_5 = L_max_4;
-        L_max_4 = L_max_3;
-        L_max_3 = L_max_2;
-        L_max_2 = L_max_1;
-        L_max_1 = L_max;
-        L_max = uint(t_peak);
+    uint sum = 0;
+    for (uint i = 0; i < len; i++) {
+        sum += L_max_t[i];
+    }
+
+    if (sum > L_sdr * (len - 1)) {
+        float den = 1.0 / L_max;
+        for (uint i = 0; i < len - 1; i++) {
+            den += 1.0 / L_max_t[i];
+        }
+        const float peak = len / den;
+
+        for (uint i = len - 1; i > 0; i--) {
+            L_max_t[i] = L_max_t[i - 1];
+        }
+        L_max_t[0] = L_max;
+
+        L_max = uint(peak);
     } else {
-        L_max_7 = L_max;
-        L_max_6 = L_max;
-        L_max_5 = L_max;
-        L_max_4 = L_max;
-        L_max_3 = L_max;
-        L_max_2 = L_max;
-        L_max_1 = L_max;
+        for (uint i = 0; i < len; i++) {
+            L_max_t[i] = L_max;
+        }
     }
 }
 
