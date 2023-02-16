@@ -1,6 +1,6 @@
 # HDR Toys
 
-Componentized Rec.2100 to Rec.709 color conversion shaders for mpv-player and libplacebo, include dynamic tone-mapping curve and uniform tone-mapping color space.
+Componentized Rec.2100 to Rec.709 conversion shader for mpv-player, featuring dynamic curves and a uniform color space.
 
 - [Comparison with other dynamic tone mappings](https://github.com/natural-harmonia-gropius/hdr-toys/blob/master/Comparisons.md)
 
@@ -132,7 +132,7 @@ This is a part of tone mapping, the screenshot below will show you how it works.
 You can set the intensity of it by `set glsl-shader-opts alpha=N`.
 
 It makes the color less chromatic when tone mapping and the lightness between colors more even.  
-And for non-perceptual conversions (e.g. hejl2015) it brings achromatically highlights.
+And for some conversions like hejl2015, it brings achromatically highlights.
 
 | without crosstalk inverse                                                                                       | `alpha=0` with heatmap                                                                                          | `alpha=0.3` with heatmap                                                                                        | `alpha=0` with hejl2015                                                                                         | `alpha=0.3` with hejl2015                                                                                       |
 | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
