@@ -42,7 +42,7 @@ void hook() {
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!SAVE BLURRED
-//!DESC metering (gaussian blur horizonal)
+//!DESC metering (spatial stabilization, horizonal)
 // Fast pixel shader gaussian blur by butterw pass1
 
 #define Offsets vec3(0.0, 1.3846153846, 3.2307692308)
@@ -62,7 +62,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND BLURRED
 //!SAVE BLURRED
-//!DESC metering (gaussian blur vertical)
+//!DESC metering (spatial stabilization, vertical)
 // Fast pixel shader gaussian blur by butterw pass2
 
 #define Offsets vec3(0.0, 1.3846153846, 3.2307692308)
@@ -84,7 +84,7 @@ vec4 hook(){
 //!BIND FRAME_DATA
 //!SAVE EMPTY
 //!COMPUTE 32 32
-//!DESC metering (min, max, sum)
+//!DESC metering (peak, bottom)
 
 void hook() {
     vec4 texelValue = texelFetch(BLURRED_raw, ivec2(gl_GlobalInvocationID.xy), 0);
@@ -101,7 +101,7 @@ void hook() {
 //!WIDTH 1
 //!HEIGHT 1
 //!COMPUTE 1 1
-//!DESC metering (temporal max, average)
+//!DESC metering (temporal stabilization, 8 frames)
 
 #define len 8
 
@@ -134,7 +134,7 @@ void hook() {
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!BIND FRAME_DATA
-//!DESC tone mapping (hable2, dynamic)
+//!DESC tone mapping (hable2, dynamic, hybrid)
 
 float toeLength = 0.0;
 float toeStrength = 0.5;
