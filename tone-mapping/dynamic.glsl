@@ -532,8 +532,9 @@ vec3 tone_mapping_hybrid(vec3 color) {
 void calc_params() {
     float L_min_ev = log2(L_min / L_sdr);
     float L_max_ev = log2(L_max / L_sdr);
+    float L_hdr_ev = log2(L_hdr / L_sdr);
 
-    shoulderLength = 1.0 - 1.0 / L_max_ev;
+    shoulderLength = L_max_ev / L_hdr_ev;
     shoulderStrength = L_max_ev;
     toeLength = L_max_ev / CONTRAST_sdr;
     toeStrength = 0.5 + 0.5 * (L_min / toeLength);
