@@ -494,7 +494,8 @@ vec3 tone_mapping_hybrid(vec3 color) {
     lum = Jzazbz_to_JzCzhz(lum);
 
     float norm = max(max(color.r, color.g), color.b);
-    sat = color * curve(norm) / norm;
+    float norm_max = min(norm, L_max / L_sdr);
+    sat = color * curve(norm) / norm_max;
     sat = RGB_to_Jzazbz(sat, L_sdr);
     sat = Jzazbz_to_JzCzhz(sat);
 
