@@ -88,9 +88,7 @@ vec4 hook(){
 
 void hook() {
     vec4 texelValue = texelFetch(BLURRED_raw, ivec2(gl_GlobalInvocationID.xy), 0);
-    float lum = dot(texelValue.rgb, vec3(0.2627, 0.6780, 0.0593));
-    float norm = max(max(texelValue.r, texelValue.g), texelValue.b);
-    float L = L_sdr * max(lum, norm);
+    float L = L_sdr * max(max(texelValue.r, texelValue.g), texelValue.b);
 
     atomicMin(L_min, uint(L));
     atomicMax(L_max, uint(L));
@@ -496,8 +494,7 @@ vec3 tone_mapping_hybrid(vec3 color) {
     lum = Jzazbz_to_JzCzhz(lum);
 
     float norm = max(max(color.r, color.g), color.b);
-    float norm_max = min(norm, L_max / L_sdr);
-    sat = color * curve(norm) / norm_max;
+    sat = color * curve(norm) / norm;
     sat = RGB_to_Jzazbz(sat, L_sdr);
     sat = Jzazbz_to_JzCzhz(sat);
 
