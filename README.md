@@ -1,6 +1,7 @@
 # HDR Toys
 
-Componentized Rec.2100 to Rec.709 conversion shader for mpv-player, featuring dynamic curves and a uniform color space.
+Componentized Rec.2100 to Rec.709 conversion shader for mpv-player.  
+Featuring dynamic curves and a uniform color space.
 
 - [Comparison with other dynamic tone mappings](https://github.com/natural-harmonia-gropius/hdr-toys/blob/master/Comparisons.md)
 
@@ -9,7 +10,7 @@ Componentized Rec.2100 to Rec.709 conversion shader for mpv-player, featuring dy
 1. Download [hdr-toys.zip](https://github.com/natural-harmonia-gropius/hdr-toys/archive/refs/heads/master.zip)
 2. Extract it and put it in `~~/shaders`
 3. Append the following profile to your `mpv.conf`
-4. (Recommended) Download [hdr-toys-helper.lua](https://github.com/natural-harmonia-gropius/mpv-config/blob/master/portable_config/scripts/hdr-toys-helper.lua) and put it in `~~/scripts`
+4. **Recommended** Download [hdr-toys-helper.lua](https://github.com/natural-harmonia-gropius/mpv-config/blob/master/portable_config/scripts/hdr-toys-helper.lua) and put it in `~~/scripts`
 
 ```ini
 vo=gpu-next
@@ -109,11 +110,12 @@ Typical representation of static and dynamic curves applied to the same color sp
 
 - SDR peak defaults to 203nit.  
   You can set it manually with `set glsl-shader-opts L_sdr=N`  
-  In some grading workflows it is 100nit, if so you'll get a dim result, unfortunately you have to guess the value and set it manually.
+  In some grading workflows it is 100nit or 120nit, if so you'll get a dim result.  
+  unfortunately you have to guess the value and set it manually.
 
-- That the BT.2390 EETF designed for display transform,  
-  To get the desired result, you need to set reference white to your monitor's peak white by `set glsl-shader-opts L_sdr=N`.  
-  To adapt the black point, you need to set the contrast to your monitor's contrast by `set glsl-shader-opts CONTRAST_sdr=N`.
+- BT.2390 EETF designed for display transform, to get desired result, you need to  
+  set reference white to your monitor's peak by `set glsl-shader-opts L_sdr=N`  
+  set the contrast to your monitor's by `set glsl-shader-opts CONTRAST_sdr=N`
 
 ### Chroma correction
 
@@ -154,4 +156,5 @@ You can set the intensity of compress by `set glsl-shader-opts select=N`.
 | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | ![image](https://user-images.githubusercontent.com/50797982/218429032-7599602d-07db-47b9-8c02-8e654998129c.png) | ![image](https://user-images.githubusercontent.com/50797982/218429058-6ae993a9-c16b-4895-8c75-9e565fd44f6d.png) | ![image](https://user-images.githubusercontent.com/50797982/218429078-d0dba612-5794-400e-9723-d4e9a23fbeed.png) | ![image](https://user-images.githubusercontent.com/50797982/218429113-adcf4d2d-c6de-4fb4-8a72-98c0bf1efb10.png) |
 
-- The result of `matrix` is different from mpv --vo=gpu-next, this is due to the black point of BT.1886, I personally consider that the black point in color conversion is always 0.
+- The result of `matrix` is different from `mpv --vo=gpu-next`, which is due to the black point of BT.1886.  
+  I consider that the black point should be set to zero for transcoding and conversion.
