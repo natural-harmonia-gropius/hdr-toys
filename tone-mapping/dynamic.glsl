@@ -235,14 +235,12 @@ float eval_derivative_linear_gamma(float m, float b, float g, float x) {
 
 // CreateCurve
 float curve(float x) {
-    calc_direct_params_from_user();
-
     // normalize params to 1.0 range
     float invW = 1.0 / W;
-    x0 /= W;
-    x1 /= W;
-    overshootX /= W;
-    W = 1.0;
+    float x0 = x0 / W;
+    float x1 = x1 / W;
+    float overshootX = overshootX / W;
+    float W = 1.0;
 
     // Precompute information for all three segments (mid, toe, shoulder)
     const vec2  tmp = as_slope_intercept(x0, x1, y0, y1);
@@ -273,9 +271,9 @@ float curve(float x) {
     const float toeM = eval_derivative_linear_gamma(m, b, g, x0);
     const float shoulderM = eval_derivative_linear_gamma(m, b, g, x1);
 
-    y0 = max(pow(y0, g), 1e-6);
-    y1 = max(pow(y1, g), 1e-6);
-    overshootY = pow(1.0 + overshootY, g) - 1.0;
+    float y0 = max(pow(y0, g), 1e-6);
+    float y1 = max(pow(y1, g), 1e-6);
+    float overshootY = pow(1.0 + overshootY, g) - 1.0;
 
     const vec2  toeAB   = solve_AB(x0, y0, m);
     float   toeOffsetX  = 0.0,
@@ -519,6 +517,7 @@ void calc_user_params_from_metered() {
 vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
     calc_user_params_from_metered();
+    calc_direct_params_from_user();
     color.rgb = tone_mapping_hybrid(color.rgb);
     return color;
 }
