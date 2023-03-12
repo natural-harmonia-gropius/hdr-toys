@@ -1,5 +1,4 @@
 // Simple conversion from BT.2020 to BT.709 based on linear matrix transformation
-// RGB_rec2020 => CIE_XYZ => RGB_rec709
 
 //!HOOK OUTPUT
 //!BIND HOOKED
