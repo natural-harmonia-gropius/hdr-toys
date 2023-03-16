@@ -16,13 +16,19 @@
 //!MAXIMUM 1000000
 1000.0
 
+//!PARAM temporal_stable_frames
+//!TYPE uint
+//!MINIMUM 0
+//!MAXIMUM 120
+8
+
 //!BUFFER FRAME_DATA
 //!VAR uint L_min
 //!VAR uint L_max
 //!STORAGE
 
 //!BUFFER TEMPORAL_MAX
-//!VAR uint L_max_t[32]
+//!VAR uint L_max_t[128]
 //!STORAGE
 
 //!HOOK OUTPUT
@@ -101,31 +107,30 @@ void hook() {
 //!WIDTH 1
 //!HEIGHT 1
 //!COMPUTE 1 1
-//!DESC metering (temporal stabilization, 8 frames)
-
-#define len 8
+//!WHEN temporal_stable_frames
+//!DESC metering (temporal stabilization)
 
 void hook() {
     uint sum = 0;
-    for (uint i = 0; i < len; i++) {
+    for (uint i = 0; i < temporal_stable_frames; i++) {
         sum += L_max_t[i];
     }
 
-    if (sum > L_sdr * (len - 1)) {
+    if (sum > L_sdr * (temporal_stable_frames - 1)) {
         float den = 1.0 / L_max;
-        for (uint i = 0; i < len - 1; i++) {
+        for (uint i = 0; i < temporal_stable_frames - 1; i++) {
             den += 1.0 / L_max_t[i];
         }
-        const float peak = len / den;
+        const float peak = temporal_stable_frames / den;
 
-        for (uint i = len - 1; i > 0; i--) {
+        for (uint i = temporal_stable_frames - 1; i > 0; i--) {
             L_max_t[i] = L_max_t[i - 1];
         }
         L_max_t[0] = L_max;
 
         L_max = uint(peak);
     } else {
-        for (uint i = 0; i < len; i++) {
+        for (uint i = 0; i < temporal_stable_frames; i++) {
             L_max_t[i] = L_max;
         }
     }
