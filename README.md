@@ -15,22 +15,33 @@ Featuring dynamic curves and a uniform color space.
 ```ini
 vo=gpu-next
 
-[bt.2100]
-profile-cond=get("video-params/sig-peak") > 1
+tone-mapping=clip
+
+[bt.2100-pq]
+profile-cond=get("video-params/primaries") == "bt.2020" and get("video-params/gamma") == "pq"
 profile-restore=copy
 target-trc=pq
 target-prim=bt.2020
 glsl-shader=~~/shaders/hdr-toys/utils/clip_both.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/pq_to_l.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/l_to_linear.glsl
-glsl-shader=~~/shaders/hdr-toys/utils/crosstalk.glsl
 glsl-shader=~~/shaders/hdr-toys/utils/chroma_correction.glsl
 glsl-shader=~~/shaders/hdr-toys/tone-mapping/dynamic.glsl
-glsl-shader=~~/shaders/hdr-toys/utils/crosstalk_inverse.glsl
 glsl-shader=~~/shaders/hdr-toys/gamut-mapping/compress.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/linear_to_bt1886.glsl
-glsl-shader-opts-add=crosstalk/alpha=0
-glsl-shader-opts-add=crosstalk_inverse/alpha=0
+
+[bt.2100-hlg]
+profile-cond=get("video-params/primaries") == "bt.2020" and get("video-params/gamma") == "hlg"
+profile-restore=copy
+target-trc=hlg
+target-prim=bt.2020
+glsl-shader=~~/shaders/hdr-toys/utils/clip_both.glsl
+glsl-shader=~~/shaders/hdr-toys/transfer-function/hlg_to_l.glsl
+glsl-shader=~~/shaders/hdr-toys/transfer-function/l_to_linear.glsl
+glsl-shader=~~/shaders/hdr-toys/utils/chroma_correction.glsl
+glsl-shader=~~/shaders/hdr-toys/tone-mapping/dynamic.glsl
+glsl-shader=~~/shaders/hdr-toys/gamut-mapping/compress.glsl
+glsl-shader=~~/shaders/hdr-toys/transfer-function/linear_to_bt1886.glsl
 ```
 
 - `vo=gpu-next` is required, the minimum version of mpv required is v0.35.0.
@@ -40,8 +51,9 @@ Also you can use it to get a better experience to play BT.2020 content.
 
 ```ini
 [bt.2020]
-profile-cond=get("video-params/primaries") == "bt.2020" and get("video-params/sig-peak") == 1
+profile-cond=get("video-params/primaries") == "bt.2020" and get("video-params/gamma") == "bt.1886"
 profile-restore=copy
+target-trc=bt.1886
 target-prim=bt.2020
 glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886_to_linear.glsl
 glsl-shader=~~/shaders/hdr-toys/gamut-mapping/compress.glsl
