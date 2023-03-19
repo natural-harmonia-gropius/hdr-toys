@@ -110,30 +110,62 @@ void hook() {
 //!WHEN temporal_stable_frames
 //!DESC metering (temporal stabilization)
 
-void hook() {
+bool sence_changed() {
+    // hard transition, black frame insert
+    if (L_max_t[0] < 1) {
+        return true;
+    }
+
+    // hard transition, 1 stop tolerance
+    float prev_ev = log2(L_max_t[0] / L_sdr);
+    float curr_ev = log2(L_max / L_sdr);
+    if (abs(prev_ev - curr_ev) >= 1.0) {
+        return true;
+    }
+
+    // soft transition, black frame fade in
     uint sum = 0;
     for (uint i = 0; i < temporal_stable_frames; i++) {
         sum += L_max_t[i];
     }
-
-    if (sum > L_sdr * (temporal_stable_frames - 1)) {
-        float den = 1.0 / L_max;
-        for (uint i = 0; i < temporal_stable_frames - 1; i++) {
-            den += 1.0 / L_max_t[i];
-        }
-        const float peak = temporal_stable_frames / den;
-
-        for (uint i = temporal_stable_frames - 1; i > 0; i--) {
-            L_max_t[i] = L_max_t[i - 1];
-        }
-        L_max_t[0] = L_max;
-
-        L_max = uint(peak);
-    } else {
-        for (uint i = 0; i < temporal_stable_frames; i++) {
-            L_max_t[i] = L_max;
-        }
+    if (L_sdr * (temporal_stable_frames - 1) > sum) {
+        return true;
     }
+
+    return false;
+}
+
+uint peak_harmonic_mean() {
+    float den = 1.0 / L_max;
+    for (uint i = 0; i < temporal_stable_frames - 1; i++) {
+        den += 1.0 / L_max_t[i];
+    }
+    float peak = temporal_stable_frames / den;
+    return uint(peak);
+}
+
+void peak_add() {
+    for (uint i = temporal_stable_frames - 1; i > 0; i--) {
+        L_max_t[i] = L_max_t[i - 1];
+    }
+    L_max_t[0] = L_max;
+}
+
+void peak_set_all() {
+    for (uint i = 0; i < temporal_stable_frames; i++) {
+        L_max_t[i] = L_max;
+    }
+}
+
+void hook() {
+    if (sence_changed()) {
+        peak_set_all();
+        return;
+    }
+
+    uint peak = peak_harmonic_mean();
+    peak_add();
+    L_max = peak;
 }
 
 //!HOOK OUTPUT
