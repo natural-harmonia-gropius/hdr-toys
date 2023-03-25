@@ -49,40 +49,52 @@ void hook() {
 //!BIND HOOKED
 //!SAVE BLURRED
 //!DESC metering (spatial stabilization, horizonal)
-// Fast pixel shader gaussian blur by butterw pass1
 
-#define Offsets vec3(0.0, 1.3846153846, 3.2307692308)
-#define K       vec3(0.2270270270, 0.3162162162, 0.0702702703)
+#define offset vec3(0.0000000000, 1.3846153846, 3.2307692308)
+#define weight vec3(0.2270270270, 0.3162162162, 0.0702702703)
 
 vec4 hook(){
-    vec4 c0 = HOOKED_tex(HOOKED_pos) * K[0];
-    uint i = 1;
-    c0 += HOOKED_tex(HOOKED_pos + HOOKED_pt * vec2(Offsets[i], 0)) * K[i];
-    c0 += HOOKED_tex(HOOKED_pos - HOOKED_pt * vec2(Offsets[i], 0)) * K[i];
+    uint i;
+    vec4 c;
+
+    i = 0;
+    c = HOOKED_texOff(offset[i]) * weight[i];
+
+    i = 1;
+    c += HOOKED_texOff(vec2(offset[i], 0)) * weight[i];
+    c += HOOKED_texOff(-vec2(offset[i], 0)) * weight[i];
+
     i = 2;
-    c0 += HOOKED_tex(HOOKED_pos + HOOKED_pt * vec2(Offsets[i], 0)) * K[i];
-    c0 += HOOKED_tex(HOOKED_pos - HOOKED_pt * vec2(Offsets[i], 0)) * K[i];
-    return c0;
+    c += HOOKED_texOff(vec2(offset[i], 0)) * weight[i];
+    c += HOOKED_texOff(-vec2(offset[i], 0)) * weight[i];
+
+    return c;
 }
 
 //!HOOK OUTPUT
 //!BIND BLURRED
 //!SAVE BLURRED
 //!DESC metering (spatial stabilization, vertical)
-// Fast pixel shader gaussian blur by butterw pass2
 
-#define Offsets vec3(0.0, 1.3846153846, 3.2307692308)
-#define K       vec3(0.2270270270, 0.3162162162, 0.0702702703)
+#define offset vec3(0.0000000000, 1.3846153846, 3.2307692308)
+#define weight vec3(0.2270270270, 0.3162162162, 0.0702702703)
 
 vec4 hook(){
-    vec4 c0 = BLURRED_tex(BLURRED_pos) * K[0];
-    uint i = 1;
-    c0 += BLURRED_tex(BLURRED_pos + BLURRED_pt * vec2(0, Offsets[i])) * K[i];
-    c0 += BLURRED_tex(BLURRED_pos - BLURRED_pt * vec2(0, Offsets[i])) * K[i];
+    uint i;
+    vec4 c;
+
+    i = 0;
+    c = BLURRED_texOff(offset[i]) * weight[i];
+
+    i = 1;
+    c += BLURRED_texOff(vec2(0, offset[i])) * weight[i];
+    c += BLURRED_texOff(-vec2(0, offset[i])) * weight[i];
+
     i = 2;
-    c0 += BLURRED_tex(BLURRED_pos + BLURRED_pt * vec2(Offsets[i], 0)) * K[i];
-    c0 += BLURRED_tex(BLURRED_pos - BLURRED_pt * vec2(Offsets[i], 0)) * K[i];
-    return c0;
+    c += BLURRED_texOff(vec2(0, offset[i])) * weight[i];
+    c += BLURRED_texOff(-vec2(0, offset[i])) * weight[i];
+
+    return c;
 }
 
 //!HOOK OUTPUT
