@@ -148,9 +148,9 @@ bool sence_changed() {
 }
 
 uint peak_harmonic_mean() {
-    float den = 1.0 / L_max;
+    float den = 1.0 / max(L_max, 1e-6);
     for (uint i = 0; i < temporal_stable_frames - 1; i++) {
-        den += 1.0 / L_max_t[i];
+        den += 1.0 / max(L_max_t[i], 1e-6);
     }
     float peak = temporal_stable_frames / den;
     return uint(peak);
