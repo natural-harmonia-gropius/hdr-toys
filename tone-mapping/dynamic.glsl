@@ -22,7 +22,7 @@
 //!MAXIMUM 120
 8
 
-//!BUFFER FRAME_DATA
+//!BUFFER MINMAX
 //!VAR uint L_min
 //!VAR uint L_max
 //!STORAGE
@@ -32,7 +32,7 @@
 //!STORAGE
 
 //!HOOK OUTPUT
-//!BIND FRAME_DATA
+//!BIND MINMAX
 //!BIND TEMPORAL_MAX
 //!SAVE EMPTY
 //!WIDTH 1
@@ -99,10 +99,10 @@ vec4 hook(){
 
 //!HOOK OUTPUT
 //!BIND BLURRED
-//!BIND FRAME_DATA
+//!BIND MINMAX
 //!SAVE EMPTY
 //!COMPUTE 32 32
-//!DESC metering (peak, bottom)
+//!DESC metering (min, max)
 
 void hook() {
     vec4 texelValue = texelFetch(BLURRED_raw, ivec2(gl_GlobalInvocationID.xy), 0);
@@ -113,7 +113,7 @@ void hook() {
 }
 
 //!HOOK OUTPUT
-//!BIND FRAME_DATA
+//!BIND MINMAX
 //!BIND TEMPORAL_MAX
 //!SAVE EMPTY
 //!WIDTH 1
@@ -182,7 +182,7 @@ void hook() {
 
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!BIND FRAME_DATA
+//!BIND MINMAX
 //!DESC tone mapping (hable2, dynamic, hybrid)
 
 float toeLength = 0.0;
