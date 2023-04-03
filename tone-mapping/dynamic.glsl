@@ -136,13 +136,13 @@ bool sence_changed() {
     }
 
     // soft transition, black frame fade in
-    uint sum = 0;
-    for (uint i = 0; i < temporal_stable_frames; i++) {
-        sum += L_max_t[i];
-    }
-    if (L_sdr * (temporal_stable_frames - 1) > sum) {
-        return true;
-    }
+    // uint sum = 0;
+    // for (uint i = 0; i < temporal_stable_frames; i++) {
+    //     sum += L_max_t[i];
+    // }
+    // if (L_sdr * (temporal_stable_frames - 1) > sum) {
+    //     return true;
+    // }
 
     return false;
 }
