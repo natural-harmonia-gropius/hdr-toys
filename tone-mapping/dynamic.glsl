@@ -48,7 +48,7 @@ void hook() {
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!SAVE BLURRED
-//!DESC metering (spatial stabilization, horizonal)
+//!DESC metering (spatial stabilization, vertical)
 
 #define offset vec3(0.0000000000, 1.3846153846, 3.2307692308)
 #define weight vec3(0.2270270270, 0.3162162162, 0.0702702703)
@@ -74,7 +74,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND BLURRED
 //!SAVE BLURRED
-//!DESC metering (spatial stabilization, vertical)
+//!DESC metering (spatial stabilization, horizonal)
 
 #define offset vec3(0.0000000000, 1.3846153846, 3.2307692308)
 #define weight vec3(0.2270270270, 0.3162162162, 0.0702702703)
