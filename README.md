@@ -15,8 +15,6 @@ Featuring dynamic curves and a uniform color space.
 ```ini
 vo=gpu-next
 
-tone-mapping=clip
-
 [bt.2100-pq]
 profile-cond=get("video-params/primaries") == "bt.2020" and get("video-params/gamma") == "pq"
 profile-restore=copy
