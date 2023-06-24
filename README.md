@@ -3,14 +3,13 @@
 Componentized Rec.2100 to Rec.709 conversion shader for mpv-player.  
 Featuring dynamic curves and a uniform color space.
 
-- [Comparison with other dynamic tone mappings](https://github.com/natural-harmonia-gropius/hdr-toys/blob/master/Comparisons.md)
+~~[Comparison with other dynamic tone mappings](https://github.com/natural-harmonia-gropius/hdr-toys/blob/master/Comparisons.md)~~
 
-## How to use?
+## Getting started
 
-1. Download [hdr-toys.zip](https://github.com/natural-harmonia-gropius/hdr-toys/archive/refs/heads/master.zip)
-2. Extract it and put it in `~~/shaders`
+1. Download [hdr-toys.zip](https://github.com/natural-harmonia-gropius/hdr-toys/archive/refs/heads/master.zip), extract it and put it in `~~/shaders`
+2. Download [hdr-toys-helper.lua](https://github.com/natural-harmonia-gropius/mpv-config/blob/master/portable_config/scripts/hdr-toys-helper.lua) and put it in `~~/scripts`
 3. Append the following profile to your `mpv.conf`
-4. **Recommended** Download [hdr-toys-helper.lua](https://github.com/natural-harmonia-gropius/mpv-config/blob/master/portable_config/scripts/hdr-toys-helper.lua) and put it in `~~/scripts`
 
 ```ini
 vo=gpu-next
@@ -39,15 +38,8 @@ glsl-shader=~~/shaders/hdr-toys/transfer-function/l_to_linear.glsl
 glsl-shader=~~/shaders/hdr-toys/utils/chroma_correction.glsl
 glsl-shader=~~/shaders/hdr-toys/tone-mapping/dynamic.glsl
 glsl-shader=~~/shaders/hdr-toys/gamut-mapping/compress.glsl
-glsl-shader=~~/shaders/hdr-toys/transfer-function/linear_to_bt1886.glsl
-```
+glsl-shader=~~/shaders/hdr-toys/transfer-function/linear_to_bt1886.glsl、
 
-- `vo=gpu-next` is required, the minimum version of mpv required is v0.35.0.
-- Dolby Vision Profile 5 is not tagged as HDR by mpv, so it wouldn't activate this auto-profile.
-
-Also you can use it to get a better experience to play BT.2020 content.
-
-```ini
 [bt.2020]
 profile-cond=get("video-params/primaries") == "bt.2020" and get("video-params/gamma") == "bt.1886"
 profile-restore=copy
@@ -58,20 +50,22 @@ glsl-shader=~~/shaders/hdr-toys/gamut-mapping/compress.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/linear_to_bt1886.glsl
 ```
 
-## What are these? What are they for?
+- `vo=gpu-next` is required, the minimum version of mpv required is v0.35.0.
+- Don't set target-peak, icc-profile... and make sure there are no built-in tone map, gamut map, 3DLUT... in Frame Timings page.
+- Dolby Vision Profile 5 is not tagged as HDR by mpv, so it wouldn't activate this auto-profile.
 
-### Workflow
-
-```mermaid
-graph TD
-    A[BT.2100-pq, BT.2100-hlg, HDR10+, Dolby Vision, etc.] -->|mpv --target-trc=pq --target-prim=bt.2020| B(BT.2100-pq)
-    B -->|linearize and normalize| C(BT.2020 linear)
-    C -->|tone mapping| D(BT.2020 linear - tone mapped)
-    D -->|gamut mapping| E(BT.709 linear)
-    E -->|bt1886| F[BT.709]
-```
+## Detailed information
 
 ### Tone mapping
+
+- HDR peak defaults to 1000nit, should be the max luminance of video.  
+  [hdr-toys-helper.lua](https://github.com/natural-harmonia-gropius/mpv-config/blob/master/portable_config/scripts/hdr-toys-helper.lua) can get it automatically from the mpv's video-out-params/sig-peak.  
+  You can set it manually with`set glsl-shader-opts L_hdr=N`
+
+- SDR peak defaults to 203nit, should be the reference white of video.  
+  In many videos it is 100nit and if so you'll get a dim result.  
+  Unfortunately you have to guess the value and set it manually.  
+  You can set it manually with `set glsl-shader-opts L_sdr=N`
 
 You can change the tone mapping operator by replacing this line.  
 For example, use bt2446c instead of dynamic.
@@ -81,7 +75,8 @@ For example, use bt2446c instead of dynamic.
 + glsl-shader=~~/shaders/hdr-toys/tone-mapping/bt2446c.glsl
 ```
 
-This table lists the features of operators.
+This table lists the features of operators.  
+Operators below the blank row are for testing and should not be used for watching.
 
 | Operator | Applied to | Conversion peak |
 | -------- | ---------- | --------------- |
@@ -112,21 +107,6 @@ Typical representation of static and dynamic curves applied to the same color sp
 | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | ![image](https://user-images.githubusercontent.com/50797982/216832251-abf05c55-bc97-48e4-97c8-a9b06240f235.png) | ![image](https://user-images.githubusercontent.com/50797982/216832261-93d7dcd4-7588-4086-a4dd-fb48d29c0ade.png) | ![image](https://user-images.githubusercontent.com/50797982/216901529-fa175d65-1fc8-4efe-a5e3-df7d63b4c800.png) | ![image](https://user-images.githubusercontent.com/50797982/216901584-93ffdbae-4f70-4b81-a978-d0fe69e06a39.png) | ![image](https://user-images.githubusercontent.com/50797982/216832312-9a3e1a9f-2dd0-4b28-abd0-b09b5aa45399.png) | ![image](https://user-images.githubusercontent.com/50797982/216832291-fbee6755-b028-4ede-a330-bccf0904a5b3.png) |
 
-- Operators below the blank row are for testing and should not be used for watching.
-
-- HDR peak defaults to 1000nit.  
-  You can set it manually with `set glsl-shader-opts L_hdr=N`  
-  [hdr-toys-helper.lua](https://github.com/natural-harmonia-gropius/mpv-config/blob/master/portable_config/scripts/hdr-toys-helper.lua) can get it automatically from the mpv's video-out-params/sig-peak.
-
-- SDR peak defaults to 203nit.  
-  You can set it manually with `set glsl-shader-opts L_sdr=N`  
-  In some grading workflows it is 100nit or 120nit, if so you'll get a dim result.  
-  unfortunately you have to guess the value and set it manually.
-
-- BT.2390 EETF designed for display transform, to get desired result, you need to  
-  set reference white to your monitor's peak by `set glsl-shader-opts L_sdr=N`  
-  set the contrast to your monitor's by `set glsl-shader-opts CONTRAST_sdr=N`
-
 ### Chroma correction
 
 This is a part of tone mapping, also known as "highlights desaturate".  
@@ -140,6 +120,7 @@ In real world, the brighter the color, the less saturated it becomes, and eventu
 
 ### Crosstalk
 
+**Currently unused**  
 This is a part of tone mapping, the screenshot below will show you how it works.  
 You can set the intensity of it by `set glsl-shader-opts alpha=N`.
 
