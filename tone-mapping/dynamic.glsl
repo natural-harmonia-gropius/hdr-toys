@@ -96,8 +96,8 @@ void hook() {
     vec4 texelValue = texelFetch(BLURRED_raw, ivec2(gl_GlobalInvocationID.xy), 0);
     float L = L_sdr * max(max(texelValue.r, texelValue.g), texelValue.b);
 
-    atomicMin(L_min, uint(L));
-    atomicMax(L_max, uint(L));
+    atomicMin(L_min, uint(L + 0.5));
+    atomicMax(L_max, uint(L + 0.5));
 }
 
 //!HOOK OUTPUT
