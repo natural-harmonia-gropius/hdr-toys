@@ -48,53 +48,41 @@ void hook() {
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!SAVE BLURRED
-//!DESC metering (spatial stabilization, vertical)
-
-#define offset vec3(0.0000000000, 1.3846153846, 3.2307692308)
-#define weight vec3(0.2270270270, 0.3162162162, 0.0702702703)
-
-vec4 hook(){
-    uint i;
-    vec4 c;
-
-    i = 0;
-    c = HOOKED_texOff(offset[i]) * weight[i];
-
-    i = 1;
-    c += HOOKED_texOff(vec2(offset[i], 0)) * weight[i];
-    c += HOOKED_texOff(-vec2(offset[i], 0)) * weight[i];
-
-    i = 2;
-    c += HOOKED_texOff(vec2(offset[i], 0)) * weight[i];
-    c += HOOKED_texOff(-vec2(offset[i], 0)) * weight[i];
-
-    return c;
-}
-
-//!HOOK OUTPUT
-//!BIND BLURRED
-//!SAVE BLURRED
 //!DESC metering (spatial stabilization, horizonal)
 
 #define offset vec3(0.0000000000, 1.3846153846, 3.2307692308)
 #define weight vec3(0.2270270270, 0.3162162162, 0.0702702703)
 
 vec4 hook(){
-    uint i;
-    vec4 c;
+    uint i = 0;
+    vec4 c = HOOKED_texOff(offset[i]) * weight[i];
 
-    i = 0;
-    c = BLURRED_texOff(offset[i]) * weight[i];
+    for (i = 1; i < 3; i++) {
+        c += HOOKED_texOff( vec2(offset[i], 0.0)) * weight[i];
+        c += HOOKED_texOff(-vec2(offset[i], 0.0)) * weight[i];
+    }
 
-    i = 1;
-    c += BLURRED_texOff(vec2(0, offset[i])) * weight[i];
-    c += BLURRED_texOff(-vec2(0, offset[i])) * weight[i];
+    return vec4(c.rgb, 1.0);
+}
 
-    i = 2;
-    c += BLURRED_texOff(vec2(0, offset[i])) * weight[i];
-    c += BLURRED_texOff(-vec2(0, offset[i])) * weight[i];
+//!HOOK OUTPUT
+//!BIND BLURRED
+//!SAVE BLURRED
+//!DESC metering (spatial stabilization, vertical)
 
-    return c;
+#define offset vec3(0.0000000000, 1.3846153846, 3.2307692308)
+#define weight vec3(0.2270270270, 0.3162162162, 0.0702702703)
+
+vec4 hook(){
+    uint i = 0;
+    vec4 c = BLURRED_texOff(offset[i]) * weight[i];
+
+    for (i = 1; i < 3; i++) {
+        c += BLURRED_texOff( vec2(0.0, offset[i])) * weight[i];
+        c += BLURRED_texOff(-vec2(0.0, offset[i])) * weight[i];
+    }
+
+    return vec4(c.rgb, 1.0);
 }
 
 //!HOOK OUTPUT
