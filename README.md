@@ -51,8 +51,11 @@ glsl-shader=~~/shaders/hdr-toys/transfer-function/linear_to_bt1886.glsl
 ```
 
 - `vo=gpu-next` is required, the minimum version of mpv required is v0.35.0.
-- Don't set target-peak, icc-profile... and make sure there are no built-in tone map, gamut map, 3DLUT... in Frame Timings page.
 - Dolby Vision Profile 5 is not tagged as HDR by mpv, so it wouldn't activate this auto-profile.
+- Don't set target-peak, icc-profile...  
+  Make sure there are no built-in tone map, gamut map, 3DLUT... in "Frame Timings" page.
+- If you are using a BT.2020 display, remove the [bt.2020] profile and all gamut-mapping lines.  
+  And for a P3 display, replace all `gamut-mapping/*` with `gamut-mapping/matrix_p3.glsl`.
 
 ## Detailed information
 
