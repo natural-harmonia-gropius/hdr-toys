@@ -24,17 +24,27 @@ const float c = 0.0593; // a + b + c = 1
 const float d = 1.8814; // 2 * (a + b)
 const float e = 1.4747; // 2 * (1 - a)
 
-vec3 RGB_to_YCbCr(float R, float G, float B) {
+vec3 RGB_to_YCbCr(vec3 RGB) {
+    float R = RGB.r;
+    float G = RGB.g;
+    float B = RGB.b;
+
     const float Y  = a * R + b * G + c * B;
     const float Cb = (B - Y) / d;
     const float Cr = (R - Y) / e;
+
     return vec3(Y, Cb, Cr);
 }
 
-vec3 YCbCr_to_RGB(float Y, float Cb, float Cr) {
+vec3 YCbCr_to_RGB(vec3 YCbCr) {
+    float Y  = YCbCr.x;
+    float Cb = YCbCr.y;
+    float Cr = YCbCr.z;
+
     const float R = Y + e * Cr;
     const float G = Y - (a * e / b) * Cr - (c * d / b) * Cb;
     const float B = Y + d * Cb;
+
     return vec3(R, G, B);
 }
 
@@ -78,8 +88,8 @@ vec3 tone_mapping(vec3 YCbCr) {
 
 vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
-    color.rgb = RGB_to_YCbCr(color.r, color.g, color.b);
+    color.rgb = RGB_to_YCbCr(color.rgb);
     color.rgb = tone_mapping(color.rgb);
-    color.rgb = YCbCr_to_RGB(color.r, color.g, color.b);
+    color.rgb = YCbCr_to_RGB(color.rgb);
     return color;
 }

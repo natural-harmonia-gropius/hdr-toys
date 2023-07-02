@@ -81,75 +81,73 @@ float ST2084_to_Y(float N) {
     return L * pq_C;
 }
 
-vec3 RGB_to_XYZ(float R, float G, float B) {
+vec3 RGB_to_XYZ(vec3 RGB) {
     mat3 M = mat3(
         0.6370, 0.1446, 0.1689,
         0.2627, 0.6780, 0.0593,
         0.0000, 0.0281, 1.0610);
-    return vec3(R, G, B) * M;
+    return RGB * M;
 }
 
-vec3 XYZ_to_RGB(float X, float Y, float Z) {
+vec3 XYZ_to_RGB(vec3 XYZ) {
     mat3 M = mat3(
          1.7167, -0.3557, -0.2534,
         -0.6667,  1.6165,  0.0158,
          0.0176, -0.0428,  0.9421);
-    return vec3(X, Y, Z) * M;
+    return XYZ * M;
 }
 
-vec3 XYZ_to_LMS(float X, float Y, float Z) {
+vec3 XYZ_to_LMS(vec3 XYZ) {
     mat3 M = mat3(
          0.3592, 0.6976, -0.0358,
         -0.1922, 1.1004,  0.0755,
          0.0070, 0.0749,  0.8434);
-    return vec3(X, Y, Z) * M;
+    return XYZ * M;
 }
 
-vec3 LMS_to_XYZ(float L, float M, float S) {
-    mat3 MM = mat3(
+vec3 LMS_to_XYZ(vec3 LMS) {
+    mat3 M = mat3(
          2.070180056695613509600, -1.326456876103021025500,  0.206616006847855170810,
          0.364988250032657479740,  0.680467362852235141020, -0.045421753075853231409,
         -0.049595542238932107896, -0.049421161186757487412,  1.187995941732803439400);
-    return vec3(L, M, S) * MM;
+    return LMS * M;
 }
 
-vec3 LMS_to_ICtCp(float L, float M, float S) {
-    vec3 VV = vec3(L, M, S);
-    VV.r = Y_to_ST2084(VV.r);
-    VV.g = Y_to_ST2084(VV.g);
-    VV.b = Y_to_ST2084(VV.b);
-    mat3 MM = mat3(
+vec3 LMS_to_ICtCp(vec3 LMS) {
+    LMS.x = Y_to_ST2084(LMS.x);
+    LMS.y = Y_to_ST2084(LMS.y);
+    LMS.z = Y_to_ST2084(LMS.z);
+    mat3 M = mat3(
          2048,   2048,    0,
          6610, -13613, 7003,
         17933, -17390, -543) / 4096;
-    return VV * MM;
+    return LMS * M;
 }
 
-vec3 ICtCp_to_LMS(float I, float Ct, float Cp) {
-    vec3 VV = vec3(I, Ct, Cp);
-    mat3 MM = mat3(
+vec3 ICtCp_to_LMS(vec3 ICtCp) {
+    mat3 M = mat3(
         0.99998889656284013833,  0.00860505014728705821,  0.11103437159861647860,
         1.00001110343715986160, -0.00860505014728705821, -0.11103437159861647860,
         1.00003206339100541200,  0.56004913547279000113, -0.32063391005412026469);
-    VV *= MM;
-    VV.r = ST2084_to_Y(VV.r);
-    VV.g = ST2084_to_Y(VV.g);
-    VV.b = ST2084_to_Y(VV.b);
-    return VV;
+    ICtCp *= M;
+    ICtCp.x = ST2084_to_Y(ICtCp.x);
+    ICtCp.y = ST2084_to_Y(ICtCp.y);
+    ICtCp.z = ST2084_to_Y(ICtCp.z);
+    return ICtCp;
 }
 
 vec3 RGB_to_Ictcp(vec3 color, float L_sdr) {
     color *= L_sdr;
-    color = RGB_to_XYZ(color.r, color.g, color.b);
-    color = XYZ_to_LMS(color.r, color.g, color.b);
-    color = LMS_to_ICtCp(color.r, color.g, color.b);
+    color = RGB_to_XYZ(color);
+    color = XYZ_to_LMS(color);
+    color = LMS_to_ICtCp(color);
     return color;
 }
 
 vec3 Ictcp_to_RGB(vec3 color, float L_sdr) {
-    color = ICtCp_to_LMS(color.r, color.g, color.b);
-    color = LMS_to_XYZ(color.r, color.g, color.b);
-    color = XYZ_to_RGB(color.r, color.g, color.b);
+    color = ICtCp_to_LMS(color);
+    color = LMS_to_XYZ(color);
+    color = XYZ_to_RGB(color);
     color /= L_sdr;
     return color;
 }

@@ -392,52 +392,52 @@ float ST2084_to_Y(float N) {
     return L * pq_C;
 }
 
-vec3 RGB_to_XYZ(float R, float G, float B) {
+vec3 RGB_to_XYZ(vec3 RGB) {
     mat3 M = mat3(
         0.6370, 0.1446, 0.1689,
         0.2627, 0.6780, 0.0593,
         0.0000, 0.0281, 1.0610);
-    return vec3(R, G, B) * M;
+    return RGB * M;
 }
 
-vec3 XYZ_to_RGB(float X, float Y, float Z) {
+vec3 XYZ_to_RGB(vec3 XYZ) {
     mat3 M = mat3(
          1.7167, -0.3557, -0.2534,
         -0.6667,  1.6165,  0.0158,
          0.0176, -0.0428,  0.9421);
-    return vec3(X, Y, Z) * M;
+    return XYZ * M;
 }
 
-vec3 XYZ_to_Cone(float X, float Y, float Z) {
+vec3 XYZ_to_Cone(vec3 XYZ) {
     mat3 M = mat3(
          0.41478972, 0.579999,  0.0146480,
         -0.2015100,  1.120649,  0.0531008,
         -0.0166008,  0.264800,  0.6684799);
-    return vec3(X, Y, Z) * M;
+    return XYZ * M;
 }
 
-vec3 Cone_to_XYZ(float X, float Y, float Z) {
+vec3 Cone_to_XYZ(vec3 LMS) {
     mat3 M = mat3(
          1.9242264357876067,  -1.0047923125953657,  0.037651404030618,
          0.35031676209499907,  0.7264811939316552, -0.06538442294808501,
         -0.09098281098284752, -0.3127282905230739,  1.5227665613052603);
-    return vec3(X, Y, Z) * M;
+    return LMS * M;
 }
 
-vec3 Cone_to_Iab(float L, float M, float S) {
-    mat3 MM = mat3(
+vec3 Cone_to_Iab(vec3 LMS) {
+    mat3 M = mat3(
         0.5,       0.5,       0.0,
         3.524000, -4.066708,  0.542708,
         0.199076,  1.096799, -1.295875);
-    return vec3(L, M, S) * MM;
+    return LMS * M;
 }
 
-vec3 Iab_to_Cone(float I, float a, float b) {
+vec3 Iab_to_Cone(vec3 Iab) {
     mat3 M = mat3(
         1.0,                 0.1386050432715393,   0.05804731615611886,
         0.9999999999999999, -0.1386050432715393,  -0.05804731615611886,
         0.9999999999999998, -0.09601924202631895, -0.8118918960560388);
-    return vec3(I, a, b) * M;
+    return Iab * M;
 }
 
 const float b = 1.15;
@@ -449,18 +449,18 @@ const float d0 = 1.6295499532821566e-11;
 vec3 RGB_to_Jzazbz(vec3 color, float L_sdr) {
     color *= L_sdr;
 
-    color = RGB_to_XYZ(color.r, color.g, color.b);
+    color = RGB_to_XYZ(color);
 
     float Xm = (b * color.x) - ((b - 1.0) * color.z);
     float Ym = (g * color.y) - ((g - 1.0) * color.x);
 
-    color = XYZ_to_Cone(Xm, Ym, color.z);
+    color = XYZ_to_Cone(vec3(Xm, Ym, color.z));
 
     color.r = Y_to_ST2084(color.r);
     color.g = Y_to_ST2084(color.g);
     color.b = Y_to_ST2084(color.b);
 
-    color = Cone_to_Iab(color.r, color.g, color.b);
+    color = Cone_to_Iab(color);
 
     color.r = ((1.0 + d) * color.r) / (1.0 + (d * color.r)) - d0;
 
@@ -470,42 +470,42 @@ vec3 RGB_to_Jzazbz(vec3 color, float L_sdr) {
 vec3 Jzazbz_to_RGB(vec3 color, float L_sdr) {
     color.r = (color.r + d0) / (1.0 + d - d * (color.r + d0));
 
-    color = Iab_to_Cone(color.r, color.g, color.b);
+    color = Iab_to_Cone(color);
 
     color.r = ST2084_to_Y(color.r);
     color.g = ST2084_to_Y(color.g);
     color.b = ST2084_to_Y(color.b);
 
-    color = Cone_to_XYZ(color.r, color.g, color.b);
+    color = Cone_to_XYZ(color);
 
     float Xa = (color.x + ((b - 1.0) * color.z)) / b;
     float Ya = (color.y + ((g - 1.0) * Xa)) / g;
 
-    color = XYZ_to_RGB(Xa, Ya, color.z);
+    color = XYZ_to_RGB(vec3(Xa, Ya, color.z));
 
     color /= L_sdr;
 
     return color;
 }
 
-vec3 Jzazbz_to_JzCzhz(vec3 color) {
-    float az = color.g;
-    float bz = color.b;
+vec3 Jzazbz_to_JzCzhz(vec3 Jzazbz) {
+    float az = Jzazbz.y;
+    float bz = Jzazbz.z;
 
-    color.g = sqrt(az * az + bz * bz);
-    color.b = atan(bz, az);
+    float Cz = length(vec2(az, bz));
+    float hz = atan(bz, az);
 
-    return color;
+    return vec3(Jzazbz.x, Cz, hz);
 }
 
-vec3 JzCzhz_to_Jzazbz(vec3 color) {
-    float Cz = color.g;
-    float hz = color.b;
+vec3 JzCzhz_to_Jzazbz(vec3 JzCzhz) {
+    float Cz = JzCzhz.y;
+    float hz = JzCzhz.z;
 
-    color.g = Cz * cos(hz);
-    color.b = Cz * sin(hz);
+    float az = Cz * cos(hz);
+    float bz = Cz * sin(hz);
 
-    return color;
+    return vec3(JzCzhz.x, az, bz);
 }
 
 vec3 tone_mapping_hybrid(vec3 color) {
