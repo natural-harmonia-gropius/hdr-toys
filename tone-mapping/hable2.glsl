@@ -17,6 +17,54 @@
 //!BIND HOOKED
 //!DESC tone mapping (hable2)
 
+float toeLength = 0.1;
+float toeStrength = 0.5;
+float shoulderAngle = 1.0;
+float shoulderLength = 0.5;
+float shoulderStrength = log2(L_hdr / L_sdr);
+
+float x0 = 0.0;
+float y0 = 0.0;
+float x1 = 0.0;
+float y1 = 0.0;
+float W  = 0.0;
+float overshootX = 0.0;
+float overshootY = 0.0;
+
+// Convert from "user" to "direct" parameters
+void calc_direct_params_from_user() {
+    // This is not actually the display gamma. It's just a UI space to avoid having to
+    // enter small numbers for the input.
+    const float perceptualGamma = 2.4;
+
+    // constraints
+    toeLength = clamp(pow(toeLength, perceptualGamma), 0.0, 1.0);
+    toeStrength = clamp(toeStrength, 0.0, 1.0);
+    shoulderAngle = clamp(shoulderAngle, 0.0, 1.0);
+    shoulderLength = clamp(shoulderLength, 1e-5, 0.999 - 0.5 * toeLength);
+    shoulderStrength = clamp(shoulderStrength, 0.0, 10.0);
+
+    // apply base params
+    x0 = toeLength * 0.5; // toe goes from 0 to 0.5
+    y0 = (1.0 - toeStrength) * x0; // lerp from 0 to x0
+
+    float remainingY = 1.0 - y0;
+
+    float initialW = x0 + remainingY;
+
+    float y1_offset = (1.0 - shoulderLength) * remainingY;
+    x1 = x0 + y1_offset;
+    y1 = y0 + y1_offset;
+
+    // filmic shoulder strength is in F stops
+    float extraW = exp2(shoulderStrength) - 1.0;
+
+    W = initialW + extraW;
+
+    overshootX = (W * 2.0) * shoulderAngle * shoulderStrength;
+    overshootY = 0.5 * shoulderAngle * shoulderStrength;
+}
+
 float curve_segment_eval(float x, float lnA, float B, float offsetX, float offsetY, float scaleX, float scaleY) {
     float x0 = (x - offsetX) * scaleX;
     float y0 = 0.0;
@@ -70,62 +118,14 @@ float eval_derivative_linear_gamma(float m, float b, float g, float x) {
     return g * m * pow(m * x + b, g - 1.0);
 }
 
+// CreateCurve
 float curve(float x) {
-    float toeLength = 0.1;
-    float toeStrength = 0.5;
-    float shoulderAngle = 1.0;
-    float shoulderLength = 0.5;
-    float shoulderStrength = log2(L_hdr / L_sdr);
-
-    float x0 = 0.0;
-    float y0 = 0.0;
-    float x1 = 0.0;
-    float y1 = 0.0;
-    float W  = 0.0;
-    float overshootX = 0.0;
-    float overshootY = 0.0;
-
-    // Convert from "user" to "direct" parameters
-
-    // This is not actually the display gamma. It's just a UI space to avoid having to
-    // enter small numbers for the input.
-    float perceptualGamma = 2.4;
-
-    // constraints
-    toeLength = clamp(pow(toeLength, perceptualGamma), 0.0, 1.0);
-    toeStrength = clamp(toeStrength, 0.0, 1.0);
-    shoulderAngle = clamp(shoulderAngle, 0.0, 1.0);
-    shoulderLength = clamp(shoulderLength, 1e-5, 0.999 - 0.5 * toeLength);
-    shoulderStrength = clamp(shoulderStrength, 0.0, 10.0);
-
-    // apply base params
-    x0 = toeLength * 0.5; // toe goes from 0 to 0.5
-    y0 = (1.0 - toeStrength) * x0; // lerp from 0 to x0
-
-    float remainingY = 1.0 - y0;
-
-    float initialW = x0 + remainingY;
-
-    float y1_offset = (1.0 - shoulderLength) * remainingY;
-    x1 = x0 + y1_offset;
-    y1 = y0 + y1_offset;
-
-    // filmic shoulder strength is in F stops
-    float extraW = exp2(shoulderStrength) - 1.0;
-
-    W = initialW + extraW;
-
-    overshootX = (W * 2.0) * shoulderAngle * shoulderStrength;
-    overshootY = 0.5 * shoulderAngle * shoulderStrength;
-
-    // CreateCurve
-
     // normalize params to 1.0 range
     float invW = 1.0 / W;
-    x0 /= W;
-    x1 /= W;
-    overshootX /= W;
-    W = 1.0;
+    float x0 = x0 / W;
+    float x1 = x1 / W;
+    float overshootX = overshootX / W;
+    float W = 1.0;
 
     // Precompute information for all three segments (mid, toe, shoulder)
     const vec2  tmp = as_slope_intercept(x0, x1, y0, y1);
@@ -156,9 +156,9 @@ float curve(float x) {
     const float toeM = eval_derivative_linear_gamma(m, b, g, x0);
     const float shoulderM = eval_derivative_linear_gamma(m, b, g, x1);
 
-    y0 = max(pow(y0, g), 1e-6);
-    y1 = max(pow(y1, g), 1e-6);
-    overshootY = pow(1.0 + overshootY, g) - 1.0;
+    float y0 = max(pow(y0, g), 1e-6);
+    float y1 = max(pow(y1, g), 1e-6);
+    float overshootY = pow(1.0 + overshootY, g) - 1.0;
 
     const vec2  toeAB   = solve_AB(x0, y0, m);
     float   toeOffsetX  = 0.0,
@@ -217,7 +217,8 @@ float curve(float x) {
 
 vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
-    const float L = dot(color.rgb, vec3(0.2627, 0.6780, 0.0593));
-    color.rgb *= curve(L) / L;
+    calc_direct_params_from_user();
+    const float lum = dot(color.rgb, vec3(0.2627, 0.6780, 0.0593));
+    color.rgb *= curve(lum) / lum;
     return color;
 }
