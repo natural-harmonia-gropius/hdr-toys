@@ -1,4 +1,4 @@
-// Parameters calculator for compress
+// Parameters calculator for gamut-mapping/jedypod
 // I'm not sure if my process is correct, the reference is below
 // https://github.com/jedypod/gamut-compress/blob/master/utilities/CalculateDistance.nk
 
