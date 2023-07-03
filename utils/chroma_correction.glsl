@@ -113,8 +113,7 @@ vec3 Lab_to_XYZ(vec3 Lab) {
 float pi = 3.141592653589793;
 float epsilon = 0.02;
 
-vec3 Lab_to_LCHab(vec3 Lab) {
-    float L = Lab.x;
+vec3 Lab_to_LCH(vec3 Lab) {
     float a = Lab.y;
     float b = Lab.z;
 
@@ -123,21 +122,17 @@ vec3 Lab_to_LCHab(vec3 Lab) {
         0.0 :
         atan(b, a) * 180.0 / pi;
 
-    return vec3(L, C, H);
+    return vec3(Lab.x, C, H);
 }
 
-vec3 LCHab_to_Lab(vec3 LCH) {
-    float L = LCH.x;
-    float C = LCH.y;
-    float H = LCH.z;
-
-    C = max(C, 0.0);
-    H *= pi / 180.0;
+vec3 LCH_to_Lab(vec3 LCH) {
+    float C = max(LCH.y, 0.0);
+    float H = LCH.z * pi / 180.0;
 
     float a = C * cos(H);
     float b = C * sin(H);
 
-    return vec3(L, a, b);
+    return vec3(LCH.x, a, b);
 }
 
 float chroma_correction(float L, float Lref, float Lmax, float sigma) {
@@ -155,9 +150,9 @@ vec4 hook() {
     color.rgb  = RGB_to_XYZ(color.rgb);
     color.rgb  = XYZD65_to_XYZD50(color.rgb);
     color.rgb  = XYZ_to_Lab(color.rgb);
-    color.rgb  = Lab_to_LCHab(color.rgb);
+    color.rgb  = Lab_to_LCH(color.rgb);
     color.g   *= chroma_correction(color.x, L_ref, L_max, sigma);
-    color.rgb  = LCHab_to_Lab(color.rgb);
+    color.rgb  = LCH_to_Lab(color.rgb);
     color.rgb  = Lab_to_XYZ(color.rgb);
     color.rgb  = XYZD50_to_XYZD65(color.rgb);
     color.rgb  = XYZ_to_RGB(color.rgb);

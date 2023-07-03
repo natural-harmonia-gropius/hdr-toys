@@ -488,24 +488,29 @@ vec3 Jzazbz_to_RGB(vec3 color, float L_sdr) {
     return color;
 }
 
-vec3 Jzazbz_to_JzCzhz(vec3 Jzazbz) {
-    float az = Jzazbz.y;
-    float bz = Jzazbz.z;
+float pi = 3.141592653589793;
+float epsilon = 0.0002;
 
-    float Cz = length(vec2(az, bz));
-    float hz = atan(bz, az);
+vec3 Lab_to_LCH(vec3 Lab) {
+    float a = Lab.y;
+    float b = Lab.z;
 
-    return vec3(Jzazbz.x, Cz, hz);
+    float C = length(vec2(a, b));
+    float H = (abs(a) < epsilon && abs(b) < epsilon) ?
+        0.0 :
+        atan(b, a) * 180.0 / pi;
+
+    return vec3(Lab.x, C, H);
 }
 
-vec3 JzCzhz_to_Jzazbz(vec3 JzCzhz) {
-    float Cz = JzCzhz.y;
-    float hz = JzCzhz.z;
+vec3 LCH_to_Lab(vec3 LCH) {
+    float C = max(LCH.y, 0.0);
+    float H = LCH.z * pi / 180.0;
 
-    float az = Cz * cos(hz);
-    float bz = Cz * sin(hz);
+    float a = C * cos(H);
+    float b = C * sin(H);
 
-    return vec3(JzCzhz.x, az, bz);
+    return vec3(LCH.x, a, b);
 }
 
 vec3 tone_mapping_hybrid(vec3 color) {
@@ -517,24 +522,24 @@ vec3 tone_mapping_hybrid(vec3 color) {
 
     src = color;
     src = RGB_to_Jzazbz(src, L_sdr);
-    src = Jzazbz_to_JzCzhz(src);
+    src = Lab_to_LCH(src);
 
     rgb = vec3(curve(color.r), curve(color.g), curve(color.b));
     rgb = RGB_to_Jzazbz(rgb, L_sdr);
-    rgb = Jzazbz_to_JzCzhz(rgb);
+    rgb = Lab_to_LCH(rgb);
 
     float L = dot(color, vec3(0.2627, 0.6780, 0.0593));
     lum = color * curve(L) / L;
     lum = RGB_to_Jzazbz(lum, L_sdr);
-    lum = Jzazbz_to_JzCzhz(lum);
+    lum = Lab_to_LCH(lum);
 
     float norm = max(max(color.r, color.g), color.b);
     sat = color * curve(norm) / norm;
     sat = RGB_to_Jzazbz(sat, L_sdr);
-    sat = Jzazbz_to_JzCzhz(sat);
+    sat = Lab_to_LCH(sat);
 
     dst = vec3(mix(lum.r, sat.r, src.r), mix(lum.g, rgb.g, src.r), src.b);
-    dst = JzCzhz_to_Jzazbz(dst);
+    dst = LCH_to_Lab(dst);
     dst = Jzazbz_to_RGB(dst, L_sdr);
 
     return dst;
