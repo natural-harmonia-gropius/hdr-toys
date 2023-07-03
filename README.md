@@ -90,8 +90,6 @@ Operators below the blank row are for testing and should not be used for watchin
 | reinhard | YRGB       | HDR peak        |
 | hable    | YRGB       | HDR peak        |
 | hable2   | YRGB       | HDR peak        |
-| suzuki   | YRGB       | 10000nit        |
-| uchimura | YRGB       | 1000nit         |
 | lottes   | maxRGB     | HDR peak        |
 | hejl2015 | RGB        | HDR peak        |
 |          |            |                 |
