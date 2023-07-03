@@ -1,4 +1,3 @@
-// Compress highly chromatic source colorimetry into a smaller gamut
 // https://github.com/jedypod/gamut-compress
 // https://github.com/ampas/aces-dev/blob/dev/transforms/ctl/lmt/LMT.Academy.ReferenceGamutCompress.ctl
 
@@ -46,7 +45,7 @@
 
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!DESC gamut mapping (compress)
+//!DESC gamut mapping (jedypod)
 
 mat3 M = mat3(
      1.6604910021084354,  -0.5876411387885495,  -0.07284986331988474,

@@ -21,7 +21,7 @@
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!WHEN enabled
-//!DESC tone mapping (heatmap)
+//!DESC tone mapping (false color)
 
 vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {

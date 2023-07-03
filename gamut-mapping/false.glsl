@@ -2,7 +2,7 @@
 
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!DESC gamut mapping (warning)
+//!DESC gamut mapping (false color)
 
 mat3 M = mat3(
      1.6604910021084354,  -0.5876411387885495,  -0.07284986331988474,

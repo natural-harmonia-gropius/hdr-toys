@@ -24,7 +24,7 @@ glsl-shader=~~/shaders/hdr-toys/transfer-function/pq_to_l.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/l_to_linear.glsl
 glsl-shader=~~/shaders/hdr-toys/utils/chroma_correction.glsl
 glsl-shader=~~/shaders/hdr-toys/tone-mapping/dynamic.glsl
-glsl-shader=~~/shaders/hdr-toys/gamut-mapping/compress.glsl
+glsl-shader=~~/shaders/hdr-toys/gamut-mapping/jedypod.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/linear_to_bt1886.glsl
 
 [bt.2100-hlg]
@@ -37,7 +37,7 @@ glsl-shader=~~/shaders/hdr-toys/transfer-function/hlg_to_l.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/l_to_linear.glsl
 glsl-shader=~~/shaders/hdr-toys/utils/chroma_correction.glsl
 glsl-shader=~~/shaders/hdr-toys/tone-mapping/dynamic.glsl
-glsl-shader=~~/shaders/hdr-toys/gamut-mapping/compress.glsl
+glsl-shader=~~/shaders/hdr-toys/gamut-mapping/jedypod.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/linear_to_bt1886.glsl、
 
 [bt.2020]
@@ -46,23 +46,23 @@ profile-restore=copy
 target-trc=bt.1886
 target-prim=bt.2020
 glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886_to_linear.glsl
-glsl-shader=~~/shaders/hdr-toys/gamut-mapping/compress.glsl
+glsl-shader=~~/shaders/hdr-toys/gamut-mapping/jedypod.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/linear_to_bt1886.glsl
 ```
 
 - `vo=gpu-next` is required, the minimum version of mpv required is v0.35.0.
-- Dolby Vision Profile 5 is not tagged as HDR by mpv, so it wouldn't activate this auto-profile.
+- Dolby Vision Profile 5 is not tagged as HDR, so it wouldn't activate this auto-profile.
 - Don't set target-peak, icc-profile...  
   Make sure there are no built-in tone map, gamut map, 3DLUT... in "Frame Timings" page.
 - If you are using a BT.2020 display, remove the [bt.2020] profile and all gamut-mapping lines.  
-  And for a P3 display, replace all `gamut-mapping/*` with `gamut-mapping/matrix_p3.glsl`.
+  And for a P3 display, replace all gamut-mapping/\* with `gamut-mapping/clip_p3.glsl`.
 
 ## Detailed information
 
 ### Tone mapping
 
 - HDR peak defaults to 1000nit, should be the max luminance of video.  
-  [hdr-toys-helper.lua](https://github.com/natural-harmonia-gropius/mpv-config/blob/master/portable_config/scripts/hdr-toys-helper.lua) can get it automatically from the mpv's video-out-params/sig-peak.  
+  [hdr-toys-helper.lua](https://github.com/natural-harmonia-gropius/mpv-config/blob/master/portable_config/scripts/hdr-toys-helper.lua) can get it automatically from video-out-params/sig-peak.  
   You can set it manually with `set glsl-shader-opts L_hdr=N`
 
 - SDR peak defaults to 203nit, should be the reference white of video.  
@@ -97,8 +97,8 @@ Operators below the blank row are for testing and should not be used for watchin
 |          |            |                 |
 | clip     | RGB        | SDR peak        |
 | linear   | YRGB       | HDR peak        |
+| false    | Y          | Infinity        |
 | local    | YRGB       | Block peak      |
-| heatmap  | Y          | 10000nit        |
 
 Typical representation of the same curve applied to different color spaces.
 | RGB | YRGB | maxRGB | Hybrid in JzCzhz |
@@ -136,19 +136,19 @@ And for some conversions like hejl2015, it brings achromatically highlights.
 
 ### Gamut mapping
 
-`matrix` is the exact conversion.  
-`compress` restores the excess color by reducing the distance of the achromatic axis.  
-`warning` shows the excess color after conversion as inverse color.
+`clip` is the exact conversion.  
+`jedypod` restores the excess color by reducing the distance of the achromatic axis.  
+`false` shows the excess color after conversion as inverse color.
 
-| matrix                                                                                                          | compress                                                                                                        | warning                                                                                                         |
+| clip                                                                                                            | jedypod                                                                                                         | false                                                                                                           |
 | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | ![image](https://user-images.githubusercontent.com/50797982/215457620-7920720a-c6a2-4f71-aa30-cc97bd8f03ea.png) | ![image](https://user-images.githubusercontent.com/50797982/215457533-802154a7-cfd0-442b-9882-35cce210308f.png) | ![image](https://user-images.githubusercontent.com/50797982/215457770-e1822c28-d1ac-4938-b3cc-48dcdee5738a.png) |
 
-You can set the intensity of compress by `set glsl-shader-opts select=N`.
+You can set the intensity of jedypod by `set glsl-shader-opts select=N`.
 
 | `select=0.0`                                                                                                    | `select=0.1`                                                                                                    | `select=0.15`                                                                                                   | `select=0.2`                                                                                                    |
 | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | ![image](https://user-images.githubusercontent.com/50797982/218429032-7599602d-07db-47b9-8c02-8e654998129c.png) | ![image](https://user-images.githubusercontent.com/50797982/218429058-6ae993a9-c16b-4895-8c75-9e565fd44f6d.png) | ![image](https://user-images.githubusercontent.com/50797982/218429078-d0dba612-5794-400e-9723-d4e9a23fbeed.png) | ![image](https://user-images.githubusercontent.com/50797982/218429113-adcf4d2d-c6de-4fb4-8a72-98c0bf1efb10.png) |
 
-- The result of `matrix` is different from `mpv --vo=gpu-next`, which is due to the black point of BT.1886.  
+- The result of `clip` is different from `mpv --vo=gpu-next`, which is due to the black point of BT.1886.  
   I consider that the black point should be set to zero for transcoding and conversion.
