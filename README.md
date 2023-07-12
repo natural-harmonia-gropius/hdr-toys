@@ -8,8 +8,9 @@ Featuring dynamic curves and a uniform color space.
 ## Getting started
 
 > **Note**  
-> I recommend using the git version of mpv.  
-> libplacebo dependency and `--vo=gpu-next` is required.
+> libplacebo dependency and `--vo=gpu-next` is required.  
+> Recommended to use the git version of mpv.  
+> For full config see [natural-harmonia-gropius/mpv-config](https://github.com/natural-harmonia-gropius/mpv-config)
 
 1. Download [hdr-toys.zip](https://github.com/natural-harmonia-gropius/hdr-toys/archive/refs/heads/master.zip), extract it and rename it to `hdr-toys/` then put it in `~~/shaders`.
 2. Download [hdr-toys-helper.lua](https://github.com/natural-harmonia-gropius/mpv-config/blob/master/portable_config/scripts/hdr-toys-helper.lua) and put it in `~~/scripts`
