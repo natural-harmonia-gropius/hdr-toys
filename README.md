@@ -63,7 +63,7 @@ glsl-shader=~~/shaders/hdr-toys/transfer-function/linear_to_bt1886.glsl
 ### Tone mapping
 
 - HDR peak defaults to 1000nit, should be the max luminance of video.  
-  [hdr-toys-helper.lua](https://github.com/natural-harmonia-gropius/mpv-config/blob/master/portable_config/scripts/hdr-toys-helper.lua) can get it automatically from video-out-params/sig-peak.  
+  hdr-toys-helper.lua can get it automatically from video-out-params/sig-peak.  
   You can set it manually with `set glsl-shader-opts L_hdr=N`
 
 - SDR peak defaults to 203nit, should be the reference white of video.  
