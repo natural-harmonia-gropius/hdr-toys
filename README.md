@@ -8,7 +8,7 @@ Featuring dynamic curves and a uniform color space.
 ## Getting started
 
 > **Note**  
-> libplacebo dependency and `--vo=gpu-next` is required.  
+> `vo=gpu-next` is required.  
 > Recommended to use the git version of mpv.  
 > For full config see [natural-harmonia-gropius/mpv-config](https://github.com/natural-harmonia-gropius/mpv-config)
 
