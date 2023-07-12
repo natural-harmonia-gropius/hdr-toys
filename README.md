@@ -7,13 +7,15 @@ Featuring dynamic curves and a uniform color space.
 
 ## Getting started
 
+> **Note**  
+> I recommend using the git version of mpv.  
+> libplacebo dependency and `--vo=gpu-next` is required.
+
 1. Download [hdr-toys.zip](https://github.com/natural-harmonia-gropius/hdr-toys/archive/refs/heads/master.zip), extract it and rename it to `hdr-toys/` then put it in `~~/shaders`.
 2. Download [hdr-toys-helper.lua](https://github.com/natural-harmonia-gropius/mpv-config/blob/master/portable_config/scripts/hdr-toys-helper.lua) and put it in `~~/scripts`
-3. Append the following profile to your `mpv.conf`
+3. Append the following profiles to your `mpv.conf`
 
 ```ini
-vo=gpu-next
-
 [bt.2100-pq]
 profile-cond=get("video-params/primaries") == "bt.2020" and get("video-params/gamma") == "pq"
 profile-restore=copy
@@ -50,8 +52,7 @@ glsl-shader=~~/shaders/hdr-toys/gamut-mapping/jedypod.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/linear_to_bt1886.glsl
 ```
 
-- `vo=gpu-next` is required, the minimum version of mpv required is v0.35.0.
-- Dolby Vision Profile 5 is not tagged as HDR, so it wouldn't activate this auto-profile.
+- Dolby Vision Profile 5 is not tagged as HDR, so it wouldn't activate any auto-profile.
 - Don't set target-peak, icc-profile...  
   Make sure there are no built-in tone map, gamut map, 3DLUT... in "Frame Timings" page.
 - If you are using a BT.2020 display, remove the [bt.2020] profile and all gamut-mapping lines.  
@@ -121,7 +122,8 @@ In real world, the brighter the color, the less saturated it becomes, and eventu
 
 ### Crosstalk
 
-**Currently unused**  
+> **Currently unused**
+
 This is a part of tone mapping, the screenshot below will show you how it works.  
 You can set the intensity of it by `set glsl-shader-opts alpha=N`.
 
@@ -148,5 +150,5 @@ You can set the intensity of jedypod by `set glsl-shader-opts select=N`.
 | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | ![image](https://user-images.githubusercontent.com/50797982/218429032-7599602d-07db-47b9-8c02-8e654998129c.png) | ![image](https://user-images.githubusercontent.com/50797982/218429058-6ae993a9-c16b-4895-8c75-9e565fd44f6d.png) | ![image](https://user-images.githubusercontent.com/50797982/218429078-d0dba612-5794-400e-9723-d4e9a23fbeed.png) | ![image](https://user-images.githubusercontent.com/50797982/218429113-adcf4d2d-c6de-4fb4-8a72-98c0bf1efb10.png) |
 
-- The result of `clip` is different from `mpv --vo=gpu-next`, which is due to the black point of BT.1886.  
+- The result of `clip` is different from libplacebo, which is due to the black point of BT.1886.  
   I consider that the black point should be set to zero for transcoding and conversion.
