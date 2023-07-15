@@ -12,11 +12,9 @@ mat3 M = mat3(
 vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
     vec3 color_src = color.rgb;
-    vec3 color_src_cliped = clamp(color_src, 0.0, 1.0);
-    vec3 color_dst = color_src_cliped * M;
-    vec3 color_dst_cliped = clamp(color_dst, 0.0, 1.0);
+    vec3 color_dst = color_src * M;
 
-    color.rgb = color_dst_cliped;
+    color.rgb = clamp(color_dst, 0.0, 1.0);
 
     return color;
 }
