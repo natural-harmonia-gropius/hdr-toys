@@ -215,10 +215,14 @@ float curve(float x) {
     }
 }
 
+vec3 tone_mapping_y(vec3 RGB) {
+    const float y = dot(RGB, vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196));
+    return RGB * curve(y) / y;
+}
+
 vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
     calc_direct_params_from_user();
-    const float lum = dot(color.rgb, vec3(0.2627, 0.6780, 0.0593));
-    color.rgb *= curve(lum) / lum;
+    color.rgb = tone_mapping_y(color.rgb);
     return color;
 }

@@ -28,23 +28,18 @@ float bt1886_f(float V, float gamma, float Lw, float Lb) {
     return L;
 }
 
-vec3 tone_mapping_clip(vec3 color) {
-    color.rgb = vec3(
-        bt1886_r(color.r, DISPGAMMA, L_W, L_W / CONTRAST_sdr),
-        bt1886_r(color.g, DISPGAMMA, L_W, L_W / CONTRAST_sdr),
-        bt1886_r(color.b, DISPGAMMA, L_W, L_W / CONTRAST_sdr)
-    );
+float curve(float x) {
+    x = bt1886_r(x, DISPGAMMA, L_W, L_W / CONTRAST_sdr);
+    x = bt1886_f(x, DISPGAMMA, L_W, L_B);
+    return x;
+}
 
-    color.rgb = vec3(
-        bt1886_f(color.r, DISPGAMMA, L_W, L_B),
-        bt1886_f(color.g, DISPGAMMA, L_W, L_B),
-        bt1886_f(color.b, DISPGAMMA, L_W, L_B)
-    );
-    return color;
+vec3 tone_mapping_rgb(vec3 RGB) {
+    return vec3(curve(RGB.r), curve(RGB.g), curve(RGB.b));
 }
 
 vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
-    color.rgb = tone_mapping_clip(color.rgb);
+    color.rgb = tone_mapping_rgb(color.rgb);
     return color;
 }

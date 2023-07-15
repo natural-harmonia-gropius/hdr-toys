@@ -10,16 +10,22 @@ void metering() {
     for (uint x = 0; x < gl_WorkGroupSize.x; x++) {
         for (uint y = 0; y < gl_WorkGroupSize.y; y++) {
             vec4 texelValue = texelFetch(HOOKED_raw, base + ivec2(x,y), 0);
-            float L = dot(texelValue.rgb, vec3(0.2627, 0.6780, 0.0593));
+            float L = max(max(texelValue.r, texelValue.g), texelValue.b);
             L_max = max(L_max, L);
         }
     }
 }
 
-float curve(float x, float w) {
+float curve(float x) {
+    const float w = L_max;
     const float simple = x / (1.0 + x);
     const float extended = simple * (1.0 + x / (w * w));
     return extended;
+}
+
+vec3 tone_mapping_max(vec3 RGB) {
+    const float m = max(max(RGB.r, RGB.g), RGB.b);
+    return RGB * curve(m) / m;
 }
 
 vec4 color = HOOKED_tex(HOOKED_pos);
@@ -30,8 +36,7 @@ void hook() {
 
     barrier();
 
-    float L = dot(color.rgb, vec3(0.2627, 0.6780, 0.0593));
-    color.rgb *= curve(L, L_max) / L;
+    color.rgb = tone_mapping_max(color.rgb);
 
     imageStore(out_image, ivec2(gl_GlobalInvocationID), color);
 }

@@ -41,19 +41,14 @@ float bt1886_f(float V, float gamma, float Lw, float Lb) {
     return L;
 }
 
-vec3 tone_mapping_clip(vec3 color) {
-    color.rgb = vec3(
-        bt1886_r(color.r, DISPGAMMA, L_W, L_W / CONTRAST_sdr),
-        bt1886_r(color.g, DISPGAMMA, L_W, L_W / CONTRAST_sdr),
-        bt1886_r(color.b, DISPGAMMA, L_W, L_W / CONTRAST_sdr)
-    );
+float curve_clip(float x) {
+    x = bt1886_r(x, DISPGAMMA, L_W, L_W / CONTRAST_sdr);
+    x = bt1886_f(x, DISPGAMMA, L_W, L_B);
+    return x;
+}
 
-    color.rgb = vec3(
-        bt1886_f(color.r, DISPGAMMA, L_W, L_B),
-        bt1886_f(color.g, DISPGAMMA, L_W, L_B),
-        bt1886_f(color.b, DISPGAMMA, L_W, L_B)
-    );
-    return color;
+vec3 tone_mapping_rgb(vec3 RGB) {
+    return vec3(curve_clip(RGB.r), curve_clip(RGB.g), curve_clip(RGB.b));
 }
 
 const float pq_m1 = 0.1593017578125;
@@ -136,7 +131,7 @@ vec3 ICtCp_to_LMS(vec3 ICtCp) {
     return ICtCp;
 }
 
-vec3 RGB_to_Ictcp(vec3 color, float L_sdr) {
+vec3 RGB_to_ICtCp(vec3 color, float L_sdr) {
     color *= L_sdr;
     color = RGB_to_XYZ(color);
     color = XYZ_to_LMS(color);
@@ -144,7 +139,7 @@ vec3 RGB_to_Ictcp(vec3 color, float L_sdr) {
     return color;
 }
 
-vec3 Ictcp_to_RGB(vec3 color, float L_sdr) {
+vec3 ICtCp_to_RGB(vec3 color, float L_sdr) {
     color = ICtCp_to_LMS(color);
     color = LMS_to_XYZ(color);
     color = XYZ_to_RGB(color);
@@ -152,15 +147,20 @@ vec3 Ictcp_to_RGB(vec3 color, float L_sdr) {
     return color;
 }
 
-float f(float x, float L_w, float L_b, float L_max, float L_min) {
-    const float maxLum = (L_max - L_b) / (L_w - L_b);
-    const float minLum = (L_min - L_b) / (L_w - L_b);
+float curve(float x) {
+    const float iw = Y_to_ST2084(L_hdr);
+    const float ib = Y_to_ST2084(0.0);
+    const float ow = Y_to_ST2084(L_sdr);
+    const float ob = Y_to_ST2084(L_sdr / CONTRAST_sdr);
+
+    const float maxLum = (ow - ib) / (iw - ib);
+    const float minLum = (ob - ib) / (iw - ib);
 
     const float KS = 1.5 * maxLum - 0.5;
     const float b = minLum;
 
     // E1
-    x = (x - L_b) / (L_w - L_b);
+    x = (x - ib) / (iw - ib);
 
     // E2
     if (KS <= x) {
@@ -181,29 +181,24 @@ float f(float x, float L_w, float L_b, float L_max, float L_min) {
     }
 
     // E4
-    x = x * (L_w - L_b) + L_b;
+    x = x * (iw - ib) + ib;
 
     return x;
 }
 
-vec3 tone_mapping(vec3 Ictcp) {
-    const float iw = Y_to_ST2084(L_hdr);
-    const float ib = Y_to_ST2084(0.0);
-    const float ow = Y_to_ST2084(L_sdr);
-    const float ob = Y_to_ST2084(L_sdr / CONTRAST_sdr);
+vec3 tone_mapping_ictcp(vec3 ICtCp) {
+    float I2  = curve(ICtCp.x);
+    ICtCp.yz *= min(ICtCp.x / I2, I2 / ICtCp.x);
+    ICtCp.x   = I2;
 
-    float I2  = f(Ictcp.x, iw, ib, ow, ob);
-    Ictcp.yz *= min(Ictcp.x / I2, I2 / Ictcp.x);
-    Ictcp.x   = I2;
-
-    return Ictcp;
+    return ICtCp;
 }
 
 vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
-    color.rgb = RGB_to_Ictcp(color.rgb, L_sdr);
-    color.rgb = tone_mapping(color.rgb);
-    color.rgb = Ictcp_to_RGB(color.rgb, L_sdr);
-    color.rgb = tone_mapping_clip(color.rgb);
+    color.rgb = RGB_to_ICtCp(color.rgb, L_sdr);
+    color.rgb = tone_mapping_ictcp(color.rgb);
+    color.rgb = ICtCp_to_RGB(color.rgb, L_sdr);
+    color.rgb = tone_mapping_rgb(color.rgb);
     return color;
 }

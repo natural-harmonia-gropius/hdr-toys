@@ -17,7 +17,7 @@
 //!BIND HOOKED
 //!DESC tone mapping (hejl2015)
 
-vec3 curve(vec3 rgb, float w) {
+vec3 tone_mapping(vec3 rgb, float w) {
     vec4 vh = vec4(rgb, w);
     vec4 va = (1.425 * vh) + 0.05;
     vec4 vf = ((vh * va + 0.004) / ((vh * (va + 0.55) + 0.0491))) - 0.0821;
@@ -26,6 +26,6 @@ vec3 curve(vec3 rgb, float w) {
 
 vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
-    color.rgb = curve(color.rgb, L_hdr / L_sdr);
+    color.rgb = tone_mapping(color.rgb, L_hdr / L_sdr);
     return color;
 }
