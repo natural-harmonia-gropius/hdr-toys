@@ -131,7 +131,7 @@ vec3 ICtCp_to_LMS(vec3 ICtCp) {
     return ICtCp;
 }
 
-vec3 RGB_to_ICtCp(vec3 color, float L_sdr) {
+vec3 RGB_to_ICtCp(vec3 color) {
     color *= L_sdr;
     color = RGB_to_XYZ(color);
     color = XYZ_to_LMS(color);
@@ -139,7 +139,7 @@ vec3 RGB_to_ICtCp(vec3 color, float L_sdr) {
     return color;
 }
 
-vec3 ICtCp_to_RGB(vec3 color, float L_sdr) {
+vec3 ICtCp_to_RGB(vec3 color) {
     color = ICtCp_to_LMS(color);
     color = LMS_to_XYZ(color);
     color = XYZ_to_RGB(color);
@@ -196,9 +196,9 @@ vec3 tone_mapping_ictcp(vec3 ICtCp) {
 
 vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
-    color.rgb = RGB_to_ICtCp(color.rgb, L_sdr);
+    color.rgb = RGB_to_ICtCp(color.rgb);
     color.rgb = tone_mapping_ictcp(color.rgb);
-    color.rgb = ICtCp_to_RGB(color.rgb, L_sdr);
+    color.rgb = ICtCp_to_RGB(color.rgb);
     color.rgb = tone_mapping_rgb(color.rgb);
     return color;
 }

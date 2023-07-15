@@ -446,7 +446,7 @@ const float g = 0.66;
 const float d = -0.56;
 const float d0 = 1.6295499532821566e-11;
 
-vec3 RGB_to_Jzazbz(vec3 color, float L_sdr) {
+vec3 RGB_to_Jzazbz(vec3 color) {
     color *= L_sdr;
 
     color = RGB_to_XYZ(color);
@@ -467,7 +467,7 @@ vec3 RGB_to_Jzazbz(vec3 color, float L_sdr) {
     return color;
 }
 
-vec3 Jzazbz_to_RGB(vec3 color, float L_sdr) {
+vec3 Jzazbz_to_RGB(vec3 color) {
     color.r = (color.r + d0) / (1.0 + d - d * (color.r + d0));
 
     color = Iab_to_Cone(color);
@@ -521,26 +521,26 @@ vec3 tone_mapping_hybrid(vec3 color) {
     vec3 sat;
 
     src = color;
-    src = RGB_to_Jzazbz(src, L_sdr);
+    src = RGB_to_Jzazbz(src);
     src = Lab_to_LCH(src);
 
     rgb = vec3(curve(color.r), curve(color.g), curve(color.b));
-    rgb = RGB_to_Jzazbz(rgb, L_sdr);
+    rgb = RGB_to_Jzazbz(rgb);
     rgb = Lab_to_LCH(rgb);
 
     float L = dot(color, vec3(0.2627, 0.6780, 0.0593));
     lum = color * curve(L) / L;
-    lum = RGB_to_Jzazbz(lum, L_sdr);
+    lum = RGB_to_Jzazbz(lum);
     lum = Lab_to_LCH(lum);
 
     float norm = max(max(color.r, color.g), color.b);
     sat = color * curve(norm) / norm;
-    sat = RGB_to_Jzazbz(sat, L_sdr);
+    sat = RGB_to_Jzazbz(sat);
     sat = Lab_to_LCH(sat);
 
     dst = vec3(mix(lum.r, sat.r, src.r), mix(lum.g, rgb.g, src.r), src.b);
     dst = LCH_to_Lab(dst);
-    dst = Jzazbz_to_RGB(dst, L_sdr);
+    dst = Jzazbz_to_RGB(dst);
 
     return dst;
 }

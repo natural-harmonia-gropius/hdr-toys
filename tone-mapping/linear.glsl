@@ -17,7 +17,8 @@
 //!DESC tone mapping (linear)
 
 float curve(float x) {
-    return x * L_sdr / L_hdr;
+    const float w = L_hdr / L_sdr;
+    return x / w;
 }
 
 vec3 tone_mapping_y(vec3 RGB) {
