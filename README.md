@@ -138,12 +138,13 @@ And for some conversions like hejl2015, it brings achromatically highlights.
 ### Gamut mapping
 
 `clip` is the exact conversion.  
-`jedypod` restores the excess color by reducing the distance of the achromatic axis.  
+`jedypod` compress out of gamut colors back into gamut.  
+`bottosson` clip out of gamut colors using Oklab.  
 `false` shows the excess color after conversion as inverse color.
 
-| clip                                                                                                            | jedypod                                                                                                         | false                                                                                                           |
-| --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| ![image](https://user-images.githubusercontent.com/50797982/215457620-7920720a-c6a2-4f71-aa30-cc97bd8f03ea.png) | ![image](https://user-images.githubusercontent.com/50797982/215457533-802154a7-cfd0-442b-9882-35cce210308f.png) | ![image](https://user-images.githubusercontent.com/50797982/215457770-e1822c28-d1ac-4938-b3cc-48dcdee5738a.png) |
+| clip                                                                                                            | jedypod                                                                                                             | bottosson                                                                                                           | false                                                                                                           |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| ![image](https://user-images.githubusercontent.com/50797982/215457620-7920720a-c6a2-4f71-aa30-cc97bd8f03ea.png) | ![image](https://github.com/natural-harmonia-gropius/hdr-toys/assets/50797982/b6fb1fb7-5063-4ee8-8679-6f0e316b7c56) | ![image](https://github.com/natural-harmonia-gropius/hdr-toys/assets/50797982/e40ca901-4645-46d5-b2e0-e0296630f38f) | ![image](https://user-images.githubusercontent.com/50797982/215457770-e1822c28-d1ac-4938-b3cc-48dcdee5738a.png) |
 
 You can set the intensity of jedypod by `set glsl-shader-opts select=N`.
 
