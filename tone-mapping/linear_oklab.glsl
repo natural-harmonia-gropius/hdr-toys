@@ -16,6 +16,9 @@
 //!BIND HOOKED
 //!DESC tone mapping (linear, Oklab)
 
+#define cbrt(x) (sign(x) * pow(abs(x), 1.0 / 3.0))
+
+
 vec3 RGB_to_XYZ(vec3 RGB) {
     mat3 M = mat3(
         0.6369580483012914, 0.14461690358620832,  0.1688809751641721,
@@ -55,9 +58,9 @@ vec3 LMS_to_Lab(vec3 LMS) {
         0.0259040371,  0.7827717662, -0.8086757660);
 
     LMS = vec3(
-        pow(LMS.x, 1.0 / 3.0),
-        pow(LMS.y, 1.0 / 3.0),
-        pow(LMS.z, 1.0 / 3.0)
+        cbrt(LMS.x),
+        cbrt(LMS.y),
+        cbrt(LMS.z)
     );
 
     return LMS * M;

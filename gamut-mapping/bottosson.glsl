@@ -4,8 +4,8 @@
 //!BIND HOOKED
 //!DESC gamut mapping (bottosson)
 
-#define cbrtf(x)    (sign(x) * pow(abs(x), 1.0 / 3.0))
-#define FLT_MAX     3.402823466e+38
+#define cbrt(x) (sign(x) * pow(abs(x), 1.0 / 3.0))
+#define FLT_MAX 3.402823466e+38
 
 
 // struct Lab {float L; float a; float b;};
@@ -17,9 +17,9 @@ vec3 linear_srgb_to_oklab(vec3 c)
 	float m = 0.2119034982 * c.r + 0.6806995451 * c.g + 0.1073969566 * c.b;
 	float s = 0.0883024619 * c.r + 0.2817188376 * c.g + 0.6299787005 * c.b;
 
-	float l_ = cbrtf(l);
-	float m_ = cbrtf(m);
-	float s_ = cbrtf(s);
+	float l_ = cbrt(l);
+	float m_ = cbrt(m);
+	float s_ = cbrt(s);
 
 	return vec3(
 		0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
@@ -122,7 +122,7 @@ vec2 find_cusp(float a, float b)
 
 	// Convert to linear sRGB to find the first point where at least one of r,g or b >= 1:
     vec3 rgb_at_max = oklab_to_linear_srgb(vec3(1, S_cusp * a, S_cusp * b));
-    float L_cusp = cbrtf(1.0 / max(max(rgb_at_max.r, rgb_at_max.g), rgb_at_max.b));
+    float L_cusp = cbrt(1.0 / max(max(rgb_at_max.r, rgb_at_max.g), rgb_at_max.b));
     float C_cusp = L_cusp * S_cusp;
 
     return vec2(L_cusp , C_cusp);

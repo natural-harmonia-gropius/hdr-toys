@@ -16,6 +16,9 @@
 //!BIND HOOKED
 //!DESC tone mapping (linear, Lab)
 
+#define cbrt(x) (sign(x) * pow(abs(x), 1.0 / 3.0))
+
+
 vec3 RGB_to_XYZ(vec3 RGB) {
     mat3 M = mat3(
         0.6369580483012914, 0.14461690358620832,  0.1688809751641721,
@@ -53,7 +56,7 @@ float deltac = delta * 2.0 / 3.0;
 
 float f1(float x, float delta) {
     return x > pow(delta, 3.0) ?
-        pow(x, 1.0 / 3.0) :
+        cbrt(x) :
         deltac + x / (3.0 * pow(delta, 2.0));
 }
 

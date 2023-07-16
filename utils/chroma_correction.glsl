@@ -29,6 +29,9 @@
 //!WHEN sigma
 //!DESC chroma correction
 
+#define cbrt(x) (sign(x) * pow(abs(x), 1.0 / 3.0))
+
+
 vec3 RGB_to_XYZ(vec3 RGB) {
     mat3 M = mat3(
         0.6369580483012914, 0.14461690358620832,  0.1688809751641721,
@@ -66,7 +69,7 @@ float deltac = delta * 2.0 / 3.0;
 
 float f1(float x, float delta) {
     return x > pow(delta, 3.0) ?
-        pow(x, 1.0 / 3.0) :
+        cbrt(x) :
         deltac + x / (3.0 * pow(delta, 2.0));
 }
 
@@ -135,6 +138,22 @@ vec3 LCH_to_Lab(vec3 LCH) {
     return vec3(LCH.x, a, b);
 }
 
+vec3 RGB_to_Lab(vec3 color) {
+    color *= L_sdr;
+    color  = RGB_to_XYZ(color);
+    color  = XYZD65_to_XYZD50(color);
+    color  = XYZ_to_Lab(color);
+    return color;
+}
+
+vec3 Lab_to_RGB(vec3 color) {
+    color  = Lab_to_XYZ(color);
+    color  = XYZD50_to_XYZD65(color);
+    color  = XYZ_to_RGB(color);
+    color /= L_sdr;
+    return color;
+}
+
 float chroma_correction(float L, float Lref, float Lmax, float sigma) {
     return L > Lref ?
         max(1.0 - sigma * (L - Lref) / (Lmax - Lref), 0.0) :
@@ -146,16 +165,10 @@ vec4 hook() {
     float L_ref = XYZ_to_Lab(RGB_to_XYZ(vec3(L_sdr))).x;
     float L_max = XYZ_to_Lab(RGB_to_XYZ(vec3(L_hdr))).x;
 
-    color.rgb *= L_sdr;
-    color.rgb  = RGB_to_XYZ(color.rgb);
-    color.rgb  = XYZD65_to_XYZD50(color.rgb);
-    color.rgb  = XYZ_to_Lab(color.rgb);
-    color.rgb  = Lab_to_LCH(color.rgb);
-    color.g   *= chroma_correction(color.x, L_ref, L_max, sigma);
-    color.rgb  = LCH_to_Lab(color.rgb);
-    color.rgb  = Lab_to_XYZ(color.rgb);
-    color.rgb  = XYZD50_to_XYZD65(color.rgb);
-    color.rgb  = XYZ_to_RGB(color.rgb);
-    color.rgb /= L_sdr;
+    color.rgb = RGB_to_Lab(color.rgb);
+    color.rgb = Lab_to_LCH(color.rgb);
+    color.y  *= chroma_correction(color.x, L_ref, L_max, sigma);
+    color.rgb = LCH_to_Lab(color.rgb);
+    color.rgb = Lab_to_RGB(color.rgb);
     return color;
 }
