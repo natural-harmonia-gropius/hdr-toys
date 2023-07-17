@@ -113,6 +113,22 @@ vec3 Lab_to_XYZ(vec3 Lab) {
     return vec3(X, Y, Z);
 }
 
+vec3 RGB_to_Lab(vec3 color) {
+    color *= L_sdr;
+    color  = RGB_to_XYZ(color);
+    color  = XYZD65_to_XYZD50(color);
+    color  = XYZ_to_Lab(color);
+    return color;
+}
+
+vec3 Lab_to_RGB(vec3 color) {
+    color  = Lab_to_XYZ(color);
+    color  = XYZD50_to_XYZD65(color);
+    color  = XYZ_to_RGB(color);
+    color /= L_sdr;
+    return color;
+}
+
 float pi = 3.141592653589793;
 float epsilon = 0.02;
 
@@ -138,22 +154,6 @@ vec3 LCH_to_Lab(vec3 LCH) {
     return vec3(LCH.x, a, b);
 }
 
-vec3 RGB_to_Lab(vec3 color) {
-    color *= L_sdr;
-    color  = RGB_to_XYZ(color);
-    color  = XYZD65_to_XYZD50(color);
-    color  = XYZ_to_Lab(color);
-    return color;
-}
-
-vec3 Lab_to_RGB(vec3 color) {
-    color  = Lab_to_XYZ(color);
-    color  = XYZD50_to_XYZD65(color);
-    color  = XYZ_to_RGB(color);
-    color /= L_sdr;
-    return color;
-}
-
 float chroma_correction(float L, float Lref, float Lmax, float sigma) {
     return L > Lref ?
         max(1.0 - sigma * (L - Lref) / (Lmax - Lref), 0.0) :
@@ -162,8 +162,8 @@ float chroma_correction(float L, float Lref, float Lmax, float sigma) {
 
 vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
-    float L_ref = XYZ_to_Lab(RGB_to_XYZ(vec3(L_sdr))).x;
-    float L_max = XYZ_to_Lab(RGB_to_XYZ(vec3(L_hdr))).x;
+    float L_ref = RGB_to_Lab(vec3(1.0)).x;
+    float L_max = RGB_to_Lab(vec3(L_hdr / L_sdr)).x;
 
     color.rgb = RGB_to_Lab(color.rgb);
     color.rgb = Lab_to_LCH(color.rgb);
