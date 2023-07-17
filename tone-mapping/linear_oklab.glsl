@@ -99,7 +99,7 @@ vec3 Lab_to_RGB(vec3 color) {
 
 float curve(float x) {
     const float iw = RGB_to_Lab(vec3(L_hdr / L_sdr)).x;
-    const float ow = RGB_to_Lab(vec3(L_sdr / L_sdr)).x;
+    const float ow = RGB_to_Lab(vec3(1.0)).x;
     const float w = iw / ow;
     return x / w;
 }
