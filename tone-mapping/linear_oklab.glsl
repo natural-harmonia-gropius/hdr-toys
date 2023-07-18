@@ -82,7 +82,6 @@ vec3 Lab_to_LMS(vec3 Lab) {
 }
 
 vec3 RGB_to_Lab(vec3 color) {
-    color *= L_sdr;
     color  = RGB_to_XYZ(color);
     color  = XYZ_to_LMS(color);
     color  = LMS_to_Lab(color);
@@ -93,7 +92,6 @@ vec3 Lab_to_RGB(vec3 color) {
     color  = Lab_to_LMS(color);
     color  = LMS_to_XYZ(color);
     color  = XYZ_to_RGB(color);
-    color /= L_sdr;
     return color;
 }
 
