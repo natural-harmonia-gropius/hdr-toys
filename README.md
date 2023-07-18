@@ -3,8 +3,6 @@
 Componentized Rec.2100 to Rec.709 conversion shader for mpv-player.  
 Featuring dynamic curves and a uniform color space.
 
-~~[Comparison with other dynamic tone mappings](https://github.com/natural-harmonia-gropius/hdr-toys/blob/master/Comparisons.md)~~
-
 ## Getting started
 
 > **Note**  
