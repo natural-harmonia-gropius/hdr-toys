@@ -119,19 +119,19 @@ In real world, the brighter the color, the less saturated it becomes, and eventu
 | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | ![image](https://user-images.githubusercontent.com/50797982/216247628-8647c010-ff70-488c-bc40-1d57612d1d9f.png) | ![image](https://user-images.githubusercontent.com/50797982/216247654-fc3066a1-098b-4f81-b4c5-a9c8eb6720cd.png) | ![image](https://user-images.githubusercontent.com/50797982/216247675-71c50982-2061-49b1-93b7-87ebe85951d6.png) |
 
+<!--
 ### Crosstalk
 
-> **Currently unused**
-
-This is a part of tone mapping, the screenshot below will show you how it works.  
+This is a part of tone mapping, the screenshot below will show you how it works.
 You can set the intensity of it by `set glsl-shader-opts alpha=N`.
 
-It makes the color less chromatic when tone mapping and the lightness between colors more even.  
+It makes the color less chromatic when tone mapping and the lightness between colors more even.
 And for some conversions like hejl2015, it brings achromatically highlights.
 
 | without crosstalk inverse                                                                                       | `alpha=0` with heatmap                                                                                          | `alpha=0.3` with heatmap                                                                                        | `alpha=0` with hejl2015                                                                                         | `alpha=0.3` with hejl2015                                                                                       |
 | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | ![image](https://user-images.githubusercontent.com/50797982/213441412-7f43f19c-afc3-4b31-8b5c-55c1ac064ff7.png) | ![image](https://user-images.githubusercontent.com/50797982/213441611-fd6e6afa-e39b-4a44-82da-45a667dfe88a.png) | ![image](https://user-images.githubusercontent.com/50797982/213441631-3f87b965-8206-4e91-a8dd-d867c07cbf0d.png) | ![image](https://user-images.githubusercontent.com/50797982/213442007-411fd942-c930-4629-8dc1-88da8705639e.png) | ![image](https://user-images.githubusercontent.com/50797982/213442036-45e0a832-7d14-40f5-b4ca-1320ad59358d.png) |
+-->
 
 ### Gamut mapping
 
