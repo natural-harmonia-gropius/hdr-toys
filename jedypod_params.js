@@ -82,7 +82,7 @@ function distance(r, g, b) {
     return [0, 0, 0];
   }
 
-  const d = [ac - r / abs(ac), ac - g / abs(ac), ac - b / abs(ac)];
+  const d = [ac - r, ac - g, ac - b].map((v) => v / abs(ac));
 
   return d;
 }
@@ -129,4 +129,4 @@ const threshold = [
   .map((v) => distance(...v))
   .reduce((p, c) => [max(p[0], c[0]), max(p[1], c[1]), max(p[2], c[2])]);
 
-console.table({ threshold, limit });
+console.table({ limit, threshold });

@@ -3,45 +3,39 @@
 
 //!PARAM cyan_limit
 //!TYPE float
-//!MINIMUM 1.001
+//!MINIMUM 1.000001
 //!MAXIMUM 2
-1.6516051598586419
+1.518705262732682
 
 //!PARAM magenta_limit
 //!TYPE float
-//!MINIMUM 1.001
+//!MINIMUM 1.000001
 //!MAXIMUM 2
-1.7354992221851722
+1.0750082200767368
 
 //!PARAM yellow_limit
 //!TYPE float
-//!MINIMUM 1.001
+//!MINIMUM 1.000001
 //!MAXIMUM 2
-1.6714219636926042
+1.0887800398456782
 
 //!PARAM cyan_threshold
 //!TYPE float
 //!MINIMUM 0
-//!MAXIMUM 1
-0.4771117822119532
+//!MAXIMUM 2
+1.0505085424784364
 
 //!PARAM magenta_threshold
 //!TYPE float
 //!MINIMUM 0
-//!MAXIMUM 1
-0.43298122287124785
+//!MAXIMUM 2
+0.9405097727736265
 
 //!PARAM yellow_threshold
 //!TYPE float
 //!MINIMUM 0
-//!MAXIMUM 1
-0.8429108377406571
-
-//!PARAM select
-//!TYPE float
-//!MINIMUM 0
-//!MAXIMUM 1
-0.135
+//!MAXIMUM 2
+0.9771607745933959
 
 //!HOOK OUTPUT
 //!BIND HOOKED
@@ -75,7 +69,7 @@ vec3 gamut_compress(vec3 rgb) {
     // Inverse RGB Ratios to RGB
     vec3 crgb = ac - cd * abs(ac);
 
-    return mix(rgb, crgb, select);
+    return crgb;
 }
 
 mat3 M = mat3(
