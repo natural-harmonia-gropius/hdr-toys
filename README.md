@@ -47,7 +47,7 @@ profile-restore=copy
 target-prim=bt.2020
 target-trc=bt.1886
 glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886_to_linear.glsl
-glsl-shader=~~/shaders/hdr-toys/gamut-mapping/jedypod.glsl
+glsl-shader=~~/shaders/hdr-toys/gamut-mapping/bottosson.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/linear_to_bt1886.glsl
 ```
 
