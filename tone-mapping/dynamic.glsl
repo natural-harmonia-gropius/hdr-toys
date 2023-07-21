@@ -488,17 +488,21 @@ vec3 Jzazbz_to_RGB(vec3 color) {
     return color;
 }
 
-float pi = 3.141592653589793;
-float epsilon = 0.0002;
+const float pi = 3.141592653589793;
+const float epsilon = 1e-6;
 
 vec3 Lab_to_LCH(vec3 Lab) {
     float a = Lab.y;
     float b = Lab.z;
 
     float C = length(vec2(a, b));
-    float H = (abs(a) < epsilon && abs(b) < epsilon) ?
-        0.0 :
-        atan(b, a) * 180.0 / pi;
+    float H = 0.0;
+
+    if (!(abs(a) < epsilon && abs(b) < epsilon)) {
+        H = atan(b, a);
+        H = H * 180.0 / pi;
+        H = mod((mod(H, 360.0) + 360.0), 360.0);
+    }
 
     return vec3(Lab.x, C, H);
 }
