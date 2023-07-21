@@ -24,6 +24,12 @@
 //!MAXIMUM 1
 0.2
 
+//!PARAM alpha
+//!TYPE float
+//!MINIMUM 0.00
+//!MAXIMUM 0.33
+0.04
+
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!WHEN sigma
@@ -79,16 +85,16 @@ float f2(float x, float delta) {
         (x - deltac) * (3.0 * pow(delta, 2.0));
 }
 
-vec3 XYZn = RGB_to_XYZ(vec3(L_sdr));
+vec3 XYZ_ref = RGB_to_XYZ(vec3(L_sdr));
 
 vec3 XYZ_to_Lab(vec3 XYZ) {
     float X = XYZ.x;
     float Y = XYZ.y;
     float Z = XYZ.z;
 
-    X = f1(X / XYZn.x, delta);
-    Y = f1(Y / XYZn.y, delta);
-    Z = f1(Z / XYZn.z, delta);
+    X = f1(X / XYZ_ref.x, delta);
+    Y = f1(Y / XYZ_ref.y, delta);
+    Z = f1(Z / XYZ_ref.z, delta);
 
     float L = 116.0 * Y - 16.0;
     float a = 500.0 * (X - Y);
@@ -106,9 +112,9 @@ vec3 Lab_to_XYZ(vec3 Lab) {
     float X = Y + a / 500.0;
     float Z = Y - b / 200.0;
 
-    X = f2(X, delta) * XYZn.x;
-    Y = f2(Y, delta) * XYZn.y;
-    Z = f2(Z, delta) * XYZn.z;
+    X = f2(X, delta) * XYZ_ref.x;
+    Y = f2(Y, delta) * XYZ_ref.y;
+    Z = f2(Z, delta) * XYZ_ref.z;
 
     return vec3(X, Y, Z);
 }
@@ -129,17 +135,21 @@ vec3 Lab_to_RGB(vec3 color) {
     return color;
 }
 
-float pi = 3.141592653589793;
-float epsilon = 0.02;
+const float pi = 3.141592653589793;
+const float epsilon = 1e-6;
 
 vec3 Lab_to_LCH(vec3 Lab) {
     float a = Lab.y;
     float b = Lab.z;
 
     float C = length(vec2(a, b));
-    float H = (abs(a) < epsilon && abs(b) < epsilon) ?
-        0.0 :
-        atan(b, a) * 180.0 / pi;
+    float H = 0.0;
+
+    if (!(abs(a) < epsilon && abs(b) < epsilon)) {
+        H = atan(b, a);
+        H = H * 180.0 / pi;
+        H = mod((mod(H, 360.0) + 360.0), 360.0);
+    }
 
     return vec3(Lab.x, C, H);
 }
@@ -155,20 +165,44 @@ vec3 LCH_to_Lab(vec3 LCH) {
 }
 
 float chroma_correction(float L, float Lref, float Lmax, float sigma) {
-    return L > Lref ?
-        max(1.0 - sigma * (L - Lref) / (Lmax - Lref), 0.0) :
-        1.0;
+    if (L > Lref) {
+        return max(1.0 - sigma * (L - Lref) / (Lmax - Lref), 0.0);
+    }
+
+    return 1.0;
+}
+
+vec3 crosstalk(vec3 x, float a) {
+    float b = 1.0 - 2.0 * a;
+    mat3  M = mat3(
+        b, a, a,
+        a, b, a,
+        a, a, b);
+    return x * M;
+}
+
+vec3 crosstalk_inv(vec3 x, float a) {
+    float b = 1.0 - a;
+    float c = 1.0 - 3.0 * a;
+    mat3  M = mat3(
+         b, -a, -a,
+        -a,  b, -a,
+        -a, -a,  b) / c;
+    return x * M;
 }
 
 vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
-    float L_ref = RGB_to_Lab(vec3(1.0)).x;
-    float L_max = RGB_to_Lab(vec3(L_hdr / L_sdr)).x;
+    const float L_ref = RGB_to_Lab(vec3(1.0)).x;
+    const float L_max = RGB_to_Lab(vec3(L_hdr / L_sdr)).x;
 
+    color.rgb = crosstalk(color.rgb, alpha);
     color.rgb = RGB_to_Lab(color.rgb);
     color.rgb = Lab_to_LCH(color.rgb);
     color.y  *= chroma_correction(color.x, L_ref, L_max, sigma);
     color.rgb = LCH_to_Lab(color.rgb);
     color.rgb = Lab_to_RGB(color.rgb);
+    color.rgb = crosstalk_inv(color.rgb, alpha);
+
     return color;
 }
