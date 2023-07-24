@@ -542,7 +542,7 @@ vec3 tone_mapping_hybrid(vec3 color) {
     sat = RGB_to_Jzazbz(sat);
     sat = Lab_to_LCH(sat);
 
-    dst = vec3(mix(lum.r, sat.r, src.r), mix(lum.g, rgb.g, src.r), src.b);
+    dst = vec3(mix(lum.r, sat.r, src.r * src.g), mix(lum.g, rgb.g, src.r), src.b);
     dst = LCH_to_Lab(dst);
     dst = Jzazbz_to_RGB(dst);
 
