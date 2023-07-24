@@ -22,7 +22,7 @@
 //!TYPE float
 //!MINIMUM 0
 //!MAXIMUM 1
-0.2
+0.05
 
 //!PARAM alpha
 //!TYPE float
