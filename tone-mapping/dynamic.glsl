@@ -48,6 +48,17 @@ void hook() {
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!SAVE BLURRED
+//!WIDTH 640
+//!HEIGHT 360
+//!DESC metering (spatial stabilization, downscaling)
+
+vec4 hook() {
+	return HOOKED_tex(HOOKED_pos);
+}
+
+//!HOOK OUTPUT
+//!BIND BLURRED
+//!SAVE BLURRED
 //!DESC metering (spatial stabilization, horizonal)
 
 #define offset vec3(0.0000000000, 1.3846153846, 3.2307692308)
@@ -55,11 +66,11 @@ void hook() {
 
 vec4 hook(){
     uint i = 0;
-    vec4 c = HOOKED_texOff(offset[i]) * weight[i];
+    vec4 c = BLURRED_texOff(offset[i]) * weight[i];
 
     for (i = 1; i < 3; i++) {
-        c += HOOKED_texOff( vec2(offset[i], 0.0)) * weight[i];
-        c += HOOKED_texOff(-vec2(offset[i], 0.0)) * weight[i];
+        c += BLURRED_texOff( vec2(offset[i], 0.0)) * weight[i];
+        c += BLURRED_texOff(-vec2(offset[i], 0.0)) * weight[i];
     }
 
     return vec4(c.rgb, 1.0);
