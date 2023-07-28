@@ -127,10 +127,12 @@ bool sence_changed() {
         return true;
     }
 
-    // hard transition, 1 stop tolerance
+    // hard transition, stops
+    float threshold = 1.5;
     float prev_ev = log2(L_max_t[0] / L_sdr);
     float curr_ev = log2(L_max / L_sdr);
-    if (abs(prev_ev - curr_ev) >= 1.0) {
+    float diff_ev = abs(prev_ev - curr_ev);
+    if (diff_ev >= threshold) {
         return true;
     }
 
