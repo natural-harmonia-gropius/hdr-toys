@@ -146,12 +146,37 @@ bool sence_changed() {
     return false;
 }
 
+const float pq_m1 = 0.1593017578125;
+const float pq_m2 = 78.84375;
+const float pq_c1 = 0.8359375;
+const float pq_c2 = 18.8515625;
+const float pq_c3 = 18.6875;
+
+const float pq_C  = 10000.0;
+
+float Y_to_ST2084(float C) {
+    float L = C / pq_C;
+    float Lm = pow(L, pq_m1);
+    float N = (pq_c1 + pq_c2 * Lm) / (1.0 + pq_c3 * Lm);
+    N = pow(N, pq_m2);
+    return N;
+}
+
+float ST2084_to_Y(float N) {
+    float Np = pow(N, 1.0 / pq_m2);
+    float L = Np - pq_c1;
+    if (L < 0.0 ) L = 0.0;
+    L = L / (pq_c2 - pq_c3 * Np);
+    L = pow(L, 1.0 / pq_m1);
+    return L * pq_C;
+}
+
 uint peak_harmonic_mean() {
-    float den = 1.0 / max(log2(L_max), 1e-6);
+    float den = 1.0 / max(Y_to_ST2084(L_max), 1e-6);
     for (uint i = 0; i < temporal_stable_frames - 1; i++) {
-        den += 1.0 / max(log2(L_max_t[i]), 1e-6);
+        den += 1.0 / max(Y_to_ST2084(L_max_t[i]), 1e-6);
     }
-    float peak = exp2(temporal_stable_frames / den);
+    float peak = ST2084_to_Y(temporal_stable_frames / den);
     return uint(peak);
 }
 
