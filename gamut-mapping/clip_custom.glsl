@@ -1,9 +1,17 @@
-// adapt from a source whitepoint or illuminant W1
-// to a destination whitepoint or illuminant W2
+// RGB to RGB conversion, include chromatic adaptation transform
 
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!DESC chromatic adaptation transform
+//!DESC gamut mapping (clip, custom)
+
+#define from    BT2020
+#define to      BT709
+#define cone    Bradford
+
+
+struct Chromaticity {
+    vec2 r, g, b, w;
+};
 
 vec2 A   = vec2(0.44757, 0.40745);
 vec2 B   = vec2(0.34842, 0.35161);
@@ -15,7 +23,45 @@ vec2 D65 = vec2(0.31271, 0.32902);
 vec2 D75 = vec2(0.29902, 0.31485);
 vec2 D93 = vec2(0.28315, 0.29711);
 vec2 E   = vec2(1.0/3.0, 1.0/3.0);
-vec2 DCI = vec2(0.314  , 0.351  );
+vec2 F2  = vec2(0.37208, 0.37529);
+vec2 F7  = vec2(0.31292, 0.32933);
+vec2 F11 = vec2(0.38052, 0.37713);
+vec2 DCI = vec2(0.31400, 0.35100);
+
+Chromaticity BT709  = Chromaticity(
+    vec2(0.64, 0.33),
+    vec2(0.30, 0.60),
+    vec2(0.15, 0.06),
+    D65
+);
+
+Chromaticity BT2020 = Chromaticity(
+    vec2(0.708, 0.292),
+    vec2(0.170, 0.797),
+    vec2(0.131, 0.046),
+    D65
+);
+
+Chromaticity P3DCI  = Chromaticity(
+    vec2(0.680, 0.320),
+    vec2(0.265, 0.690),
+    vec2(0.150, 0.060),
+    DCI
+);
+
+Chromaticity P3D65 = Chromaticity(
+    P3DCI.r,
+    P3DCI.g,
+    P3DCI.b,
+    D65
+);
+
+Chromaticity P3D60 = Chromaticity(
+    P3DCI.r,
+    P3DCI.g,
+    P3DCI.b,
+    D60
+);
 
 mat3 Bradford = mat3(
      0.8951000,  0.2664000, -0.1614000,
@@ -71,22 +117,6 @@ mat3 invert_mat3(mat3 m) {
     );
 }
 
-vec3 RGB_to_XYZ(vec3 RGB) {
-    mat3 M = mat3(
-        0.6369580483012914, 0.14461690358620832,  0.1688809751641721,
-        0.2627002120112671, 0.6779980715188708,   0.05930171646986196,
-        0.000000000000000,  0.028072693049087428, 1.060985057710791);
-    return RGB * M;
-}
-
-vec3 XYZ_to_RGB(vec3 XYZ) {
-    mat3 M = mat3(
-         1.716651187971268,  -0.355670783776392, -0.253366281373660,
-        -0.666684351832489,   1.616481236634939,  0.0157685458139111,
-         0.017639857445311,  -0.042770613257809,  0.942103121235474);
-    return XYZ * M;
-}
-
 vec3 xyY_to_XYZ(vec3 xyY) {
     float x = xyY.x;
     float y = xyY.y;
@@ -101,12 +131,33 @@ vec3 xyY_to_XYZ(vec3 xyY) {
     return vec3(X, Y, Z);
 }
 
-mat3 adapt(vec2 w1, vec2 w2, mat3 cone) {
-    vec3 src_xyY = vec3(w1, 1.0);
-    vec3 dst_xyY = vec3(w2, 1.0);
+mat3 RGB_to_XYZ(Chromaticity C) {
+    vec3 r = xyY_to_XYZ(vec3(C.r, 1.0));
+    vec3 g = xyY_to_XYZ(vec3(C.g, 1.0));
+    vec3 b = xyY_to_XYZ(vec3(C.b, 1.0));
+    vec3 w = xyY_to_XYZ(vec3(C.w, 1.0));
 
-    vec3 src_XYZ = xyY_to_XYZ(src_xyY);
-    vec3 dst_XYZ = xyY_to_XYZ(dst_xyY);
+    vec3 s = w * invert_mat3(mat3(
+        r.x, g.x, b.x,
+        r.y, g.y, b.y,
+        r.z, g.z, b.z
+    ));
+
+    return mat3(
+        s.r * r.x, s.g * g.x, s.b * b.x,
+        s.r * r.y, s.g * g.y, s.b * b.y,
+        s.r * r.z, s.g * g.z, s.b * b.z
+    );
+}
+
+mat3 XYZ_to_RGB(Chromaticity N) {
+    mat3 M = invert_mat3(RGB_to_XYZ(N));
+    return M;
+}
+
+mat3 adapt(vec2 w1, vec2 w2, mat3 cone) {
+    vec3 src_XYZ = xyY_to_XYZ(vec3(w1, 1.0));
+    vec3 dst_XYZ = xyY_to_XYZ(vec3(w2, 1.0));
 
     vec3 src_cone = src_XYZ * cone;
     vec3 dst_cone = dst_XYZ * cone;
@@ -122,8 +173,8 @@ mat3 adapt(vec2 w1, vec2 w2, mat3 cone) {
 
 vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
-    color.rgb  = RGB_to_XYZ(color.rgb);
-    color.rgb *= adapt(D65, DCI, Bradford);
-    color.rgb  = XYZ_to_RGB(color.rgb);
+    color.rgb *= RGB_to_XYZ(from);
+    color.rgb *= adapt(from.w, to.w, cone);
+    color.rgb *= XYZ_to_RGB(to);
     return color;
 }
