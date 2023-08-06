@@ -1,6 +1,6 @@
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!DESC linear to bt.1886
+//!DESC transfer function (bt.1886)
 
 const float GAMMA = 2.4;
 const float L_W = 1.0;

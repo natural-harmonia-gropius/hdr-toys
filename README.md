@@ -21,12 +21,11 @@ profile-restore=copy
 target-prim=bt.2020
 target-trc=pq
 glsl-shader=~~/shaders/hdr-toys/utils/clip_both.glsl
-glsl-shader=~~/shaders/hdr-toys/transfer-function/pq_to_l.glsl
-glsl-shader=~~/shaders/hdr-toys/transfer-function/l_to_linear.glsl
+glsl-shader=~~/shaders/hdr-toys/transfer-function/pq_inv.glsl
 glsl-shader=~~/shaders/hdr-toys/utils/chroma_correction.glsl
 glsl-shader=~~/shaders/hdr-toys/tone-mapping/dynamic.glsl
 glsl-shader=~~/shaders/hdr-toys/gamut-mapping/jedypod.glsl
-glsl-shader=~~/shaders/hdr-toys/transfer-function/linear_to_bt1886.glsl
+glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886.glsl
 
 [bt.2100-hlg]
 profile-cond=get("video-params/primaries") == "bt.2020" and get("video-params/gamma") == "hlg"
@@ -34,21 +33,20 @@ profile-restore=copy
 target-prim=bt.2020
 target-trc=hlg
 glsl-shader=~~/shaders/hdr-toys/utils/clip_both.glsl
-glsl-shader=~~/shaders/hdr-toys/transfer-function/hlg_to_l.glsl
-glsl-shader=~~/shaders/hdr-toys/transfer-function/l_to_linear.glsl
+glsl-shader=~~/shaders/hdr-toys/transfer-function/hlg_inv.glsl
 glsl-shader=~~/shaders/hdr-toys/utils/chroma_correction.glsl
 glsl-shader=~~/shaders/hdr-toys/tone-mapping/dynamic.glsl
 glsl-shader=~~/shaders/hdr-toys/gamut-mapping/jedypod.glsl
-glsl-shader=~~/shaders/hdr-toys/transfer-function/linear_to_bt1886.glsl
+glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886.glsl
 
 [bt.2020]
 profile-cond=get("video-params/primaries") == "bt.2020" and get("video-params/gamma") == "bt.1886"
 profile-restore=copy
 target-prim=bt.2020
 target-trc=bt.1886
-glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886_to_linear.glsl
+glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886_inv.glsl
 glsl-shader=~~/shaders/hdr-toys/gamut-mapping/bottosson.glsl
-glsl-shader=~~/shaders/hdr-toys/transfer-function/linear_to_bt1886.glsl
+glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886.glsl
 ```
 
 - Dolby Vision Profile 5 is not tagged as HDR, so it wouldn't activate any auto-profile.

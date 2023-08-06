@@ -1,6 +1,6 @@
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!DESC srgb to linear
+//!DESC transfer function (srgb, inverse)
 
 const float GAMMA  = 2.4;
 const float OFFSET = 0.055;

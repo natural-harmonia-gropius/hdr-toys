@@ -1,6 +1,12 @@
+//!PARAM L_sdr
+//!TYPE float
+//!MINIMUM 0
+//!MAXIMUM 1000
+203.0
+
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!DESC hybrid log–gamma to luminance
+//!DESC transfer function (hlg, inverse)
 
 const float L_w   = 1000.0;
 const float L_b   = 0.0;
@@ -31,6 +37,6 @@ vec3 HLG_to_Y(vec3 HLG) {
 
 vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
-    color.rgb = HLG_to_Y(color.rgb);
+    color.rgb = HLG_to_Y(color.rgb) / L_sdr;
     return color;
 }
