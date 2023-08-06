@@ -54,7 +54,7 @@ glsl-shader=~~/shaders/hdr-toys/transfer-function/linear_to_bt1886.glsl
 - Dolby Vision Profile 5 is not tagged as HDR, so it wouldn't activate any auto-profile.
 - Don't set target-peak, icc-profile...  
   Make sure there are **no** built-in tone map, gamut map, 3DLUT... in "Frame Timings" page.
-- If you are not using a BT.709 display, replace all gamut-mapping/\* with `gamut-mapping/clip_custom.glsl`. Then set `from` and `to` in clip_custom.glsl to match your display.
+- If you are not using a BT.709 display, replace all gamut-mapping/\* with `gamut-mapping/clip_custom.glsl`. Then set `to` in clip_custom.glsl to match your display.
 
 ## Detailed information
 
