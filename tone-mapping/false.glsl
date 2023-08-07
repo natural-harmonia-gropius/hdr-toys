@@ -23,8 +23,9 @@
 //!WHEN enabled
 //!DESC tone mapping (false color)
 
-vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
+    vec4 color = HOOKED_texOff(0);
+
     float L = 0.0;
     if (enabled == 1) // Y (relative luminance)
         L = dot(color.rgb, vec3(0.2627, 0.6780, 0.0593));

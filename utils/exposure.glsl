@@ -11,8 +11,9 @@
 //!WHEN ev
 //!DESC exposure
 
-vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
+    vec4 color = HOOKED_texOff(0);
+
     color.rgb *= exp2(ev);
     return color;
 }

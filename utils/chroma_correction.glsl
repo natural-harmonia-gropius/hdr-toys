@@ -191,8 +191,9 @@ vec3 crosstalk_inv(vec3 x, float a) {
     return x * M;
 }
 
-vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
+    vec4 color = HOOKED_texOff(0);
+
     const float L_ref = RGB_to_Lab(vec3(1.0)).x;
     const float L_max = RGB_to_Lab(vec3(L_hdr / L_sdr)).x;
 

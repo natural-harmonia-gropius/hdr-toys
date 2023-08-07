@@ -28,8 +28,9 @@ vec3 tone_mapping_max(vec3 RGB) {
     return RGB * curve(m) / m;
 }
 
-vec4 color = HOOKED_tex(HOOKED_pos);
 void hook() {
+    vec4 color = HOOKED_texOff(0);
+
     L_max = 1.0;
 
     metering();

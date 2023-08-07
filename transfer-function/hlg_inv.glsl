@@ -35,8 +35,9 @@ vec3 HLG_to_Y(vec3 HLG) {
     return displayLinear;
 }
 
-vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
+    vec4 color = HOOKED_texOff(0);
+
     color.rgb = HLG_to_Y(color.rgb) / L_sdr;
     return color;
 }

@@ -15,8 +15,9 @@ float bt1886_f(float V, float gamma, float Lw, float Lb) {
     return L;
 }
 
-vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
+    vec4 color = HOOKED_texOff(0);
+
     color.rgb = vec3(
         bt1886_f(color.r, GAMMA, L_W, L_B),
         bt1886_f(color.g, GAMMA, L_W, L_B),

@@ -67,8 +67,9 @@ float curve(float x) {
     return f(x, k1, k3, ip) / over_white;
 }
 
-vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
+    vec4 color = HOOKED_texOff(0);
+
     color.rgb = RGB_to_XYZ(color.rgb);
     color.rgb = XYZ_to_xyY(color.rgb);
     color.z   = curve(color.z);

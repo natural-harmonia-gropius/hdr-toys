@@ -171,8 +171,9 @@ mat3 adapt(vec2 w1, vec2 w2, mat3 cone) {
     return (scale * invert_mat3(cone)) * cone;
 }
 
-vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
+    vec4 color = HOOKED_texOff(0);
+
     color.rgb *= RGB_to_XYZ(from);
     color.rgb *= adapt(from.w, to.w, cone);
     color.rgb *= XYZ_to_RGB(to);

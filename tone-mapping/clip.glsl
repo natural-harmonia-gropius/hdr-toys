@@ -38,8 +38,9 @@ vec3 tone_mapping_rgb(vec3 RGB) {
     return vec3(curve(RGB.r), curve(RGB.g), curve(RGB.b));
 }
 
-vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
+    vec4 color = HOOKED_texOff(0);
+
     color.rgb = tone_mapping_rgb(color.rgb);
     return color;
 }

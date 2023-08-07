@@ -53,7 +53,7 @@ void hook() {
 //!DESC metering (spatial stabilization, downscaling)
 
 vec4 hook() {
-	return HOOKED_tex(HOOKED_pos);
+	return HOOKED_texOff(0);
 }
 
 //!HOOK OUTPUT
@@ -599,8 +599,9 @@ void calc_user_params_from_metered() {
     toeStrength = 0.5 + 0.5 * (L_min / (toeLength - black));
 }
 
-vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
+    vec4 color = HOOKED_texOff(0);
+
     calc_user_params_from_metered();
     calc_direct_params_from_user();
     color.rgb = tone_mapping_hybrid(color.rgb);

@@ -86,8 +86,9 @@ vec3 tone_mapping(vec3 YCbCr) {
     return vec3(Y, Cb, Cr);
 }
 
-vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
+    vec4 color = HOOKED_texOff(0);
+
     color.rgb = RGB_to_YCbCr(color.rgb);
     color.rgb = tone_mapping(color.rgb);
     color.rgb = YCbCr_to_RGB(color.rgb);

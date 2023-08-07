@@ -16,8 +16,9 @@
 //!BIND HOOKED
 //!DESC signal range scaling (inverse)
 
-vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
+    vec4 color = HOOKED_texOff(0);
+
     const float l = pow(2, depth);
     const float d = l - 1;
     const float b = l * black / d;

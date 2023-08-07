@@ -12,8 +12,9 @@ float moncurve_f(float x, float gamma, float offs) {
     return x >= xb ? pow((x + offs) / (1.0 + offs), gamma) : x * fs;
 }
 
-vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
+    vec4 color = HOOKED_texOff(0);
+
     color.rgb = vec3(
         moncurve_f(color.r, GAMMA, OFFSET),
         moncurve_f(color.g, GAMMA, OFFSET),

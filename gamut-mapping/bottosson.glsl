@@ -365,8 +365,9 @@ mat3 M = mat3(
     -0.12455047452159074,  1.1328998971259596,  -0.008349422604369515,
     -0.01815076335490526, -0.10057889800800737,  1.118729661362913);
 
-vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
+    vec4 color = HOOKED_texOff(0);
+
     vec3 color_src = color.rgb;
     vec3 color_dst = color_src * M;
 

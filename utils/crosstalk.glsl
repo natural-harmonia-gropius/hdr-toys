@@ -22,8 +22,9 @@ vec3 crosstalk(vec3 x, float a) {
     return x * M;
 }
 
-vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
+    vec4 color = HOOKED_texOff(0);
+
     color.rgb = crosstalk(color.rgb, alpha);
     return color;
 }

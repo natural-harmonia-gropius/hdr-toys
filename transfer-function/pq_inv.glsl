@@ -38,8 +38,9 @@ vec3 ST2084_to_Y_f3(vec3 rgb) {
     return vec3(ST2084_to_Y(rgb.r), ST2084_to_Y(rgb.g), ST2084_to_Y(rgb.b));
 }
 
-vec4 color = HOOKED_tex(HOOKED_pos);
 vec4 hook() {
+    vec4 color = HOOKED_texOff(0);
+
     color.rgb = ST2084_to_Y_f3(color.rgb) / L_sdr;
     return color;
 }
