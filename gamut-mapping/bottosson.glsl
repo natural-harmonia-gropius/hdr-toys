@@ -368,10 +368,7 @@ mat3 M = mat3(
 vec4 hook() {
     vec4 color = HOOKED_texOff(0);
 
-    vec3 color_src = color.rgb;
-    vec3 color_dst = color_src * M;
-
-    color.rgb = gamut_clip_adaptive_L0_L_cusp(color_dst, -1);
+    color.rgb = gamut_clip_adaptive_L0_L_cusp(color.rgb * M, -1);
 
     return color;
 }
