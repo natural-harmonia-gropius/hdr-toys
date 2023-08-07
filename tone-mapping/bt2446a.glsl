@@ -17,12 +17,11 @@
 //!BIND HOOKED
 //!DESC tone mapping (bt.2446a)
 
-// https://gist.github.com/yohhoy/dafa5a47dade85d8b40625261af3776a
-const float a = 0.2627;
-const float b = 0.6780;
-const float c = 0.0593; // a + b + c = 1
-const float d = 1.8814; // 2 * (a + b)
-const float e = 1.4747; // 2 * (1 - a)
+const float a = 0.2627002120112671;
+const float b = 0.6779980715188708;
+const float c = 0.05930171646986196;
+const float d = 2 * (a + b);
+const float e = 2 * (1 - a);
 
 vec3 RGB_to_YCbCr(vec3 RGB) {
     float R = RGB.r;

@@ -29,7 +29,7 @@ vec3 HLG_to_Y(vec3 HLG) {
     );
 
     // HLG OOTF (scene linear to display linear)
-    const float Y_s = dot(sceneLinear, vec3(0.2627, 0.6780, 0.0593));
+    const float Y_s = dot(sceneLinear, vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196));
     const vec3 displayLinear = alpha * pow(Y_s, gamma - 1) * sceneLinear + beta;
 
     return displayLinear;
