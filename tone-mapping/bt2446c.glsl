@@ -75,5 +75,6 @@ vec4 hook() {
     color.z   = curve(color.z);
     color.rgb = xyY_to_XYZ(color.rgb);
     color.rgb = XYZ_to_RGB(color.rgb);
+
     return color;
 }

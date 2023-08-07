@@ -133,5 +133,6 @@ vec4 hook() {
     color.rgb = RGB_to_ICtCp(color.rgb);
     color.rgb = tone_mapping_ictcp(color.rgb);
     color.rgb = ICtCp_to_RGB(color.rgb);
+
     return color;
 }

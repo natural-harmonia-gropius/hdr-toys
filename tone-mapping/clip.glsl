@@ -42,5 +42,6 @@ vec4 hook() {
     vec4 color = HOOKED_texOff(0);
 
     color.rgb = tone_mapping_rgb(color.rgb);
+
     return color;
 }

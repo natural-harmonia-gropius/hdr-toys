@@ -177,5 +177,6 @@ vec4 hook() {
     color.rgb *= RGB_to_XYZ(from);
     color.rgb *= adapt(from.w, to.w, cone);
     color.rgb *= XYZ_to_RGB(to);
+
     return color;
 }

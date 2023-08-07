@@ -158,5 +158,6 @@ vec4 hook() {
     color.rgb = RGB_to_Jzazbz(color.rgb);
     color.rgb = tone_mapping_ictcp(color.rgb);
     color.rgb = Jzazbz_to_RGB(color.rgb);
+
     return color;
 }

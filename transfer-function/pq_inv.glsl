@@ -42,5 +42,6 @@ vec4 hook() {
     vec4 color = HOOKED_texOff(0);
 
     color.rgb = ST2084_to_Y_f3(color.rgb) / L_sdr;
+
     return color;
 }

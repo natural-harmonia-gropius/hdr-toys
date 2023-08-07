@@ -20,5 +20,6 @@ vec4 hook() {
         moncurve_f(color.g, GAMMA, OFFSET),
         moncurve_f(color.b, GAMMA, OFFSET)
     );
+
     return color;
 }

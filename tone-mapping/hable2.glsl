@@ -225,5 +225,6 @@ vec4 hook() {
 
     calc_direct_params_from_user();
     color.rgb = tone_mapping_y(color.rgb);
+
     return color;
 }

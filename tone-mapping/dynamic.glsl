@@ -605,5 +605,6 @@ vec4 hook() {
     calc_user_params_from_metered();
     calc_direct_params_from_user();
     color.rgb = tone_mapping_hybrid(color.rgb);
+
     return color;
 }

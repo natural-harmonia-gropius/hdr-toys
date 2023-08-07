@@ -23,5 +23,6 @@ vec4 hook() {
         bt1886_f(color.g, GAMMA, L_W, L_B),
         bt1886_f(color.b, GAMMA, L_W, L_B)
     );
+
     return color;
 }

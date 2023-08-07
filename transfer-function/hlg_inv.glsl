@@ -39,5 +39,6 @@ vec4 hook() {
     vec4 color = HOOKED_texOff(0);
 
     color.rgb = HLG_to_Y(color.rgb) / L_sdr;
+
     return color;
 }

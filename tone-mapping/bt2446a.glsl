@@ -92,5 +92,6 @@ vec4 hook() {
     color.rgb = RGB_to_YCbCr(color.rgb);
     color.rgb = tone_mapping(color.rgb);
     color.rgb = YCbCr_to_RGB(color.rgb);
+
     return color;
 }
