@@ -104,8 +104,13 @@ vec4 hook(){
 //!DESC metering (min, max)
 
 void hook() {
-    vec4 texelValue = texelFetch(BLURRED_raw, ivec2(gl_GlobalInvocationID.xy), 0);
-    float L = L_sdr * max(max(texelValue.r, texelValue.g), texelValue.b);
+    vec4 color = texelFetch(BLURRED_raw, ivec2(gl_GlobalInvocationID.xy), 0);
+
+    float y = dot(color.rgb, vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196));
+    float m = max(max(color.r, color.g), color.b);
+
+    // value below 1 doesn't make sense, can also improve fade in.
+    float L = max(max(y, m), 1.0) * L_sdr;
 
     atomicMin(L_min, uint(L + 0.5));
     atomicMax(L_max, uint(L + 0.5));
@@ -570,7 +575,7 @@ vec3 tone_mapping_hybrid(vec3 color) {
     rgb = RGB_to_Jzazbz(rgb);
     rgb = Lab_to_LCH(rgb);
 
-    float L = dot(color, vec3(0.2627, 0.6780, 0.0593));
+    float L = dot(color, vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196));
     lum = color * curve(L) / L;
     lum = RGB_to_Jzazbz(lum);
     lum = Lab_to_LCH(lum);
