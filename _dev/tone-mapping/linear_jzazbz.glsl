@@ -1,5 +1,3 @@
-// Linear tone mapping of I in ICtCp.
-
 //!PARAM L_hdr
 //!TYPE float
 //!MINIMUM 0
