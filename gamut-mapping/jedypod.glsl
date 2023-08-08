@@ -41,6 +41,39 @@
 //!BIND HOOKED
 //!DESC gamut mapping (jedypod)
 
+#define func    parabolic
+
+
+// Parabolic compression function: https://www.desmos.com/calculator/nvhp63hmtj
+float parabolic(float dist, float lim, float thr) {
+    if (dist > thr) {
+        // Calculate scale so compression function passes through distance limit: (x=dl, y=1)
+        float scale = (1.0 - thr) / sqrt(lim - 1.0);
+        float sacle_ = scale * scale / 4.0;
+        dist = scale * (sqrt(dist - thr + sacle_) - sqrt(sacle_)) + thr;
+    }
+
+    return dist;
+}
+
+float power(float dist, float lim, float thr) {
+    float pwr = 1.2;
+
+    if (dist > thr) {
+        // Calculate scale factor for y = 1 intersect
+        float scl = (lim - thr) / pow(pow((1.0 - thr) / (lim - thr), -pwr) - 1.0, 1.0 / pwr);
+
+        // Normalize distance outside threshold by scale factor
+        float nd = (dist - thr) / scl;
+        float p = pow(nd, pwr);
+
+        // Compress
+        dist = thr + scl * nd / (pow(1.0 + p, 1.0 / pwr));
+    }
+
+    return dist;
+}
+
 vec3 gamut_compress(vec3 rgb) {
     // Distance limit: How far beyond the gamut boundary to compress
     vec3 dl = vec3(cyan_limit, magenta_limit, yellow_limit);
@@ -54,17 +87,12 @@ vec3 gamut_compress(vec3 rgb) {
     // Inverse RGB Ratios: distance from achromatic axis
     vec3 d = ac == 0.0 ? vec3(0.0) : (ac - rgb) / abs(ac);
 
-    // Calculate scale so compression function passes through distance limit: (x=dl, y=1)
-    vec3 s;
-    s.x = (1.0 - th.x) / sqrt(dl.x - 1.0);
-    s.y = (1.0 - th.y) / sqrt(dl.y - 1.0);
-    s.z = (1.0 - th.z) / sqrt(dl.z - 1.0);
-
-    vec3 cd; // Compressed distance
-    // Parabolic compression function: https://www.desmos.com/calculator/nvhp63hmtj
-    cd.x = d.x < th.x ? d.x : s.x * sqrt(d.x - th.x + s.x * s.x / 4.0) - s.x * sqrt(s.x * s.x / 4.0) + th.x;
-    cd.y = d.y < th.y ? d.y : s.y * sqrt(d.y - th.y + s.y * s.y / 4.0) - s.y * sqrt(s.y * s.y / 4.0) + th.y;
-    cd.z = d.z < th.z ? d.z : s.z * sqrt(d.z - th.z + s.z * s.z / 4.0) - s.z * sqrt(s.z * s.z / 4.0) + th.z;
+    // Compressed distance
+    vec3 cd = vec3(
+        func(d.x, dl.x, th.x),
+        func(d.y, dl.y, th.y),
+        func(d.z, dl.z, th.z)
+    );
 
     // Inverse RGB Ratios to RGB
     vec3 crgb = ac - cd * abs(ac);
