@@ -9,83 +9,97 @@
 #define cone    Bradford
 
 
+// White points of standard illuminants
+
+const vec2 A    = vec2(0.44757, 0.40745);
+const vec2 B    = vec2(0.34842, 0.35161);
+const vec2 C    = vec2(0.31006, 0.31616);
+const vec2 D50  = vec2(0.34567, 0.35850);
+const vec2 D55  = vec2(0.33242, 0.34743);
+const vec2 D60  = vec2(0.32163, 0.33774);
+const vec2 D65  = vec2(0.31271, 0.32902);
+const vec2 D75  = vec2(0.29902, 0.31485);
+const vec2 D93  = vec2(0.28315, 0.29711);
+const vec2 E    = vec2(1.0/3.0, 1.0/3.0);
+const vec2 F2   = vec2(0.37208, 0.37529);
+const vec2 F7   = vec2(0.31292, 0.32933);
+const vec2 F11  = vec2(0.38052, 0.37713);
+const vec2 DCI  = vec2(0.31400, 0.35100);
+const vec2 ACES = vec2(0.32168, 0.33767);
+
+// Chromaticities
+
 struct Chromaticity {
     vec2 r, g, b, w;
 };
 
-vec2 A   = vec2(0.44757, 0.40745);
-vec2 B   = vec2(0.34842, 0.35161);
-vec2 C   = vec2(0.31006, 0.31616);
-vec2 D50 = vec2(0.34567, 0.35850);
-vec2 D55 = vec2(0.33242, 0.34743);
-vec2 D60 = vec2(0.32168, 0.33767);
-vec2 D65 = vec2(0.31271, 0.32902);
-vec2 D75 = vec2(0.29902, 0.31485);
-vec2 D93 = vec2(0.28315, 0.29711);
-vec2 E   = vec2(1.0/3.0, 1.0/3.0);
-vec2 F2  = vec2(0.37208, 0.37529);
-vec2 F7  = vec2(0.31292, 0.32933);
-vec2 F11 = vec2(0.38052, 0.37713);
-vec2 DCI = vec2(0.31400, 0.35100);
-
-Chromaticity BT709  = Chromaticity(
+// ITU-R Recommendation BT.709
+const Chromaticity BT709  = Chromaticity(
     vec2(0.64, 0.33),
     vec2(0.30, 0.60),
     vec2(0.15, 0.06),
     D65
 );
 
-Chromaticity BT2020 = Chromaticity(
+// ITU-R Recommendation BT.2020
+const Chromaticity BT2020 = Chromaticity(
     vec2(0.708, 0.292),
     vec2(0.170, 0.797),
     vec2(0.131, 0.046),
     D65
 );
 
-Chromaticity P3DCI  = Chromaticity(
+// P3-DCI (Theater)
+const Chromaticity P3DCI  = Chromaticity(
     vec2(0.680, 0.320),
     vec2(0.265, 0.690),
     vec2(0.150, 0.060),
     DCI
 );
 
-Chromaticity P3D65 = Chromaticity(
+// P3-D65 (Display)
+const Chromaticity P3D65 = Chromaticity(
     P3DCI.r,
     P3DCI.g,
     P3DCI.b,
     D65
 );
 
-Chromaticity P3D60 = Chromaticity(
+// P3-D60 (ACES Cinema)
+const Chromaticity P3D60 = Chromaticity(
     P3DCI.r,
     P3DCI.g,
     P3DCI.b,
-    D60
+    ACES
 );
 
-mat3 Bradford = mat3(
+// Chromatic adaptation methods
+
+const mat3 Bradford = mat3(
      0.8951000,  0.2664000, -0.1614000,
     -0.7502000,  1.7135000,  0.0367000,
      0.0389000, -0.0685000,  1.0296000
 );
 
-mat3 von_Kries = mat3(
+const mat3 von_Kries = mat3(
      0.4002400,  0.7076000, -0.0808100,
     -0.2263000,  1.1653200,  0.0457000,
      0.0000000,  0.0000000,  0.9182200
 );
 
-mat3 CAT02 = mat3(
+const mat3 CAT02 = mat3(
      0.7328000,  0.4296000, -0.1624000,
     -0.7036000,  1.6975000,  0.0061000,
      0.0030000,  0.0136000,  0.9834000
 );
 
-mat3 CAT16 = mat3(
+const mat3 CAT16 = mat3(
      0.401288,  0.650173, -0.051461,
     -0.250268,  1.204414,  0.045854,
     -0.002079,  0.048952,  0.953127
 );
+
+// Constants End
 
 mat3 invert_mat3(mat3 m) {
     float determinant =
@@ -155,7 +169,7 @@ mat3 XYZ_to_RGB(Chromaticity N) {
     return M;
 }
 
-mat3 adapt(vec2 w1, vec2 w2, mat3 cone) {
+mat3 adaptation(vec2 w1, vec2 w2, mat3 cone) {
     vec3 src_XYZ = xyY_to_XYZ(vec3(w1, 1.0));
     vec3 dst_XYZ = xyY_to_XYZ(vec3(w2, 1.0));
 
@@ -175,7 +189,7 @@ vec4 hook() {
     vec4 color = HOOKED_texOff(0);
 
     color.rgb *= RGB_to_XYZ(from);
-    color.rgb *= adapt(from.w, to.w, cone);
+    color.rgb *= adaptation(from.w, to.w, cone);
     color.rgb *= XYZ_to_RGB(to);
 
     return color;
