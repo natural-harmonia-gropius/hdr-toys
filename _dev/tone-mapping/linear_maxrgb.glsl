@@ -12,22 +12,22 @@
 
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!DESC tone mapping (linear, Relative luminance)
+//!DESC tone mapping (linear，maxRGB)
 
 float curve(float x) {
     const float w = L_hdr / L_sdr;
     return x / w;
 }
 
-vec3 tone_mapping_y(vec3 RGB) {
-    const float y = dot(RGB, vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196));
-    return RGB * curve(y) / y;
+vec3 tone_mapping_max(vec3 RGB) {
+    const float m = max(max(RGB.r, RGB.g), RGB.b);
+    return RGB * curve(m) / m;
 }
 
 vec4 hook() {
     vec4 color = HOOKED_texOff(0);
 
-    color.rgb = tone_mapping_y(color.rgb);
+    color.rgb = tone_mapping_max(color.rgb);
 
     return color;
 }

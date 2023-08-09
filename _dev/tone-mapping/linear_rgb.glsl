@@ -12,16 +12,15 @@
 
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!DESC tone mapping (linear, Relative luminance)
+//!DESC tone mapping (linear, RGB pre-channel)
 
 float curve(float x) {
     const float w = L_hdr / L_sdr;
     return x / w;
 }
 
-vec3 tone_mapping_y(vec3 RGB) {
-    const float y = dot(RGB, vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196));
-    return RGB * curve(y) / y;
+vec3 tone_mapping_rgb(vec3 RGB) {
+    return vec3(curve(RGB.r), curve(RGB.g), curve(RGB.b));
 }
 
 vec4 hook() {

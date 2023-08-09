@@ -12,7 +12,7 @@
 
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!DESC tone mapping (linear, Lab)
+//!DESC tone mapping (linear, CIE-Lab)
 
 #define cbrt(x) (sign(x) * pow(abs(x), 1.0 / 3.0))
 
