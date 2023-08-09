@@ -50,52 +50,42 @@ function multiplyMatrices(A, B) {
   return product;
 }
 
-function xyY_to_XYZ(x, y, Y) {
-  const X = (x * Y) / max(y, 1e-6);
-  const Z = ((1.0 - x - y) * Y) / max(y, 1e-6);
-
-  return [X, Y, Z];
-}
-
-function XYZ_to_BT2020(X, Y, Z) {
-  const M = [
-    [1.716651187971268, -0.355670783776392, -0.25336628137366],
-    [-0.666684351832489, 1.616481236634939, 0.0157685458139111],
-    [0.017639857445311, -0.042770613257809, 0.942103121235474],
-  ];
-  return multiplyMatrices(M, [X, Y, Z]);
-}
-
-function BT2020_to_BT709(r, g, b) {
-  const M = [
-    [1.6604910021084354, -0.5876411387885495, -0.07284986331988474],
-    [-0.12455047452159074, 1.1328998971259596, -0.008349422604369515],
-    [-0.01815076335490526, -0.10057889800800737, 1.118729661362913],
-  ];
-  return multiplyMatrices(M, [r, g, b]);
-}
-
 function distance(r, g, b) {
   const ac = max(r, g, b);
-
-  if (ac === 0) {
-    return [0, 0, 0];
-  }
-
-  const d = [ac - r, ac - g, ac - b].map((v) => v / abs(ac));
-
-  return d;
+  if (ac === 0) return [0, 0, 0];
+  return [ac - r, ac - g, ac - b].map((v) => v / abs(ac));
 }
 
+function xyY_to_XYZ(x, y, Y) {
+  return [(x * Y) / max(y, 1e-6), Y, ((1.0 - x - y) * Y) / max(y, 1e-6)];
+}
+
+// XYZ to output color space, BT.709 here
+// http://color.support/colorspacecalculator.html
+function XYZ_to_RGB(r, g, b) {
+  return multiplyMatrices(
+    [
+      [ 1.594218, -0.367846, -0.226372],
+      [-0.690519,  1.672304,  0.018215],
+      [ 0.011107, -0.006694,  0.995587],
+    ],
+    [r, g, b]
+  );
+}
+
+// Chromaticities of input color space, BT.2020 here
+// https://en.wikipedia.org/wiki/Rec._2020#System_colorimetry
 const limit = [
-  [1, 0, 0],
-  [0, 1, 0],
-  [0, 0, 1],
+  [0.708, 0.292, 1.0],
+  [0.17, 0.797, 1.0],
+  [0.131, 0.046, 1.0],
 ]
-  .map((v) => BT2020_to_BT709(...v))
+  .map((v) => xyY_to_XYZ(...v))
+  .map((v) => XYZ_to_RGB(...v))
   .map((v) => distance(...v))
   .reduce((p, c) => [max(p[0], c[0]), max(p[1], c[1]), max(p[2], c[2])]);
 
+// https://en.wikipedia.org/wiki/ColorChecker#Colors
 const threshold = [
   [0.4, 0.35, 10.1],
   [0.377, 0.345, 35.8],
@@ -124,8 +114,7 @@ const threshold = [
 ]
   .map((v) => [v[0], v[1], v[2] / 100])
   .map((v) => xyY_to_XYZ(...v))
-  .map((v) => XYZ_to_BT2020(...v))
-  .map((v) => BT2020_to_BT709(...v))
+  .map((v) => XYZ_to_RGB(...v))
   .map((v) => distance(...v))
   .reduce((p, c) => [max(p[0], c[0]), max(p[1], c[1]), max(p[2], c[2])]);
 
