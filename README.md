@@ -6,8 +6,10 @@ Featuring dynamic curves and a uniform color space.
 ## Getting started
 
 > **Note**  
-> `vo=gpu-next` is required.  
-> Recommended to use the git version of mpv.  
+> [`vo=gpu-next`](https://mpv.io/manual/master/#video-output-drivers-gpu-next) is required.  
+> Recommended to use the git version of mpv:  
+> [shinchiro/mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake/releases) / [zhongfly/mpv-winbuild](https://github.com/zhongfly/mpv-winbuild/releases) / [aur/mpv-full-git](https://aur.archlinux.org/packages/mpv-full-git)  
+> About how to set parameters, see: [--glsl-shader-opts](https://mpv.io/manual/master/#options-glsl-shader-opts)  
 > For full config see [natural-harmonia-gropius/mpv-config](https://github.com/natural-harmonia-gropius/mpv-config)
 
 1. Download [hdr-toys.zip](https://github.com/natural-harmonia-gropius/hdr-toys/archive/refs/heads/master.zip), extract it and rename it to `hdr-toys/` then put it in `~~/shaders`.
@@ -52,7 +54,8 @@ glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886.glsl
 - Dolby Vision Profile 5 is not tagged as HDR, so it wouldn't activate any auto-profile.
 - Don't set target-peak, icc-profile...  
   Make sure there are **no** built-in tone map, gamut map, 3DLUT... in "Frame Timings" page.
-- If you are not using a BT.709 display, replace all gamut-mapping/\* with `gamut-mapping/clip_custom.glsl`. Then set `to` in clip_custom.glsl to match your display.
+- If you are not using a BT.709 display, replace all gamut-mapping/\* with `gamut-mapping/clip_custom.glsl`.  
+  Then change `#define to *` to match your display.
 
 ## Detailed information
 
