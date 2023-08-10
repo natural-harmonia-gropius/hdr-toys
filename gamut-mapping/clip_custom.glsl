@@ -10,6 +10,7 @@
 
 
 // White points of standard illuminants
+// https://en.wikipedia.org/wiki/Standard_illuminant#White_points_of_standard_illuminants
 
 const vec2 A    = vec2(0.44757, 0.40745);
 const vec2 B    = vec2(0.34842, 0.35161);
@@ -33,15 +34,7 @@ struct Chromaticity {
     vec2 r, g, b, w;
 };
 
-// ITU-R Recommendation BT.709
-const Chromaticity BT709  = Chromaticity(
-    vec2(0.64, 0.33),
-    vec2(0.30, 0.60),
-    vec2(0.15, 0.06),
-    D65
-);
-
-// ITU-R Recommendation BT.2020
+// ITU-R Recommendation BT.2020, BT.2100
 const Chromaticity BT2020 = Chromaticity(
     vec2(0.708, 0.292),
     vec2(0.170, 0.797),
@@ -49,8 +42,40 @@ const Chromaticity BT2020 = Chromaticity(
     D65
 );
 
+// ITU-R Recommendation BT.709, IEC 61966-2-1 (sRGB)
+const Chromaticity BT709 = Chromaticity(
+    vec2(0.64, 0.33),
+    vec2(0.30, 0.60),
+    vec2(0.15, 0.06),
+    D65
+);
+
+// ITU-R Recommendation BT.601 (625 lines), BT.470 (B/G), EBU 3213-E
+const Chromaticity BT601_625 = Chromaticity(
+    vec2(0.64, 0.33),
+    vec2(0.29, 0.60),
+    vec2(0.15, 0.06),
+    D65
+);
+
+// ITU-R Recommendation BT.601 (525 lines)
+const Chromaticity BT601_525 = Chromaticity(
+    vec2(0.630, 0.340),
+    vec2(0.310, 0.595),
+    vec2(0.155, 0.070),
+    D65
+);
+
+// ITU-R Recommendation BT.470 (M)
+const Chromaticity BT470m = Chromaticity(
+    vec2(0.67, 0.33),
+    vec2(0.21, 0.71),
+    vec2(0.14, 0.08),
+    C
+);
+
 // P3-DCI (Theater)
-const Chromaticity P3DCI  = Chromaticity(
+const Chromaticity P3DCI = Chromaticity(
     vec2(0.680, 0.320),
     vec2(0.265, 0.690),
     vec2(0.150, 0.060),
@@ -70,6 +95,38 @@ const Chromaticity P3D60 = Chromaticity(
     P3DCI.r,
     P3DCI.g,
     P3DCI.b,
+    ACES
+);
+
+// Adobe RGB
+const Chromaticity AdobeRGB = Chromaticity(
+    vec2(0.64, 0.33),
+    vec2(0.21, 0.71),
+    vec2(0.15, 0.06),
+    D65
+);
+
+// ROMM (ProPhoto RGB)
+const Chromaticity ROMM = Chromaticity(
+    vec2(0.734699, 0.265301),
+    vec2(0.159597, 0.840403),
+    vec2(0.036598, 0.000105),
+    D50
+);
+
+// AP0 (ACES 2065-1)
+const Chromaticity AP0 = Chromaticity(
+    vec2(0.7347,  0.2653),
+    vec2(0.0000,  1.0000),
+    vec2(0.0001, -0.0770),
+    ACES
+);
+
+// AP1 (ACEScg, cc, cct, proxy)
+const Chromaticity AP1 = Chromaticity(
+    vec2(0.713, 0.293),
+    vec2(0.165, 0.830),
+    vec2(0.128, 0.044),
     ACES
 );
 
