@@ -17,7 +17,6 @@ const vec2 B    = vec2(0.34842, 0.35161);
 const vec2 C    = vec2(0.31006, 0.31616);
 const vec2 D50  = vec2(0.34567, 0.35850);
 const vec2 D55  = vec2(0.33242, 0.34743);
-const vec2 D60  = vec2(0.32163, 0.33774);
 const vec2 D65  = vec2(0.31271, 0.32902);
 const vec2 D75  = vec2(0.29902, 0.31485);
 const vec2 D93  = vec2(0.28315, 0.29711);
