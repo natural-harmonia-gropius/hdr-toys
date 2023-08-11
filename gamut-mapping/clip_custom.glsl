@@ -57,7 +57,7 @@ const Chromaticity BT601_625 = Chromaticity(
     D65
 );
 
-// ITU-R Recommendation BT.601 (525 lines)
+// ITU-R Recommendation BT.601 (525 lines), SMPTE ST 240
 const Chromaticity BT601_525 = Chromaticity(
     vec2(0.630, 0.340),
     vec2(0.310, 0.595),
@@ -95,6 +95,54 @@ const Chromaticity P3D60 = Chromaticity(
     P3DCI.g,
     P3DCI.b,
     ACES
+);
+
+// ITU-T Recommendation H.273 (Generic film)
+const Chromaticity H273_8 = Chromaticity(
+    vec2(0.681, 0.319),
+    vec2(0.243, 0.692),
+    vec2(0.145, 0.049),
+    C
+);
+
+// ITU-T Recommendation H.273 (No corresponding industry specification identified)
+const Chromaticity H273_22 = Chromaticity(
+    vec2(0.630, 0.340),
+    vec2(0.295, 0.605),
+    vec2(0.155, 0.077),
+    D65
+);
+
+// CIE 1931 XYZ
+const Chromaticity XYZ = Chromaticity(
+    vec2(1.0, 0.0),
+    vec2(0.0, 1.0),
+    vec2(0.0, 0.0),
+    E
+);
+
+// CIE 1931 XYZ (D65 whitepoint)
+const Chromaticity XYZD65 = Chromaticity(
+    XYZ.r,
+    XYZ.g,
+    XYZ.b,
+    D65
+);
+
+// CIE 1931 XYZ (D50 whitepoint)
+const Chromaticity XYZD50 = Chromaticity(
+    XYZ.r,
+    XYZ.g,
+    XYZ.b,
+    D50
+);
+
+// Grayscale, Monochrome
+const Chromaticity GRAY = Chromaticity(
+    vec2(0.0, 0.0),
+    vec2(0.0, 0.0),
+    vec2(0.0, 0.0),
+    E
 );
 
 // Adobe RGB
@@ -155,6 +203,14 @@ const mat3 CAT16 = mat3(
     -0.002079,  0.048952,  0.953127
 );
 
+// Other constants
+
+const mat3 Identity3 = mat3(
+    1.0, 0.0, 0.0,
+    0.0, 1.0, 0.0,
+    0.0, 0.0, 1.0
+);
+
 // Constants End
 
 mat3 invert_mat3(mat3 m) {
@@ -166,13 +222,8 @@ mat3 invert_mat3(mat3 m) {
         - m[2][1] * m[1][2] * m[0][0]
         - m[2][2] * m[1][0] * m[0][1];
 
-    if (determinant == 0.0) {
-        return mat3(
-            1.0, 0.0, 0.0,
-            0.0, 1.0, 0.0,
-            0.0, 0.0, 1.0
-        );
-    }
+    if (determinant == 0.0)
+        return Identity3;
 
     return (1.0 / determinant) * mat3(
         m[1][1] * m[2][2] - m[1][2] * m[2][1],
@@ -202,6 +253,9 @@ vec3 xyY_to_XYZ(vec3 xyY) {
 }
 
 mat3 RGB_to_XYZ(Chromaticity C) {
+    if (C == GRAY)
+        return Identity3;
+
     vec3 r = xyY_to_XYZ(vec3(C.r, 1.0));
     vec3 g = xyY_to_XYZ(vec3(C.g, 1.0));
     vec3 b = xyY_to_XYZ(vec3(C.b, 1.0));
@@ -220,14 +274,23 @@ mat3 RGB_to_XYZ(Chromaticity C) {
     );
 }
 
-mat3 XYZ_to_RGB(Chromaticity N) {
-    mat3 M = invert_mat3(RGB_to_XYZ(N));
-    return M;
+mat3 XYZ_to_RGB(Chromaticity C) {
+    if (C == GRAY)
+        return mat3(
+            0.0, 1.0, 0.0,
+            0.0, 1.0, 0.0,
+            0.0, 1.0, 0.0
+        );
+
+    return invert_mat3(RGB_to_XYZ(C));
 }
 
-mat3 adaptation(vec2 w1, vec2 w2, mat3 cone) {
-    vec3 src_XYZ = xyY_to_XYZ(vec3(w1, 1.0));
-    vec3 dst_XYZ = xyY_to_XYZ(vec3(w2, 1.0));
+mat3 adaptation(vec2 W1, vec2 W2, mat3 cone) {
+    if (W1 == W2)
+        return Identity3;
+
+    vec3 src_XYZ = xyY_to_XYZ(vec3(W1, 1.0));
+    vec3 dst_XYZ = xyY_to_XYZ(vec3(W2, 1.0));
 
     vec3 src_cone = src_XYZ * cone;
     vec3 dst_cone = dst_XYZ * cone;
