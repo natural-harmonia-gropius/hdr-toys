@@ -80,8 +80,7 @@ For example, use bt2446c instead of dynamic.
 + glsl-shader=~~/shaders/hdr-toys/tone-mapping/bt2446c.glsl
 ```
 
-This table lists the features of operators.  
-Operators below the blank row are for testing and should not be used for watching.
+This table lists the features of operators.
 
 | Operator | Applied to | Conversion peak |
 | -------- | ---------- | --------------- |
@@ -94,11 +93,9 @@ Operators below the blank row are for testing and should not be used for watchin
 | hable2   | YRGB       | HDR peak        |
 | lottes   | maxRGB     | HDR peak        |
 | hejl2015 | RGB        | HDR peak        |
-|          |            |                 |
-| clip     |            | SDR peak        |
-| linear   |            | HDR peak        |
-| false    |            | Infinity        |
-| local    |            | Block peak      |
+| linear   | ICtCp      | HDR peak        |
+| clip     | RGB        | SDR peak        |
+| false    | Heatmap    | Infinity        |
 
 Typical representation of the same curve applied to different color spaces.
 | RGB | YRGB | maxRGB | Hybrid in JzCzhz |
