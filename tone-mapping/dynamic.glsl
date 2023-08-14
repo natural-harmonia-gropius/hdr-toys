@@ -48,8 +48,8 @@ void hook() {
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!SAVE BLURRED
-//!WIDTH 640
-//!HEIGHT 360
+//!WIDTH 512
+//!HEIGHT 288
 //!DESC metering (spatial stabilization, downscaling)
 
 vec4 hook() {
