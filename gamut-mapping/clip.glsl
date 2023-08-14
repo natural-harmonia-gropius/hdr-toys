@@ -4,6 +4,9 @@
 //!BIND HOOKED
 //!DESC gamut mapping (clip)
 
+// You can use custom chromaticity here
+// e.g. BT.709 with D93 white point: Chromaticity(BT709.r, BT709.g, BT709.b, D93)
+
 #define from    BT2020
 #define to      BT709
 #define cone    Bradford
