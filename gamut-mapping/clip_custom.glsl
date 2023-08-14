@@ -211,6 +211,12 @@ const mat3 Identity3 = mat3(
     0.0, 0.0, 1.0
 );
 
+const mat3 SingularY3 = mat3(
+    0.0, 1.0, 0.0,
+    0.0, 1.0, 0.0,
+    0.0, 1.0, 0.0
+);
+
 // Constants End
 
 mat3 invert_mat3(mat3 m) {
@@ -225,7 +231,7 @@ mat3 invert_mat3(mat3 m) {
     if (determinant == 0.0)
         return Identity3;
 
-    return (1.0 / determinant) * mat3(
+    return mat3(
         m[1][1] * m[2][2] - m[1][2] * m[2][1],
         m[2][1] * m[0][2] - m[2][2] * m[0][1],
         m[0][1] * m[1][2] - m[0][2] * m[1][1],
@@ -235,7 +241,7 @@ mat3 invert_mat3(mat3 m) {
         m[1][0] * m[2][1] - m[2][0] * m[1][1],
         m[2][0] * m[0][1] - m[0][0] * m[2][1],
         m[0][0] * m[1][1] - m[1][0] * m[0][1]
-    );
+    ) / determinant;
 }
 
 vec3 xyY_to_XYZ(vec3 xyY) {
@@ -261,26 +267,16 @@ mat3 RGB_to_XYZ(Chromaticity C) {
     vec3 b = xyY_to_XYZ(vec3(C.b, 1.0));
     vec3 w = xyY_to_XYZ(vec3(C.w, 1.0));
 
-    vec3 s = w * invert_mat3(mat3(
-        r.x, g.x, b.x,
-        r.y, g.y, b.y,
-        r.z, g.z, b.z
-    ));
+    mat3 n = transpose(mat3(r, g, b));
+    vec3 s = w * invert_mat3(n);
+    mat3 m = mat3(n[0] * s, n[1] * s, n[2] * s);
 
-    return mat3(
-        s.r * r.x, s.g * g.x, s.b * b.x,
-        s.r * r.y, s.g * g.y, s.b * b.y,
-        s.r * r.z, s.g * g.z, s.b * b.z
-    );
+    return m;
 }
 
 mat3 XYZ_to_RGB(Chromaticity C) {
     if (C == GRAY)
-        return mat3(
-            0.0, 1.0, 0.0,
-            0.0, 1.0, 0.0,
-            0.0, 1.0, 0.0
-        );
+        return SingularY3;
 
     return invert_mat3(RGB_to_XYZ(C));
 }
