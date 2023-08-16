@@ -20,15 +20,15 @@
 const float a = 0.2627002120112671;
 const float b = 0.6779980715188708;
 const float c = 0.05930171646986196;
-const float d = 2 * (a + b);
-const float e = 2 * (1 - a);
+const float d = 2.0 * (1.0 - c);
+const float e = 2.0 * (1.0 - a);
 
 vec3 RGB_to_YCbCr(vec3 RGB) {
     float R = RGB.r;
     float G = RGB.g;
     float B = RGB.b;
 
-    const float Y  = a * R + b * G + c * B;
+    const float Y  = dot(RGB, vec3(a, b, c));
     const float Cb = (B - Y) / d;
     const float Cr = (R - Y) / e;
 
