@@ -300,7 +300,7 @@ mat3 adaptation(vec2 W1, vec2 W2, mat3 cone) {
         0.0, 0.0, dst_cone.z / src_cone.z
     );
 
-    return (scale * invert_mat3(cone)) * cone;
+    return cone * scale * invert_mat3(cone);
 }
 
 vec4 hook() {
