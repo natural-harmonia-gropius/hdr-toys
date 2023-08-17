@@ -30,6 +30,21 @@ const vec2 F11  = vec2(0.38052, 0.37713);
 const vec2 DCI  = vec2(0.31400, 0.35100);
 const vec2 ACES = vec2(0.32168, 0.33767);
 
+vec2 K(float CCT) {
+    CCT = clamp(CCT, 4000, 25000) * 1.4387768775039337 / 1.438;
+
+    const float t1 = 1000.0 / CCT;
+    const float t2 = t1 * t1;
+    const float t3 = t1 * t2;
+
+    const float x = CCT <= 7000
+        ? 0.244063 + 0.09911 * t1 + 2.9678 * t2 - 4.6070 * t3
+        : 0.237040 + 0.24748 * t1 + 1.9018 * t2 - 2.0064 * t3;
+    const float y = -0.275 + 2.87 * x - 3.0 * x * x;
+
+    return vec2(x, y);
+}
+
 // Chromaticities
 
 struct Chromaticity {
