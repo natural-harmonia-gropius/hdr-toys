@@ -3,11 +3,11 @@
 
 //!PARAM horizonal
 //!TYPE int
-1
+0
 
 //!PARAM vertical
 //!TYPE int
-1
+0
 
 //!HOOK OUTPUT
 //!BIND HOOKED
