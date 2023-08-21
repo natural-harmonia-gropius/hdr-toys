@@ -596,7 +596,7 @@ void calc_user_params_from_metered() {
     shoulderLength = L_max_ev / L_hdr_ev;
     shoulderStrength = L_max_ev;
     shoulderAngle = 1.0;
-    toeLength = (1.0 + L_max_ev) / CONTRAST_sdr;
+    toeLength = pow(2.0, L_max_ev) / CONTRAST_sdr;
     toeStrength = 0.5;
 }
 
