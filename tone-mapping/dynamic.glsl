@@ -23,7 +23,6 @@
 8
 
 //!BUFFER MINMAX
-//!VAR uint L_min
 //!VAR uint L_max
 //!STORAGE
 
@@ -41,7 +40,6 @@
 //!DESC metering (initial)
 
 void hook() {
-    L_min = 10000;
     L_max = 0;
 }
 
@@ -101,7 +99,7 @@ vec4 hook(){
 //!BIND MINMAX
 //!SAVE EMPTY
 //!COMPUTE 32 32
-//!DESC metering (min, max)
+//!DESC metering (max)
 
 void hook() {
     vec4 color = texelFetch(BLURRED_raw, ivec2(gl_GlobalInvocationID.xy), 0);
@@ -112,7 +110,6 @@ void hook() {
     // value below 1 doesn't make sense, can also improve fade in.
     float L = max(max(y, m), 1.0) * L_sdr;
 
-    atomicMin(L_min, uint(L + 0.5));
     atomicMax(L_max, uint(L + 0.5));
 }
 
