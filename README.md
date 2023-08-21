@@ -26,7 +26,7 @@ glsl-shader=~~/shaders/hdr-toys/utils/clip_both.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/pq_inv.glsl
 glsl-shader=~~/shaders/hdr-toys/utils/chroma_correction.glsl
 glsl-shader=~~/shaders/hdr-toys/tone-mapping/dynamic.glsl
-glsl-shader=~~/shaders/hdr-toys/gamut-mapping/lea.glsl
+glsl-shader=~~/shaders/hdr-toys/gamut-mapping/jedypod.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886.glsl
 
 [bt.2100-hlg]
@@ -38,7 +38,7 @@ glsl-shader=~~/shaders/hdr-toys/utils/clip_both.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/hlg_inv.glsl
 glsl-shader=~~/shaders/hdr-toys/utils/chroma_correction.glsl
 glsl-shader=~~/shaders/hdr-toys/tone-mapping/dynamic.glsl
-glsl-shader=~~/shaders/hdr-toys/gamut-mapping/lea.glsl
+glsl-shader=~~/shaders/hdr-toys/gamut-mapping/jedypod.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886.glsl
 
 [bt.2020]
@@ -47,7 +47,7 @@ profile-restore=copy
 target-prim=bt.2020
 target-trc=bt.1886
 glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886_inv.glsl
-glsl-shader=~~/shaders/hdr-toys/gamut-mapping/lea.glsl
+glsl-shader=~~/shaders/hdr-toys/gamut-mapping/jedypod.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886.glsl
 ```
 
@@ -123,6 +123,7 @@ In real world, the brighter the color, the less saturated it becomes, and eventu
 
 ### Gamut mapping
 
+**Outdated, update this on next release**
 `clip` is the exact conversion, Others are various forms of compression.
 
 | clip                                                                                                                | jedypod                                                                                                             | bottosson                                                                                                           | lea                                                                                                                 | toru                                                                                                                | false                                                                                                               |
