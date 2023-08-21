@@ -7,12 +7,7 @@
 #define cbrt(x) (sign(x) * pow(abs(x), 1.0 / 3.0))
 #define FLT_MAX 3.402823466e+38
 
-
-// struct Lab {float L; float a; float b;};
-// struct RGB {float r; float g; float b;};
-
-vec3 linear_srgb_to_oklab(vec3 c)
-{
+vec3 linear_srgb_to_oklab(vec3 c) {
 	float l = 0.4122214708 * c.r + 0.5363325363 * c.g + 0.0514459929 * c.b;
 	float m = 0.2119034982 * c.r + 0.6806995451 * c.g + 0.1073969566 * c.b;
 	float s = 0.0883024619 * c.r + 0.2817188376 * c.g + 0.6299787005 * c.b;
@@ -28,8 +23,7 @@ vec3 linear_srgb_to_oklab(vec3 c)
 	);
 }
 
-vec3 oklab_to_linear_srgb(vec3 c)
-{
+vec3 oklab_to_linear_srgb(vec3 c) {
     float l_ = c.x + 0.3963377774 * c.y + 0.2158037573 * c.b;
     float m_ = c.x - 0.1055613458 * c.y - 0.0638541728 * c.b;
     float s_ = c.x - 0.0894841775 * c.y - 1.2914855480 * c.b;
@@ -48,8 +42,7 @@ vec3 oklab_to_linear_srgb(vec3 c)
 // Finds the maximum saturation possible for a given hue that fits in sRGB
 // Saturation here is defined as S = C/L
 // a and b must be normalized so a^2 + b^2 == 1
-float compute_max_saturation(float a, float b)
-{
+float compute_max_saturation(float a, float b) {
     // Max saturation will be when one of r, g or b goes below zero.
 
     // Select different coefficients depending on which component goes below zero first
@@ -115,8 +108,7 @@ float compute_max_saturation(float a, float b)
 // finds L_cusp and C_cusp for a given hue
 // a and b must be normalized so a^2 + b^2 == 1
 // struct LC { float L; float C; };
-vec2 find_cusp(float a, float b)
-{
+vec2 find_cusp(float a, float b) {
     // First, find the maximum saturation (saturation S = C/L)
     float S_cusp = compute_max_saturation(a, b);
 
@@ -132,21 +124,17 @@ vec2 find_cusp(float a, float b)
 // L = L0 * (1 - t) + t * L1;
 // C = t * C1;
 // a and b must be normalized so a^2 + b^2 == 1
-float find_gamut_intersection(float a, float b, float L1, float C1, float L0)
-{
+float find_gamut_intersection(float a, float b, float L1, float C1, float L0) {
     // Find the cusp of the gamut triangle
     vec2 cusp = find_cusp(a, b);
 
     // Find the intersection for upper and lower half seprately
     float t;
-    if (((L1 - L0) * cusp.y - (cusp.x - L0) * C1) <= 0.0)
-    {
+    if (((L1 - L0) * cusp.y - (cusp.x - L0) * C1) <= 0.0){
         // Lower half
 
         t = cusp.y * L0 / (C1 * cusp.x + cusp.y * (L0 - L1));
-    }
-    else
-    {
+    } else {
         // Upper half
 
         // First intersect with triangle
@@ -220,23 +208,7 @@ float find_gamut_intersection(float a, float b, float L1, float C1, float L0)
     return t;
 }
 
-// float clamp(float x, float min, float max)
-// {
-// 	if (x < min)
-// 		return min;
-// 	if (x > max)
-// 		return max;
-
-// 	return x;
-// }
-
-// float sgn(float x)
-// {
-// 	return (float)(0.0 < x) - (float)(x < 0.0);
-// }
-
-vec3 gamut_clip_preserve_chroma(vec3 rgb)
-{
+vec3 gamut_clip_preserve_chroma(vec3 rgb) {
     if (rgb.r < 1 && rgb.g < 1 && rgb.b < 1 && rgb.r > 0 && rgb.g > 0 && rgb.b > 0)
         return rgb;
 
@@ -257,8 +229,7 @@ vec3 gamut_clip_preserve_chroma(vec3 rgb)
     return oklab_to_linear_srgb(vec3(L_clipped, C_clipped * a_, C_clipped * b_));
 }
 
-vec3 gamut_clip_project_to_0_5(vec3 rgb)
-{
+vec3 gamut_clip_project_to_0_5(vec3 rgb) {
     if (rgb.r < 1 && rgb.g < 1 && rgb.b < 1 && rgb.r > 0 && rgb.g > 0 && rgb.b > 0)
         return rgb;
 
@@ -279,8 +250,7 @@ vec3 gamut_clip_project_to_0_5(vec3 rgb)
     return oklab_to_linear_srgb(vec3(L_clipped, C_clipped * a_, C_clipped * b_));
 }
 
-vec3 gamut_clip_project_to_L_cusp(vec3 rgb)
-{
+vec3 gamut_clip_project_to_L_cusp(vec3 rgb) {
     if (rgb.r < 1 && rgb.g < 1 && rgb.b < 1 && rgb.r > 0 && rgb.g > 0 && rgb.b > 0)
         return rgb;
 
@@ -305,8 +275,7 @@ vec3 gamut_clip_project_to_L_cusp(vec3 rgb)
     return oklab_to_linear_srgb(vec3(L_clipped, C_clipped * a_, C_clipped * b_));
 }
 
-vec3 gamut_clip_adaptive_L0_0_5(vec3 rgb, float alpha)
-{
+vec3 gamut_clip_adaptive_L0_0_5(vec3 rgb, float alpha) {
     if (alpha < 0) alpha = 0.05;
     if (rgb.r < 1 && rgb.g < 1 && rgb.b < 1 && rgb.r > 0 && rgb.g > 0 && rgb.b > 0)
         return rgb;
@@ -330,8 +299,7 @@ vec3 gamut_clip_adaptive_L0_0_5(vec3 rgb, float alpha)
     return oklab_to_linear_srgb(vec3(L_clipped, C_clipped * a_, C_clipped * b_));
 }
 
-vec3 gamut_clip_adaptive_L0_L_cusp(vec3 rgb, float alpha)
-{
+vec3 gamut_clip_adaptive_L0_L_cusp(vec3 rgb, float alpha) {
     if (alpha < 0) alpha = 0.05;
     if (rgb.r < 1 && rgb.g < 1 && rgb.b < 1 && rgb.r > 0 && rgb.g > 0 && rgb.b > 0)
         return rgb;
