@@ -5,12 +5,11 @@ Featuring dynamic curves and a uniform color space.
 
 ## Getting started
 
-> **Note**  
-> [`vo=gpu-next`](https://mpv.io/manual/master/#video-output-drivers-gpu-next) is required.  
-> Recommended to use the git version of mpv:  
-> [shinchiro/mpv-winbuild-cmake](https://github.com/shinchiro/mpv-winbuild-cmake/releases) / [zhongfly/mpv-winbuild](https://github.com/zhongfly/mpv-winbuild/releases) / [aur/mpv-full-git](https://aur.archlinux.org/packages/mpv-full-git)  
-> About how to set parameters, see: [--glsl-shader-opts](https://mpv.io/manual/master/#options-glsl-shader-opts)  
-> For full config see [natural-harmonia-gropius/mpv-config](https://github.com/natural-harmonia-gropius/mpv-config)
+> [!Important]
+> Requires [**_vo=gpu-next_**](https://mpv.io/manual/master/#video-output-drivers-gpu-next).
+
+> [!Tip]
+> Full portable_config: [natural-harmonia-gropius/mpv-config](https://github.com/natural-harmonia-gropius/mpv-config).
 
 1. Download [hdr-toys.zip](https://github.com/natural-harmonia-gropius/hdr-toys/archive/refs/heads/master.zip), extract it and rename it to `hdr-toys/` then put it in `~~/shaders`.
 2. Download [hdr-toys-helper.lua](https://github.com/natural-harmonia-gropius/mpv-config/blob/master/portable_config/scripts/hdr-toys-helper.lua) and put it in `~~/scripts`
@@ -49,11 +48,22 @@ target-trc=bt.1886
 glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886_inv.glsl
 glsl-shader=~~/shaders/hdr-toys/gamut-mapping/jedypod.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886.glsl
+
+[dovi-p5]
+profile-cond=get("video-params/primaries") == "bt.709" and get("video-params/gamma") == "bt.1886" and get("video-out-params/max-luma") > 203
+profile-restore=copy
+target-prim=bt.2020
+target-trc=pq
+glsl-shader=~~/shaders/hdr-toys/utils/clip_both.glsl
+glsl-shader=~~/shaders/hdr-toys/transfer-function/pq_inv.glsl
+glsl-shader=~~/shaders/hdr-toys/utils/chroma_correction.glsl
+glsl-shader=~~/shaders/hdr-toys/tone-mapping/dynamic.glsl
+glsl-shader=~~/shaders/hdr-toys/gamut-mapping/jedypod.glsl
+glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886.glsl
 ```
 
-- Dolby Vision Profile 5 is not tagged as HDR, so it wouldn't activate any auto-profile.
 - Don't set target-peak, icc-profile...  
-  Make sure there are **no** built-in tone map, gamut map, 3DLUT... in "Frame Timings" page.
+  Make sure there are _**no**_ built-in tone map, gamut map, 3DLUT... in "Frame Timings" page.
 - If you are not using a BT.709 display, replace all gamut-mapping/\* with `gamut-mapping/clip.glsl`.  
   Then change `#define to *` to match your display.
 
@@ -61,10 +71,12 @@ glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886.glsl
 
 Most shaders have a link at the top, if you want to go deeper, you can visit it.
 
+- About how to set parameters, see: [--glsl-shader-opts](https://mpv.io/manual/master/#options-glsl-shader-opts)
+
 ### Tone mapping
 
 - HDR peak defaults to 1000nit, should be the max luminance of video.  
-  hdr-toys-helper.lua can get it automatically from video-out-params/sig-peak.  
+  hdr-toys-helper.lua can get it automatically from mpv.  
   You can set it manually with `set glsl-shader-opts L_hdr=N`
 
 - SDR peak defaults to 203nit, should be the reference white of video.  
@@ -123,7 +135,9 @@ In real world, the brighter the color, the less saturated it becomes, and eventu
 
 ### Gamut mapping
 
-**Outdated, update this on next release**
+> [!CAUTION]
+> Screenshots are outdated and will be updated in the next release.
+
 `clip` is the exact conversion, Others are various forms of compression.
 
 | clip                                                                                                                | jedypod                                                                                                             | bottosson                                                                                                           | lea                                                                                                                 | toru                                                                                                                | false                                                                                                               |
