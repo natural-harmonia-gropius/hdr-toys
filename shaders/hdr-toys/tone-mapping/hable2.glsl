@@ -146,12 +146,12 @@ float curve(float x) {
         return y0*m_scaleY + m_offsetY;
     */
 
-    float   midOffsetX  = -(b / m),
-            midOffsetY  = 0.0,
-            midScaleX   = 1.0,
-            midScaleY   = 1.0,
-            midLnA      = g * log(m),
-            midB        = g;
+    float   midOffsetX = -(b / m),
+            midOffsetY = 0.0,
+            midScaleX  = 1.0,
+            midScaleY  = 1.0,
+            midLnA     = g * log(m),
+            midB       = g;
 
     const float toeM = eval_derivative_linear_gamma(m, b, g, x0);
     const float shoulderM = eval_derivative_linear_gamma(m, b, g, x1);
@@ -160,13 +160,13 @@ float curve(float x) {
     float y1 = max(pow(y1, g), 1e-6);
     float overshootY = pow(1.0 + overshootY, g) - 1.0;
 
-    const vec2  toeAB   = solve_AB(x0, y0, m);
-    float   toeOffsetX  = 0.0,
-            toeOffsetY  = 0.0,
-            toeScaleX   = 1.0,
-            toeScaleY   = 1.0,
-            toeLnA      = toeAB.x,
-            toeB        = toeAB.y;
+    const vec2  toeAB  = solve_AB(x0, y0, m);
+    float   toeOffsetX = 0.0,
+            toeOffsetY = 0.0,
+            toeScaleX  = 1.0,
+            toeScaleY  = 1.0,
+            toeLnA     = toeAB.x,
+            toeB       = toeAB.y;
 
     const float shoulderX0  = (1.0 + overshootX) - x1;
     const float shoulderY0  = (1.0 + overshootY) - y1;
