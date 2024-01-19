@@ -51,7 +51,7 @@ void hook() {
 //!DESC metering (spatial stabilization, downscaling)
 
 vec4 hook() {
-	return HOOKED_texOff(0);
+    return HOOKED_texOff(0);
 }
 
 //!HOOK OUTPUT

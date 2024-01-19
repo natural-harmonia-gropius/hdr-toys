@@ -90,7 +90,7 @@ float Lr_to_L(float x) {
     const float k1 = 0.206;
     const float k2 = 0.03;
     const float k3 = (1.0 + k1) / (1.0 + k2);
-	return (x * (x + k1)) / (k3 * (x + k2));
+    return (x * (x + k1)) / (k3 * (x + k2));
 }
 
 vec3 RGB_to_Lab(vec3 color) {

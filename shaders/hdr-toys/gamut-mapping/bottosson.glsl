@@ -8,19 +8,19 @@
 #define FLT_MAX 3.402823466e+38
 
 vec3 linear_srgb_to_oklab(vec3 c) {
-	float l = 0.4122214708 * c.r + 0.5363325363 * c.g + 0.0514459929 * c.b;
-	float m = 0.2119034982 * c.r + 0.6806995451 * c.g + 0.1073969566 * c.b;
-	float s = 0.0883024619 * c.r + 0.2817188376 * c.g + 0.6299787005 * c.b;
+    float l = 0.4122214708 * c.r + 0.5363325363 * c.g + 0.0514459929 * c.b;
+    float m = 0.2119034982 * c.r + 0.6806995451 * c.g + 0.1073969566 * c.b;
+    float s = 0.0883024619 * c.r + 0.2817188376 * c.g + 0.6299787005 * c.b;
 
-	float l_ = cbrt(l);
-	float m_ = cbrt(m);
-	float s_ = cbrt(s);
+    float l_ = cbrt(l);
+    float m_ = cbrt(m);
+    float s_ = cbrt(s);
 
-	return vec3(
-		0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
-		1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
-		0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_
-	);
+    return vec3(
+        0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
+        1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
+        0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_
+    );
 }
 
 vec3 oklab_to_linear_srgb(vec3 c) {
@@ -112,7 +112,7 @@ vec2 find_cusp(float a, float b) {
     // First, find the maximum saturation (saturation S = C/L)
     float S_cusp = compute_max_saturation(a, b);
 
-	// Convert to linear sRGB to find the first point where at least one of r,g or b >= 1:
+    // Convert to linear sRGB to find the first point where at least one of r,g or b >= 1:
     vec3 rgb_at_max = oklab_to_linear_srgb(vec3(1, S_cusp * a, S_cusp * b));
     float L_cusp = cbrt(1.0 / max(max(rgb_at_max.r, rgb_at_max.g), rgb_at_max.b));
     float C_cusp = L_cusp * S_cusp;
