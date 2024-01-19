@@ -79,17 +79,33 @@ vec3 Lab_to_LMS(vec3 Lab) {
     );
 }
 
+float L_to_Lr(float x) {
+    const float k1 = 0.206;
+    const float k2 = 0.03;
+    const float k3 = (1.0 + k1) / (1.0 + k2);
+    return 0.5 * (k3 * x - k1 + sqrt(pow(k3 * x - k1, 2.0) + 4.0 * k2 * k3 * x));
+}
+
+float Lr_to_L(float x) {
+    const float k1 = 0.206;
+    const float k2 = 0.03;
+    const float k3 = (1.0 + k1) / (1.0 + k2);
+	return (x * (x + k1)) / (k3 * (x + k2));
+}
+
 vec3 RGB_to_Lab(vec3 color) {
-    color  = RGB_to_XYZ(color);
-    color  = XYZ_to_LMS(color);
-    color  = LMS_to_Lab(color);
+    color   = RGB_to_XYZ(color);
+    color   = XYZ_to_LMS(color);
+    color   = LMS_to_Lab(color);
+    color.x = L_to_Lr(color.x);
     return color;
 }
 
 vec3 Lab_to_RGB(vec3 color) {
-    color  = Lab_to_LMS(color);
-    color  = LMS_to_XYZ(color);
-    color  = XYZ_to_RGB(color);
+    color.x = Lr_to_L(color.x);
+    color   = Lab_to_LMS(color);
+    color   = LMS_to_XYZ(color);
+    color   = XYZ_to_RGB(color);
     return color;
 }
 
