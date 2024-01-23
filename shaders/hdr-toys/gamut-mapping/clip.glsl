@@ -30,8 +30,13 @@ const vec2 F11  = vec2(0.38052, 0.37713);
 const vec2 DCI  = vec2(0.31400, 0.35100);
 const vec2 ACES = vec2(0.32168, 0.33767);
 
-vec2 K(float CCT) {
-    CCT = clamp(CCT, 4000, 25000) * 1.4387768775039337 / 1.438;
+// https://en.wikipedia.org/wiki/Standard_illuminant#Illuminant_series_D
+vec2 CIE_D(float CCT) {
+    // https://en.wikipedia.org/wiki/Planckian_locus
+    // c2 = 1.4387768775039337
+    CCT = (CCT * 1.4388) / 1.438;
+
+    CCT = clamp(CCT, 4000, 25000);
 
     const float t1 = 1000.0 / CCT;
     const float t2 = t1 * t1;
@@ -46,6 +51,8 @@ vec2 K(float CCT) {
 }
 
 // Chromaticities
+// https://www.itu.int/rec/T-REC-H.273
+// https://github.com/colour-science/colour/tree/develop/colour/models/rgb/datasets
 
 struct Chromaticity {
     vec2 r, g, b, w;
@@ -171,6 +178,14 @@ const Chromaticity AdobeRGB = Chromaticity(
     D65
 );
 
+// Adobe Wide Gamut RGB
+const Chromaticity AdobeWideGamutRGB = Chromaticity(
+    vec2(0.7347, 0.2653),
+    vec2(0.1152, 0.8264),
+    vec2(0.1566, 0.0177),
+    D50
+);
+
 // ROMM (ProPhoto RGB)
 const Chromaticity ROMM = Chromaticity(
     vec2(0.734699, 0.265301),
@@ -195,7 +210,8 @@ const Chromaticity AP1 = Chromaticity(
     ACES
 );
 
-// Chromatic adaptation methods
+// Chromatic adaptation transform
+// https://en.wikipedia.org/wiki/LMS_color_space
 
 const mat3 HPE = mat3(
      0.4002400,  0.7076000, -0.0808100,
@@ -282,6 +298,7 @@ vec3 xyY_to_XYZ(vec3 xyY) {
     return vec3(X, Y, Z);
 }
 
+// http://www.brucelindbloom.com/index.html?Eqn_RGB_XYZ_Matrix.html
 mat3 RGB_to_XYZ(Chromaticity C) {
     if (C == GRAY)
         return Identity3;
@@ -305,6 +322,7 @@ mat3 XYZ_to_RGB(Chromaticity C) {
     return invert_mat3(RGB_to_XYZ(C));
 }
 
+// http://www.brucelindbloom.com/index.html?Eqn_ChromAdapt.html
 mat3 adaptation(vec2 W1, vec2 W2, mat3 cone) {
     if (W1 == W2)
         return Identity3;
