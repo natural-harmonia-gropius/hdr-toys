@@ -324,9 +324,6 @@ mat3 XYZ_to_RGB(Chromaticity C) {
 
 // http://www.brucelindbloom.com/index.html?Eqn_ChromAdapt.html
 mat3 adaptation(vec2 W1, vec2 W2, mat3 cone) {
-    if (W1 == W2)
-        return Identity3;
-
     vec3 src_XYZ = xyY_to_XYZ(vec3(W1, 1.0));
     vec3 dst_XYZ = xyY_to_XYZ(vec3(W2, 1.0));
 
@@ -345,9 +342,12 @@ mat3 adaptation(vec2 W1, vec2 W2, mat3 cone) {
 vec4 hook() {
     vec4 color = HOOKED_texOff(0);
 
-    color.rgb *= RGB_to_XYZ(from);
-    color.rgb *= adaptation(from.w, to.w, cone);
-    color.rgb *= XYZ_to_RGB(to);
+    if (from != to) {
+        color.rgb *= RGB_to_XYZ(from);
+        if (from.w != to.w)
+            color.rgb *= adaptation(from.w, to.w, cone);
+        color.rgb *= XYZ_to_RGB(to);
+    }
 
     return color;
 }
