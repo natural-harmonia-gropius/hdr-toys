@@ -11,7 +11,7 @@ Featuring dynamic curves and a uniform color space.
 > [!Tip]
 > Full portable_config: [natural-harmonia-gropius/mpv-config](https://github.com/natural-harmonia-gropius/mpv-config).
 
-1. Download [hdr-toys.zip](https://github.com/natural-harmonia-gropius/hdr-toys/archive/refs/heads/master.zip), extract it and copy `shaders` and `scripts`to your mpv config folder.
+1. Download [hdr-toys.zip](https://github.com/natural-harmonia-gropius/hdr-toys/archive/refs/heads/master.zip), extract it and copy `shaders` and `scripts` to your mpv config folder.
 2. Append the following auto profiles to your `mpv.conf`
 
 ```ini
