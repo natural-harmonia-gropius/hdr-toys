@@ -1,6 +1,12 @@
 // https://bottosson.github.io/posts/gamutclipping/
 // https://www.shadertoy.com/view/7sXcWn
 
+//!PARAM softness_scale
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 1.0
+0.33
+
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!DESC gamut mapping (bottosson, soft)
@@ -226,8 +232,6 @@ float expandScale(vec3 rgb, vec2 ST, float scale) {
 
     return max(LCh.y/Cnew, scale);
 }
-
-float softness_scale = 0.2;
 
 vec2 approximateShape() {
     float m = -softness_scale*0.2;
