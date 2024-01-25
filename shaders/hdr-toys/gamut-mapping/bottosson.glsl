@@ -217,7 +217,6 @@ vec3 calculateLCh(vec3 c) {
     return vec3(maxLms, C, atan(-b, -a));
 }
 
-
 vec2 expandShape(vec3 rgb, vec2 ST) {
     vec3 LCh = calculateLCh(rgb);
     vec2 STnew = vec2(LCh.x/LCh.y, (1.0-LCh.x)/LCh.y);
@@ -255,7 +254,6 @@ vec2 approximateShape() {
 
     return ST/scale;
 }
-
 
 vec3 compute(float L, float hue, float sat) {
     vec3 c;
@@ -330,14 +328,16 @@ vec3 softClipColor(vec3 color) {
     return grey + xscale*xsgn*softSaturate(abs(x), softness);
 }
 
+
+
 vec4 hook() {
     vec4 color = HOOKED_texOff(0);
 
     vec3 oklch = Lab_to_LCH(RGB_to_Lab(color.rgb));
-
     float L = oklch.x;
     float C = oklch.y;
     float h = oklch.z * pi / 180.0;
+
     vec2 ST = approximateShape();
     float C_smooth = (1.0 / ((ST.x / L) + (ST.y / max(1.0 - L, 1e-6))));
     color.rgb = compute(L, h, C / sqrt(C * C / C_smooth / C_smooth + 1.0));
