@@ -22,9 +22,8 @@ target-prim=bt.2020
 target-trc=pq
 glsl-shader=~~/shaders/hdr-toys/utils/clip_both.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/pq_inv.glsl
-glsl-shader=~~/shaders/hdr-toys/utils/chroma_correction.glsl
 glsl-shader=~~/shaders/hdr-toys/tone-mapping/dynamic.glsl
-glsl-shader=~~/shaders/hdr-toys/gamut-mapping/jedypod.glsl
+glsl-shader=~~/shaders/hdr-toys/gamut-mapping/bottosson.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886.glsl
 
 [bt.2100-hlg]
@@ -34,9 +33,8 @@ target-prim=bt.2020
 target-trc=hlg
 glsl-shader=~~/shaders/hdr-toys/utils/clip_both.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/hlg_inv.glsl
-glsl-shader=~~/shaders/hdr-toys/utils/chroma_correction.glsl
 glsl-shader=~~/shaders/hdr-toys/tone-mapping/dynamic.glsl
-glsl-shader=~~/shaders/hdr-toys/gamut-mapping/jedypod.glsl
+glsl-shader=~~/shaders/hdr-toys/gamut-mapping/bottosson.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886.glsl
 
 [bt.2020]
@@ -45,7 +43,7 @@ profile-restore=copy
 target-prim=bt.2020
 target-trc=bt.1886
 glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886_inv.glsl
-glsl-shader=~~/shaders/hdr-toys/gamut-mapping/jedypod.glsl
+glsl-shader=~~/shaders/hdr-toys/gamut-mapping/bottosson.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886.glsl
 
 [dovi-p5]
@@ -55,9 +53,8 @@ target-prim=bt.2020
 target-trc=pq
 glsl-shader=~~/shaders/hdr-toys/utils/clip_both.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/pq_inv.glsl
-glsl-shader=~~/shaders/hdr-toys/utils/chroma_correction.glsl
 glsl-shader=~~/shaders/hdr-toys/tone-mapping/dynamic.glsl
-glsl-shader=~~/shaders/hdr-toys/gamut-mapping/jedypod.glsl
+glsl-shader=~~/shaders/hdr-toys/gamut-mapping/bottosson.glsl
 glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886.glsl
 ```
 
@@ -117,20 +114,6 @@ Typical representation of static and dynamic curves applied to the same color sp
 | BT.2446C | Dynamic | BT.2446C | Dynamic | BT.2446C | Dynamic |
 | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | ![image](https://user-images.githubusercontent.com/50797982/216832251-abf05c55-bc97-48e4-97c8-a9b06240f235.png) | ![image](https://user-images.githubusercontent.com/50797982/216832261-93d7dcd4-7588-4086-a4dd-fb48d29c0ade.png) | ![image](https://user-images.githubusercontent.com/50797982/216901529-fa175d65-1fc8-4efe-a5e3-df7d63b4c800.png) | ![image](https://user-images.githubusercontent.com/50797982/216901584-93ffdbae-4f70-4b81-a978-d0fe69e06a39.png) | ![image](https://user-images.githubusercontent.com/50797982/216832312-9a3e1a9f-2dd0-4b28-abd0-b09b5aa45399.png) | ![image](https://user-images.githubusercontent.com/50797982/216832291-fbee6755-b028-4ede-a330-bccf0904a5b3.png) |
-
-### Chroma Correction
-
-This is a part of tone mapping, also known as "highlights desaturate".  
-You can set the intensity of it by `set glsl-shader-opts sigma=N`.
-
-Also included crosstalk, it makes the color less chromatic when processing.  
-You can set the intensity of it by `set glsl-shader-opts alpha=N`.
-
-In real world, the brighter the color, the less saturated it becomes, and eventually it turns white.
-
-| `sigma=0`                                                                                                       | `sigma=0.2`                                                                                                     | `sigma=1`                                                                                                       |
-| --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| ![image](https://user-images.githubusercontent.com/50797982/216247628-8647c010-ff70-488c-bc40-1d57612d1d9f.png) | ![image](https://user-images.githubusercontent.com/50797982/216247654-fc3066a1-098b-4f81-b4c5-a9c8eb6720cd.png) | ![image](https://user-images.githubusercontent.com/50797982/216247675-71c50982-2061-49b1-93b7-87ebe85951d6.png) |
 
 ### Gamut mapping
 
