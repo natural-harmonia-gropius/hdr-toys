@@ -303,7 +303,10 @@ vec3 softClipColor(vec3 color) {
     // soft clip of rgb values to avoid artifacts of hard clipping
     // causes hues distortions, but is a smooth mapping
 
-    if (length(color) <= 1e-6) {
+    float maxRGB = max(max(color.r, color.g), color.b);
+    float minRGB = min(min(color.r, color.g), color.b);
+
+    if (maxRGB <= 1e-6) {
         return color;
     }
 
@@ -314,9 +317,6 @@ vec3 softClipColor(vec3 color) {
     vec3 xsgn = sign(x);
     vec3 xscale = 0.5 + xsgn*(0.5-grey);
     x /= xscale;
-
-    float maxRGB = max(color.r, max(color.g, color.b));
-    float minRGB = min(color.r, min(color.g, color.b));
 
     float softness_0 = maxRGB/(1.0+softness_scale)*softness_scale;
     float softness_1 = (1.0-minRGB)/(1.0+softness_scale)*softness_scale;
@@ -335,7 +335,7 @@ vec4 hook() {
     float C = oklch.y;
     float h = oklch.z * pi / 180.0;
     vec2 ST = approximateShape();
-    float C_smooth = (1.0 / ((ST.x / L) + (ST.y / (1.0 - L))));
+    float C_smooth = (1.0 / ((ST.x / L) + (ST.y / max(1.0 - L, 1e-6))));
     color.rgb = compute(L, h, C / sqrt(C * C / C_smooth / C_smooth + 1.0));
     color.rgb = softClipColor(color.rgb);
 
