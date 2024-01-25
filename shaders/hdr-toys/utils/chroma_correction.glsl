@@ -24,12 +24,6 @@
 //!MAXIMUM 1
 0.05
 
-//!PARAM alpha
-//!TYPE float
-//!MINIMUM 0.00
-//!MAXIMUM 0.33
-0.04
-
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!WHEN sigma
@@ -172,38 +166,17 @@ float chroma_correction(float L, float Lref, float Lmax, float sigma) {
     return 1.0;
 }
 
-vec3 crosstalk(vec3 x, float a) {
-    float b = 1.0 - 2.0 * a;
-    mat3  M = mat3(
-        b, a, a,
-        a, b, a,
-        a, a, b);
-    return x * M;
-}
-
-vec3 crosstalk_inv(vec3 x, float a) {
-    float b = 1.0 - a;
-    float c = 1.0 - 3.0 * a;
-    mat3  M = mat3(
-         b, -a, -a,
-        -a,  b, -a,
-        -a, -a,  b) / c;
-    return x * M;
-}
-
 vec4 hook() {
     vec4 color = HOOKED_texOff(0);
 
     const float L_ref = RGB_to_Lab(vec3(1.0)).x;
     const float L_max = RGB_to_Lab(vec3(L_hdr / L_sdr)).x;
 
-    color.rgb = crosstalk(color.rgb, alpha);
     color.rgb = RGB_to_Lab(color.rgb);
     color.rgb = Lab_to_LCH(color.rgb);
     color.y  *= chroma_correction(color.x, L_ref, L_max, sigma);
     color.rgb = LCH_to_Lab(color.rgb);
     color.rgb = Lab_to_RGB(color.rgb);
-    color.rgb = crosstalk_inv(color.rgb, alpha);
 
     return color;
 }
