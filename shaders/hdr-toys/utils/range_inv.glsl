@@ -9,8 +9,8 @@
 0.91796875
 
 //!PARAM depth
-//!TYPE int
-10
+//!TYPE float
+10.0
 
 //!HOOK OUTPUT
 //!BIND HOOKED
@@ -19,10 +19,10 @@
 vec4 hook() {
     vec4 color = HOOKED_texOff(0);
 
-    const float l = pow(2, depth);
-    const float d = l - 1;
-    const float b = l * black / d;
-    const float w = l * white / d;
+    float l = pow(2.0, depth);
+    float d = l - 1.0;
+    float b = l * black / d;
+    float w = l * white / d;
 
     color.rgb -= b;
     color.rgb /= w - b;

@@ -64,8 +64,8 @@ vec3 XYZD50_to_XYZD65(vec3 XYZ) {
     return XYZ * M;
 }
 
-float delta = 6.0 / 29.0;
-float deltac = delta * 2.0 / 3.0;
+const float delta = 6.0 / 29.0;
+const float deltac = delta * 2.0 / 3.0;
 
 float f1(float x, float delta) {
     return x > pow(delta, 3.0) ?
@@ -79,9 +79,9 @@ float f2(float x, float delta) {
         (x - deltac) * (3.0 * pow(delta, 2.0));
 }
 
-vec3 XYZ_ref = RGB_to_XYZ(vec3(L_sdr));
-
 vec3 XYZ_to_Lab(vec3 XYZ) {
+    vec3 XYZ_ref = RGB_to_XYZ(vec3(L_sdr));
+
     float X = XYZ.x;
     float Y = XYZ.y;
     float Z = XYZ.z;
@@ -98,6 +98,8 @@ vec3 XYZ_to_Lab(vec3 XYZ) {
 }
 
 vec3 Lab_to_XYZ(vec3 Lab) {
+    vec3 XYZ_ref = RGB_to_XYZ(vec3(L_sdr));
+
     float L = Lab.x;
     float a = Lab.y;
     float b = Lab.z;
