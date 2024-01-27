@@ -36,16 +36,16 @@ vec2 CIE_D(float CCT) {
     // c2 = 1.4387768775039337
     CCT = (CCT * 1.4388) / 1.438;
 
-    CCT = clamp(CCT, 4000, 25000);
+    CCT = clamp(CCT, 4000.0, 25000.0);
 
-    const float t1 = 1000.0 / CCT;
-    const float t2 = t1 * t1;
-    const float t3 = t1 * t2;
+    float t1 = 1000.0 / CCT;
+    float t2 = t1 * t1;
+    float t3 = t1 * t2;
 
-    const float x = CCT <= 7000
+    float x = CCT <= 7000.0
         ? 0.244063 + 0.09911 * t1 + 2.9678 * t2 - 4.6070 * t3
         : 0.237040 + 0.24748 * t1 + 1.9018 * t2 - 2.0064 * t3;
-    const float y = -0.275 + 2.87 * x - 3.0 * x * x;
+    float y = -0.275 + 2.87 * x - 3.0 * x * x;
 
     return vec2(x, y);
 }
@@ -259,31 +259,6 @@ const mat3 SingularY3 = mat3(
 
 // Constants End
 
-mat3 invert_mat3(mat3 m) {
-    float determinant =
-          m[0][0] * m[1][1] * m[2][2]
-        + m[0][1] * m[1][2] * m[2][0]
-        + m[0][2] * m[1][0] * m[2][1]
-        - m[2][0] * m[1][1] * m[0][2]
-        - m[2][1] * m[1][2] * m[0][0]
-        - m[2][2] * m[1][0] * m[0][1];
-
-    if (determinant == 0.0)
-        return Identity3;
-
-    return mat3(
-        m[1][1] * m[2][2] - m[1][2] * m[2][1],
-        m[2][1] * m[0][2] - m[2][2] * m[0][1],
-        m[0][1] * m[1][2] - m[0][2] * m[1][1],
-        m[2][0] * m[1][2] - m[1][0] * m[2][2],
-        m[0][0] * m[2][2] - m[2][0] * m[0][2],
-        m[1][0] * m[0][2] - m[0][0] * m[1][2],
-        m[1][0] * m[2][1] - m[2][0] * m[1][1],
-        m[2][0] * m[0][1] - m[0][0] * m[2][1],
-        m[0][0] * m[1][1] - m[1][0] * m[0][1]
-    ) / determinant;
-}
-
 vec3 xyY_to_XYZ(vec3 xyY) {
     float x = xyY.x;
     float y = xyY.y;
@@ -309,8 +284,12 @@ mat3 RGB_to_XYZ(Chromaticity C) {
     vec3 w = xyY_to_XYZ(vec3(C.w, 1.0));
 
     mat3 n = transpose(mat3(r, g, b));
-    vec3 s = w * invert_mat3(n);
-    mat3 m = mat3(n[0] * s, n[1] * s, n[2] * s);
+    vec3 s = w * inverse(n);
+    mat3 m = mat3(
+        s.x, 0.0, 0.0,
+        0.0, s.y, 0.0,
+        0.0, 0.0, s.z
+    ) * n;
 
     return m;
 }
@@ -319,7 +298,7 @@ mat3 XYZ_to_RGB(Chromaticity C) {
     if (C == GRAY)
         return SingularY3;
 
-    return invert_mat3(RGB_to_XYZ(C));
+    return inverse(RGB_to_XYZ(C));
 }
 
 // http://www.brucelindbloom.com/index.html?Eqn_ChromAdapt.html
@@ -336,7 +315,7 @@ mat3 adaptation(vec2 W1, vec2 W2, mat3 cone) {
         0.0, 0.0, dst_cone.z / src_cone.z
     );
 
-    return cone * scale * invert_mat3(cone);
+    return cone * scale * inverse(cone);
 }
 
 vec4 hook() {
