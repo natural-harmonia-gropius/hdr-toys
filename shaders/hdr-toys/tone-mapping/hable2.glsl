@@ -17,6 +17,8 @@
 //!BIND HOOKED
 //!DESC tone mapping (hable2)
 
+const vec3 RGB_to_Y = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
+
 float toeLength = 0.1;
 float toeStrength = 0.5;
 float shoulderAngle = 1.0;
@@ -128,8 +130,8 @@ float curve(float x) {
     float W = 1.0;
 
     // Precompute information for all three segments (mid, toe, shoulder)
-    const vec2  tmp = as_slope_intercept(x0, x1, y0, y1);
-    const float m = tmp.x,
+    vec2  tmp = as_slope_intercept(x0, x1, y0, y1);
+    float m = tmp.x,
                 b = tmp.y,
                 g = 1.0; // gamma
 
@@ -153,14 +155,14 @@ float curve(float x) {
             midLnA     = g * log(m),
             midB       = g;
 
-    const float toeM = eval_derivative_linear_gamma(m, b, g, x0);
-    const float shoulderM = eval_derivative_linear_gamma(m, b, g, x1);
+    float toeM = eval_derivative_linear_gamma(m, b, g, x0);
+    float shoulderM = eval_derivative_linear_gamma(m, b, g, x1);
 
     float y0 = max(pow(y0, g), 1e-6);
     float y1 = max(pow(y1, g), 1e-6);
     float overshootY = pow(1.0 + overshootY, g) - 1.0;
 
-    const vec2  toeAB  = solve_AB(x0, y0, m);
+    vec2  toeAB  = solve_AB(x0, y0, m);
     float   toeOffsetX = 0.0,
             toeOffsetY = 0.0,
             toeScaleX  = 1.0,
@@ -168,10 +170,10 @@ float curve(float x) {
             toeLnA     = toeAB.x,
             toeB       = toeAB.y;
 
-    const float shoulderX0  = (1.0 + overshootX) - x1;
-    const float shoulderY0  = (1.0 + overshootY) - y1;
+    float shoulderX0  = (1.0 + overshootX) - x1;
+    float shoulderY0  = (1.0 + overshootY) - y1;
 
-    const vec2  shoulderAB  = solve_AB(shoulderX0, shoulderY0, m);
+    vec2  shoulderAB  = solve_AB(shoulderX0, shoulderY0, m);
     float   shoulderOffsetX = 1.0 + overshootX,
             shoulderOffsetY = 1.0 + overshootY,
             shoulderScaleX  = -1.0,
@@ -180,11 +182,11 @@ float curve(float x) {
             shoulderB       = shoulderAB.y;
 
     // Normalize (correct for overshooting)
-    const float scale = curve_segment_eval(1.0,
+    float scale = curve_segment_eval(1.0,
         shoulderLnA, shoulderB,
         shoulderOffsetX, shoulderOffsetY,
         shoulderScaleX, shoulderScaleY);
-    const float invScale = 1.0 / scale;
+    float invScale = 1.0 / scale;
 
     toeOffsetY *= invScale;
     toeScaleY  *= invScale;
@@ -216,7 +218,7 @@ float curve(float x) {
 }
 
 vec3 tone_mapping_y(vec3 RGB) {
-    const float y = dot(RGB, vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196));
+    float y = dot(RGB, RGB_to_Y);
     return RGB * curve(y) / y;
 }
 

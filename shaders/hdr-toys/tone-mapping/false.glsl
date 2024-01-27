@@ -3,7 +3,7 @@
 //!PARAM enabled
 //!TYPE int
 //!MINIMUM 0
-//!MAXIMUM 2
+//!MAXIMUM 1
 1
 
 //!PARAM L_sdr
@@ -23,21 +23,19 @@
 //!WHEN enabled
 //!DESC tone mapping (false color)
 
+const vec3 RGB_to_Y = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
+
 vec4 hook() {
     vec4 color = HOOKED_texOff(0);
 
-    float L = 0.0;
-    if (enabled == 1) // Y (relative luminance)
-        L = dot(color.rgb, vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196));
-    else if (enabled == 2) // maxRGB
-        L = max(max(color.r, color.g), color.b);
+    float L = dot(color.rgb, RGB_to_Y);
 
-    const float l0 =     1.0 / CONTRAST_sdr;
-    const float l1 =     1.0;
-    const float l2 =  1000.0 / L_sdr;
-    const float l3 =  2000.0 / L_sdr;
-    const float l4 =  4000.0 / L_sdr;
-    const float l5 = 10000.0 / L_sdr;
+    float l0 =     1.0 / CONTRAST_sdr;
+    float l1 =     1.0;
+    float l2 =  1000.0 / L_sdr;
+    float l3 =  2000.0 / L_sdr;
+    float l4 =  4000.0 / L_sdr;
+    float l5 = 10000.0 / L_sdr;
 
     float a = 0.0;
     if (L > l5) {

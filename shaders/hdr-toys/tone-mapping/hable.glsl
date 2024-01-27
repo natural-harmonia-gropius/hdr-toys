@@ -17,6 +17,8 @@
 //!BIND HOOKED
 //!DESC tone mapping (hable)
 
+const vec3 RGB_to_Y = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
+
 const float A = 0.15;   // Shoulder Strength
 const float B = 0.50;   // Linear Strength
 const float C = 0.10;   // Linear Angle
@@ -29,12 +31,12 @@ float f(float x) {
 }
 
 float curve(float x) {
-    const float W = L_hdr / L_sdr;
+    float W = L_hdr / L_sdr;
     return f(x) / f(W);
 }
 
 vec3 tone_mapping_y(vec3 RGB) {
-    const float y = dot(RGB, vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196));
+    float y = dot(RGB, RGB_to_Y);
     return RGB * curve(y) / y;
 }
 

@@ -78,9 +78,9 @@ vec3 LMS_to_ICtCp(vec3 LMS) {
     LMS.y = Y_to_ST2084(LMS.y);
     LMS.z = Y_to_ST2084(LMS.z);
     mat3 M = mat3(
-         2048,   2048,    0,
-         6610, -13613, 7003,
-        17933, -17390, -543) / 4096;
+         2048 / 4096,   2048 / 4096,    0 / 4096,
+         6610 / 4096, -13613 / 4096, 7003 / 4096,
+        17933 / 4096, -17390 / 4096, -543 / 4096);
     return LMS * M;
 }
 
@@ -113,9 +113,11 @@ vec3 ICtCp_to_RGB(vec3 color) {
 }
 
 float curve(float x) {
-    const float iw = Y_to_ST2084(L_hdr);
-    const float ow = Y_to_ST2084(L_sdr);
-    const float w = iw / ow;
+    float iw = Y_to_ST2084(L_hdr);
+    float ib = 0.0;
+    float ow = Y_to_ST2084(L_sdr);
+    float ob = 0.0;
+    float w = iw - ib / ow - ob;
     return x / w;
 }
 

@@ -17,15 +17,17 @@
 //!BIND HOOKED
 //!DESC tone mapping (reinhard)
 
+const vec3 RGB_to_Y = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
+
 float curve(float x) {
-    const float w = L_hdr / L_sdr;
-    const float simple = x / (1.0 + x);
-    const float extended = simple * (1.0 + x / (w * w));
+    float w = L_hdr / L_sdr;
+    float simple = x / (1.0 + x);
+    float extended = simple * (1.0 + x / (w * w));
     return extended;
 }
 
 vec3 tone_mapping_y(vec3 RGB) {
-    const float y = dot(RGB, vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196));
+    float y = dot(RGB, RGB_to_Y);
     return RGB * curve(y) / y;
 }
 

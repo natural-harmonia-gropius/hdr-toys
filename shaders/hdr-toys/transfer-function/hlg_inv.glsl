@@ -8,6 +8,8 @@
 //!BIND HOOKED
 //!DESC transfer function (hlg, inverse)
 
+const vec3 RGB_to_Y = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
+
 const float L_w   = 1000.0;
 const float L_b   = 0.0;
 
@@ -29,7 +31,7 @@ vec3 HLG_to_Y(vec3 HLG) {
     );
 
     // HLG OOTF (scene linear to display linear)
-    const float Y_s = dot(sceneLinear, vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196));
+    const float Y_s = dot(sceneLinear, RGB_to_Y);
     const vec3 displayLinear = alpha * pow(Y_s, gamma - 1) * sceneLinear + beta;
 
     return displayLinear;

@@ -113,9 +113,9 @@ vec3 LMS_to_ICtCp(vec3 LMS) {
     LMS.y = Y_to_ST2084(LMS.y);
     LMS.z = Y_to_ST2084(LMS.z);
     mat3 M = mat3(
-         2048,   2048,    0,
-         6610, -13613, 7003,
-        17933, -17390, -543) / 4096;
+         2048 / 4096,   2048 / 4096,    0 / 4096,
+         6610 / 4096, -13613 / 4096, 7003 / 4096,
+        17933 / 4096, -17390 / 4096, -543 / 4096);
     return LMS * M;
 }
 
@@ -148,27 +148,27 @@ vec3 ICtCp_to_RGB(vec3 color) {
 }
 
 float curve(float x) {
-    const float iw = Y_to_ST2084(L_hdr);
-    const float ib = Y_to_ST2084(0.0);
-    const float ow = Y_to_ST2084(L_sdr);
-    const float ob = Y_to_ST2084(L_sdr / CONTRAST_sdr);
+    float iw = Y_to_ST2084(L_hdr);
+    float ib = Y_to_ST2084(0.0);
+    float ow = Y_to_ST2084(L_sdr);
+    float ob = Y_to_ST2084(L_sdr / CONTRAST_sdr);
 
-    const float maxLum = (ow - ib) / (iw - ib);
-    const float minLum = (ob - ib) / (iw - ib);
+    float maxLum = (ow - ib) / (iw - ib);
+    float minLum = (ob - ib) / (iw - ib);
 
-    const float KS = 1.5 * maxLum - 0.5;
-    const float b = minLum;
+    float KS = 1.5 * maxLum - 0.5;
+    float b = minLum;
 
     // E1
     x = (x - ib) / (iw - ib);
 
     // E2
     if (KS <= x) {
-        const float TB  = (x - KS) / (1.0 - KS);
-        const float TB2 = TB * TB;
-        const float TB3 = TB * TB2;
+        float TB  = (x - KS) / (1.0 - KS);
+        float TB2 = TB * TB;
+        float TB3 = TB * TB2;
 
-        const float PB  = (2.0 * TB3 - 3.0 * TB2 + 1.0) * KS  +
+        float PB  = (2.0 * TB3 - 3.0 * TB2 + 1.0) * KS  +
                           (TB3 - 2.0 * TB2 + TB) * (1.0 - KS) +
                           (-2.0 * TB3 + 3.0 * TB2) * maxLum;
 
@@ -177,7 +177,7 @@ float curve(float x) {
 
     // E3
     if (0.0 <= x) {
-        x = x + b * pow((1 - x), 4.0);
+        x = x + b * pow((1.0 - x), 4.0);
     }
 
     // E4

@@ -8,6 +8,8 @@
 //!BIND HOOKED
 //!DESC transfer function (hlg)
 
+const vec3 RGB_to_Y = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
+
 const float L_w   = 1000.0;
 const float L_b   = 0.0;
 
@@ -25,7 +27,7 @@ vec3 Y_to_HLG(vec3 displayLinear) {
     // This case is to protect against pow(0,-N)=Inf error. The ITU document
     // does not offer a recommendation for this corner case. There may be a
     // better way to handle this, but for now, this works.
-    const float Y_d = dot(displayLinear, vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196));
+    const float Y_d = dot(displayLinear, RGB_to_Y);
     const vec3 sceneLinear = vec3(
         Y_d == 0.0 ? 0.0 : pow((Y_d - beta) / alpha, (1.0 - gamma) / gamma) * ((displayLinear.r - beta) / alpha),
         Y_d == 0.0 ? 0.0 : pow((Y_d - beta) / alpha, (1.0 - gamma) / gamma) * ((displayLinear.g - beta) / alpha),
