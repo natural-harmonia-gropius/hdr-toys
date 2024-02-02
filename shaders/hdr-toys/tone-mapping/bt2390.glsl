@@ -169,8 +169,8 @@ float curve(float x) {
         float TB3 = TB * TB2;
 
         float PB  = (2.0 * TB3 - 3.0 * TB2 + 1.0) * KS  +
-                          (TB3 - 2.0 * TB2 + TB) * (1.0 - KS) +
-                          (-2.0 * TB3 + 3.0 * TB2) * maxLum;
+                    (TB3 - 2.0 * TB2 + TB) * (1.0 - KS) +
+                    (-2.0 * TB3 + 3.0 * TB2) * maxLum;
 
         x = PB;
     }
