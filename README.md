@@ -11,52 +11,8 @@ Featuring dynamic curves and a uniform color space.
 > [!Tip]
 > Full portable_config: [natural-harmonia-gropius/mpv-config](https://github.com/natural-harmonia-gropius/mpv-config).
 
-1. Download [hdr-toys.zip](https://github.com/natural-harmonia-gropius/hdr-toys/archive/refs/heads/master.zip), extract it and copy `shaders` and `scripts` to your mpv config folder.
-2. Append the following auto profiles to your `mpv.conf`
-
-```ini
-[bt.2100-pq]
-profile-cond=get("video-params/primaries") == "bt.2020" and get("video-params/gamma") == "pq"
-profile-restore=copy
-target-prim=bt.2020
-target-trc=pq
-glsl-shader=~~/shaders/hdr-toys/utils/clip_both.glsl
-glsl-shader=~~/shaders/hdr-toys/transfer-function/pq_inv.glsl
-glsl-shader=~~/shaders/hdr-toys/tone-mapping/dynamic.glsl
-glsl-shader=~~/shaders/hdr-toys/gamut-mapping/bottosson.glsl
-glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886.glsl
-
-[bt.2100-hlg]
-profile-cond=get("video-params/primaries") == "bt.2020" and get("video-params/gamma") == "hlg"
-profile-restore=copy
-target-prim=bt.2020
-target-trc=hlg
-glsl-shader=~~/shaders/hdr-toys/utils/clip_both.glsl
-glsl-shader=~~/shaders/hdr-toys/transfer-function/hlg_inv.glsl
-glsl-shader=~~/shaders/hdr-toys/tone-mapping/dynamic.glsl
-glsl-shader=~~/shaders/hdr-toys/gamut-mapping/bottosson.glsl
-glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886.glsl
-
-[bt.2020]
-profile-cond=get("video-params/primaries") == "bt.2020" and get("video-params/gamma") == "bt.1886"
-profile-restore=copy
-target-prim=bt.2020
-target-trc=bt.1886
-glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886_inv.glsl
-glsl-shader=~~/shaders/hdr-toys/gamut-mapping/bottosson.glsl
-glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886.glsl
-
-[dovi-p5]
-profile-cond=get("video-params/primaries") == "bt.709" and get("video-params/gamma") == "bt.1886" and get("video-out-params/max-luma") > 203
-profile-restore=copy
-target-prim=bt.2020
-target-trc=pq
-glsl-shader=~~/shaders/hdr-toys/utils/clip_both.glsl
-glsl-shader=~~/shaders/hdr-toys/transfer-function/pq_inv.glsl
-glsl-shader=~~/shaders/hdr-toys/tone-mapping/dynamic.glsl
-glsl-shader=~~/shaders/hdr-toys/gamut-mapping/bottosson.glsl
-glsl-shader=~~/shaders/hdr-toys/transfer-function/bt1886.glsl
-```
+1. Download [hdr-toys.zip](https://github.com/natural-harmonia-gropius/hdr-toys/archive/refs/heads/master.zip), extract it and copy `shaders`, `scripts` and `hdr-toys.conf` to your mpv config folder.
+2. Append `include=~~/hdr-toys.conf` to your `mpv.conf`
 
 - Don't set target-peak, icc-profile...  
   Make sure there are _**no**_ built-in tone map, gamut map, 3DLUT... in "Frame Timings" page.
