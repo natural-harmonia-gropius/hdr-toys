@@ -1,10 +1,16 @@
+// https://www.itu.int/rec/R-REC-BT.1886
+
+//!PARAM CONTRAST_sdr
+//!TYPE float
+//!MINIMUM 0
+//!MAXIMUM 1000000
+1000.0
+
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!DESC transfer function (bt.1886)
 
 const float GAMMA = 2.4;
-const float L_W = 1.0;
-const float L_B = 0.0;
 
 // The reference EOTF specified in Rec. ITU-R BT.1886
 // L = a(max[(V+b),0])^g
@@ -15,14 +21,18 @@ float bt1886_r(float L, float gamma, float Lw, float Lb) {
     return V;
 }
 
+vec3 bt1886_r_f3(vec3 L, float gamma, float Lw, float Lb) {
+    return vec3(
+        bt1886_r(L.r, gamma, Lw, Lb),
+        bt1886_r(L.g, gamma, Lw, Lb),
+        bt1886_r(L.b, gamma, Lw, Lb)
+    );
+}
+
 vec4 hook() {
     vec4 color = HOOKED_texOff(0);
 
-    color.rgb = vec3(
-        bt1886_r(color.r, GAMMA, L_W, L_B),
-        bt1886_r(color.g, GAMMA, L_W, L_B),
-        bt1886_r(color.b, GAMMA, L_W, L_B)
-    );
+    color.rgb = bt1886_r_f3(color.rgb, GAMMA, 1.0, 1.0 / CONTRAST_sdr);
 
     return color;
 }
