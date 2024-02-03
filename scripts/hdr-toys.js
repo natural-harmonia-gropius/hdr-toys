@@ -77,10 +77,9 @@ mp.observe_property("video-out-params", "native", function (property, value) {
   metadata.detect.avg = value["avg-pq-y"];
 
   set_L_hdr(
-    Math.max(
-      metadata.smpte2086.maxLuminance,
-      metadata.cta861_3.maxContentLightLevel
-    )
+    metadata.cta861_3.maxContentLightLevel ||
+      metadata.smpte2086.maxLuminance ||
+      1000
   );
 });
 
