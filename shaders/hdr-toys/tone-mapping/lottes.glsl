@@ -48,9 +48,8 @@ vec3 tone_mapping(vec3 color) {
     float b = f1(hdrMax, contrast, shoulder, midIn, midOut);
     float c = f2(hdrMax, contrast, shoulder, midIn, midOut);
 
-    #define EPS 1e-6f
     float peak = max(color.r, max(color.g, color.b));
-    peak = max(EPS, peak);
+    peak = max(peak, 1e-6);
 
     vec3 ratio = color / peak;
     peak = f3(peak, vec4(contrast, shoulder, b, c) );

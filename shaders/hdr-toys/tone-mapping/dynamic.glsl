@@ -59,8 +59,8 @@ vec4 hook() {
 //!SAVE BLURRED
 //!DESC metering (spatial stabilization, horizonal)
 
-#define offset vec3(0.0000000000, 1.3846153846, 3.2307692308)
-#define weight vec3(0.2270270270, 0.3162162162, 0.0702702703)
+const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
+const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
 
 vec4 hook(){
     uint i = 0;
@@ -79,8 +79,8 @@ vec4 hook(){
 //!SAVE BLURRED
 //!DESC metering (spatial stabilization, vertical)
 
-#define offset vec3(0.0000000000, 1.3846153846, 3.2307692308)
-#define weight vec3(0.2270270270, 0.3162162162, 0.0702702703)
+const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
+const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
 
 vec4 hook(){
     uint i = 0;

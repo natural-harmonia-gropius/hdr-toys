@@ -14,8 +14,9 @@
 //!BIND HOOKED
 //!DESC tone mapping (linear, CIE-Lab)
 
-#define cbrt(x) (sign(x) * pow(abs(x), 1.0 / 3.0))
-
+float cbrt(float x) {
+    return sign(x) * pow(abs(x), 1.0 / 3.0);
+}
 
 vec3 RGB_to_XYZ(vec3 RGB) {
     mat3 M = mat3(
