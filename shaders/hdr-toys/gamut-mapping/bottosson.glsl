@@ -11,6 +11,17 @@
 //!BIND HOOKED
 //!DESC gamut mapping (bottosson, soft)
 
+const mat3 output_RGB_to_XYZ = mat3(
+    0.41239079926595934, 0.357584339383878,   0.1804807884018343,
+    0.21263900587151027, 0.715168678767756,   0.07219231536073371,
+    0.01933081871559182, 0.11919477979462598, 0.9505321522496607
+);
+const mat3 output_XYZ_to_RGB = mat3(
+     3.2409699419045226,  -1.537383177570094,   -0.4986107602930034,
+    -0.9692436362808796,   1.8759675015077202,   0.04155505740717559,
+     0.05563007969699366, -0.20397695888897652,  1.0569715142428786
+);
+
 #define cbrt(x) (sign(x) * pow(abs(x), 1.0 / 3.0))
 
 
@@ -122,14 +133,14 @@ vec3 LCH_to_Lab(vec3 LCH) {
 
 
 float findCenter(vec3 x) {
-    float a = 1.9779984951*x.x - 2.4285922050*x.y + 0.4505937099*x.z;
-    float b = 0.0259040371*x.x + 0.7827717662*x.y - 0.8086757660*x.z;
+    float a = 1.9779985324311684 * x.x - 2.4285922420485799 * x.y + 0.4505937096174110 * x.z;
+    float b = 0.0259040424655478 * x.x + 0.7827717124575296 * x.y - 0.8086757549230774 * x.z;
     float C = sqrt(a*a+b*b);
 
     // Matrix derived for max(l,m,s) to be as close to macadam limit as possible
     // this makes it some kind of g0-like estimate
     mat3 M = mat3(
-        2.26923008, -1.43594808,  0.166718,
+         2.26923008, -1.43594808,  0.166718,
         -0.98545265,  2.12616699, -0.14071434,
         -0.02985871, -0.25753239,  1.2873911);
     x = x*M;
@@ -152,8 +163,8 @@ vec2 findCenterAndPurity(vec3 x) {
     // Matrix derived for (c_smooth+s_smooth) to be an approximation of the macadam limit
     // this makes it some kind of g0-like estimate
     mat3 M = mat3(
-        2.26775149, -1.43293879,  0.1651873,
-        -0.98535505,  2.1260072, -0.14065215,
+         2.26775149, -1.43293879,  0.1651873,
+        -0.98535505,  2.1260072,  -0.14065215,
         -0.02501605, -0.26349465,  1.2885107);
 
     x = x*M;
@@ -173,12 +184,7 @@ vec2 findCenterAndPurity(vec3 x) {
 
 
 vec3 toLms(vec3 c) {
-    mat3 rgbToLms = mat3(
-        0.4122214708, 0.5363325363, 0.0514459929,
-        0.2119034982, 0.6806995451, 0.1073969566,
-        0.0883024619, 0.2817188376, 0.6299787005);
-
-    vec3 lms_ = c*rgbToLms;
+    vec3 lms_ = XYZ_to_LMS(c * output_RGB_to_XYZ);
     return sign(lms_)*pow(abs(lms_), vec3(1.0/3.0));
 }
 
@@ -209,8 +215,8 @@ vec3 calculateLCh(vec3 c) {
 
     float maxLms = findCenter(lms);
 
-    float a = 1.9779984951*lms.x - 2.4285922050*lms.y + 0.4505937099*lms.z;
-    float b = 0.0259040371*lms.x + 0.7827717662*lms.y - 0.8086757660*lms.z;
+    float a = 1.9779985324311684 * lms.x - 2.4285922420485799 * lms.y + 0.4505937096174110 * lms.z;
+    float b = 0.0259040424655478 * lms.x + 0.7827717124575296 * lms.y - 0.8086757549230774 * lms.z;
 
     float C = sqrt(a*a+b*b);
 
@@ -256,14 +262,11 @@ vec2 approximateShape() {
 }
 
 vec3 compute(float L, float hue, float sat) {
-    vec3 c;
-    c.x = L;
-    c.y = cos(hue);
-    c.z = sin(hue);
+    vec3 c = vec3(L, cos(hue), sin(hue));
 
-    float l_ = + 0.3963377774 * c.y + 0.2158037573 * c.z;
-    float m_ = - 0.1055613458 * c.y - 0.0638541728 * c.z;
-    float s_ = - 0.0894841775 * c.y - 1.2914855480 * c.z;
+    float l_ = + 0.3963377773761749 * c.y + 0.2158037573099136 * c.z;
+    float m_ = - 0.1055613458156586 * c.y - 0.0638541728258133 * c.z;
+    float s_ = - 0.0894841775298119 * c.y - 1.2914855480194092 * c.z;
 
     vec3 lms = vec3(l_,m_,s_);
 
@@ -277,20 +280,9 @@ vec3 compute(float L, float hue, float sat) {
 
     lms = lms*lms*lms;
 
-    float l = lms.x;
-    float m = lms.y;
-    float s = lms.z;
+    vec3 rgb = LMS_to_XYZ(lms) * output_XYZ_to_RGB;
 
-    vec3 rgbResult;
-    rgbResult.r = + 4.0767245293*l - 3.3072168827*m + 0.2307590544*s;
-    rgbResult.g = - 1.2681437731*l + 2.6093323231*m - 0.3411344290*s;
-    rgbResult.b = - 0.0041119885*l - 0.7034763098*m + 1.7068625689*s;
-
-    return rgbResult;
-}
-
-vec3 scurve3(vec3 x) {
-    return (3.0*x - x*x*x)/2.0;
+    return rgb;
 }
 
 vec3 softSaturate(vec3 x, vec3 a) {
