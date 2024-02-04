@@ -16,6 +16,12 @@
 //!MAXIMUM 1000000
 1000.0
 
+//!PARAM sigma
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 1.0
+0.2
+
 //!PARAM temporal_stable_frames
 //!TYPE uint
 //!MINIMUM 0
@@ -104,7 +110,9 @@ vec4 hook(){
 void hook() {
     vec4 color = texelFetch(BLURRED_raw, ivec2(gl_GlobalInvocationID.xy), 0);
 
-    float y = dot(color.rgb, vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196));
+    const vec3 RGB_to_Y = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
+
+    float y = dot(color.rgb, RGB_to_Y);
     float m = max(max(color.r, color.g), color.b);
 
     // value below 1 doesn't make sense, can also improve fade in.
@@ -354,7 +362,7 @@ float curve(float x) {
 
     const vec2  toeAB  = solve_AB(x0, y0, m);
     float   toeOffsetX = 0.0,
-            toeOffsetY = 0.0,
+            toeOffsetY = 1.0 / CONTRAST_sdr,
             toeScaleX  = 1.0,
             toeScaleY  = 1.0,
             toeLnA     = toeAB.x,
@@ -557,38 +565,6 @@ vec3 LCH_to_Lab(vec3 LCH) {
     return vec3(LCH.x, a, b);
 }
 
-vec3 tone_mapping_hybrid(vec3 color) {
-    vec3 src;
-    vec3 dst;
-    vec3 rgb;
-    vec3 lum;
-    vec3 sat;
-
-    src = color;
-    src = RGB_to_Jzazbz(src);
-    src = Lab_to_LCH(src);
-
-    rgb = vec3(curve(color.r), curve(color.g), curve(color.b));
-    rgb = RGB_to_Jzazbz(rgb);
-    rgb = Lab_to_LCH(rgb);
-
-    float L = dot(color, vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196));
-    lum = color * curve(L) / L;
-    lum = RGB_to_Jzazbz(lum);
-    lum = Lab_to_LCH(lum);
-
-    float norm = max(max(color.r, color.g), color.b);
-    sat = color * curve(norm) / norm;
-    sat = RGB_to_Jzazbz(sat);
-    sat = Lab_to_LCH(sat);
-
-    dst = vec3(mix(lum.r, sat.r, src.r * src.g), mix(lum.g, rgb.g, src.r), src.b);
-    dst = LCH_to_Lab(dst);
-    dst = Jzazbz_to_RGB(dst);
-
-    return dst;
-}
-
 void calc_user_params_from_metered() {
     float L_max_ev = log2(L_max / L_sdr);
     float L_hdr_ev = log2(L_hdr / L_sdr);
@@ -596,8 +572,8 @@ void calc_user_params_from_metered() {
     shoulderLength = L_max_ev / L_hdr_ev;
     shoulderStrength = L_max_ev;
     shoulderAngle = 1.0;
-    toeLength = pow(2.0, L_max_ev) / CONTRAST_sdr;
-    toeStrength = 0.5;
+    toeLength = 0.18;
+    toeStrength = 0.0;
 }
 
 vec4 hook() {
@@ -605,7 +581,25 @@ vec4 hook() {
 
     calc_user_params_from_metered();
     calc_direct_params_from_user();
-    color.rgb = tone_mapping_hybrid(color.rgb);
+
+    vec3 S_jab = RGB_to_Jzazbz(color.rgb);
+    vec3 S_jch = Lab_to_LCH(S_jab);
+
+    const vec3 RGB_to_Y = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
+    float Y = dot(color.rgb, RGB_to_Y);
+    vec3 Y_tm = color.rgb * curve(Y) / Y;
+    vec3 Y_jab = RGB_to_Jzazbz(Y_tm);
+
+    float M = max(max(color.r, color.g), color.b);
+    vec3 M_tm = color.rgb * curve(M) / M;
+    vec3 M_jab = RGB_to_Jzazbz(M_tm);
+
+    float N_j = mix(Y_jab.x, M_jab.x, S_jab.x * S_jch.y);
+
+    S_jab.yz *= mix(1.0, min(S_jab.x / N_j, N_j / S_jab.x), sigma);
+    S_jab.x = N_j;
+
+    color.rgb = Jzazbz_to_RGB(S_jab);
 
     return color;
 }
