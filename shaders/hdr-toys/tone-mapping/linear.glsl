@@ -12,6 +12,12 @@
 //!MAXIMUM 1000
 203.0
 
+//!PARAM CONTRAST_sdr
+//!TYPE float
+//!MINIMUM 0
+//!MAXIMUM 1000000
+1000.0
+
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!DESC tone mapping (linear, ICtCp)
@@ -116,8 +122,8 @@ float curve(float x) {
     float iw = Y_to_ST2084(L_hdr);
     float ib = 0.0;
     float ow = Y_to_ST2084(L_sdr);
-    float ob = 0.0;
-    float w = iw - ib / ow - ob;
+    float ob = Y_to_ST2084(1.0 / CONTRAST_sdr);
+    float w = (iw - ib) / (ow - ob);
     return x / w;
 }
 
