@@ -41,46 +41,16 @@
 //!BIND HOOKED
 //!DESC gamut mapping (jedypod)
 
-#define func    parabolic
-
-
-// Parabolic compression function: https://www.desmos.com/calculator/nvhp63hmtj
-float parabolic(float dist, float lim, float thr) {
-    if (dist > thr) {
-        // Calculate scale so compression function passes through distance limit: (x=dl, y=1)
-        float scale = (1.0 - thr) / sqrt(lim - 1.0);
-        float sacle_ = scale * scale / 4.0;
-        dist = scale * (sqrt(dist - thr + sacle_) - sqrt(sacle_)) + thr;
-    }
-
-    return dist;
-}
-
-float power(float dist, float lim, float thr) {
-    float pwr = 1.2;
-
-    if (dist > thr) {
-        // Calculate scale factor for y = 1 intersect
-        float scl = (lim - thr) / pow(pow((1.0 - thr) / (lim - thr), -pwr) - 1.0, 1.0 / pwr);
-
-        // Normalize distance outside threshold by scale factor
-        float nd = (dist - thr) / scl;
-        float p = pow(nd, pwr);
-
-        // Compress
-        dist = thr + scl * nd / (pow(1.0 + p, 1.0 / pwr));
-    }
-
-    return dist;
+// Parabolic compression function
+// https://www.desmos.com/calculator/khowxlu6xh
+float parabolic(float x, float t0, float x0, float y0) {
+    float s = (y0 - t0) / sqrt(x0 - y0);
+    float ox = t0 - s * s / 4.0;
+    float oy = t0 - s * sqrt(s * s / 4.0);
+    return (x < t0 ? x : s * sqrt(x - ox) + oy);
 }
 
 vec3 gamut_compress(vec3 rgb) {
-    // Distance limit: How far beyond the gamut boundary to compress
-    vec3 dl = vec3(cyan_limit, magenta_limit, yellow_limit);
-
-    // Amount of outer gamut to affect
-    vec3 th = vec3(cyan_threshold, magenta_threshold, yellow_threshold);
-
     // Achromatic axis
     float ac = max(max(rgb.r, rgb.g), rgb.b);
 
@@ -89,9 +59,9 @@ vec3 gamut_compress(vec3 rgb) {
 
     // Compressed distance
     vec3 cd = vec3(
-        func(d.x, dl.x, th.x),
-        func(d.y, dl.y, th.y),
-        func(d.z, dl.z, th.z)
+        parabolic(d.x, cyan_limit, cyan_threshold, 1.0),
+        parabolic(d.y, magenta_limit, magenta_threshold, 1.0),
+        parabolic(d.z, yellow_limit, yellow_threshold, 1.0)
     );
 
     // Inverse RGB Ratios to RGB
