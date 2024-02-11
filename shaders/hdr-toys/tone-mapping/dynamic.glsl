@@ -57,7 +57,7 @@ void hook() {
 
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!SAVE BLURRED
+//!SAVE METERING
 //!WIDTH 512
 //!HEIGHT 288
 //!DESC metering (spatial stabilization, downscaling)
@@ -67,8 +67,8 @@ vec4 hook() {
 }
 
 //!HOOK OUTPUT
-//!BIND BLURRED
-//!SAVE BLURRED
+//!BIND METERING
+//!SAVE METERING
 //!WHEN spatial_stable_iterations 0 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
@@ -78,19 +78,19 @@ const vec2 dir    = vec2(1.0, 0.0);
 
 vec4 hook(){
     uint i = 0;
-    vec4 c = BLURRED_texOff(offset[i]) * weight[i];
+    vec4 c = METERING_texOff(offset[i]) * weight[i];
 
     for (i = 1; i < 4; i++) {
-        c += BLURRED_texOff( dir * offset[i]) * weight[i];
-        c += BLURRED_texOff(-dir * offset[i]) * weight[i];
+        c += METERING_texOff( dir * offset[i]) * weight[i];
+        c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
     return vec4(c.rgb, 1.0);
 }
 
 //!HOOK OUTPUT
-//!BIND BLURRED
-//!SAVE BLURRED
+//!BIND METERING
+//!SAVE METERING
 //!WHEN spatial_stable_iterations 0 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
@@ -100,19 +100,19 @@ const vec2 dir    = vec2(0.0, 1.0);
 
 vec4 hook(){
     uint i = 0;
-    vec4 c = BLURRED_texOff(offset[i]) * weight[i];
+    vec4 c = METERING_texOff(offset[i]) * weight[i];
 
     for (i = 1; i < 4; i++) {
-        c += BLURRED_texOff( dir * offset[i]) * weight[i];
-        c += BLURRED_texOff(-dir * offset[i]) * weight[i];
+        c += METERING_texOff( dir * offset[i]) * weight[i];
+        c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
     return vec4(c.rgb, 1.0);
 }
 
 //!HOOK OUTPUT
-//!BIND BLURRED
-//!SAVE BLURRED
+//!BIND METERING
+//!SAVE METERING
 //!WHEN spatial_stable_iterations 1 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
@@ -122,19 +122,19 @@ const vec2 dir    = vec2(1.0, 0.0);
 
 vec4 hook(){
     uint i = 0;
-    vec4 c = BLURRED_texOff(offset[i]) * weight[i];
+    vec4 c = METERING_texOff(offset[i]) * weight[i];
 
     for (i = 1; i < 4; i++) {
-        c += BLURRED_texOff( dir * offset[i]) * weight[i];
-        c += BLURRED_texOff(-dir * offset[i]) * weight[i];
+        c += METERING_texOff( dir * offset[i]) * weight[i];
+        c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
     return vec4(c.rgb, 1.0);
 }
 
 //!HOOK OUTPUT
-//!BIND BLURRED
-//!SAVE BLURRED
+//!BIND METERING
+//!SAVE METERING
 //!WHEN spatial_stable_iterations 1 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
@@ -144,19 +144,19 @@ const vec2 dir    = vec2(0.0, 1.0);
 
 vec4 hook(){
     uint i = 0;
-    vec4 c = BLURRED_texOff(offset[i]) * weight[i];
+    vec4 c = METERING_texOff(offset[i]) * weight[i];
 
     for (i = 1; i < 4; i++) {
-        c += BLURRED_texOff( dir * offset[i]) * weight[i];
-        c += BLURRED_texOff(-dir * offset[i]) * weight[i];
+        c += METERING_texOff( dir * offset[i]) * weight[i];
+        c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
     return vec4(c.rgb, 1.0);
 }
 
 //!HOOK OUTPUT
-//!BIND BLURRED
-//!SAVE BLURRED
+//!BIND METERING
+//!SAVE METERING
 //!WHEN spatial_stable_iterations 2 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
@@ -166,19 +166,19 @@ const vec2 dir    = vec2(1.0, 0.0);
 
 vec4 hook(){
     uint i = 0;
-    vec4 c = BLURRED_texOff(offset[i]) * weight[i];
+    vec4 c = METERING_texOff(offset[i]) * weight[i];
 
     for (i = 1; i < 4; i++) {
-        c += BLURRED_texOff( dir * offset[i]) * weight[i];
-        c += BLURRED_texOff(-dir * offset[i]) * weight[i];
+        c += METERING_texOff( dir * offset[i]) * weight[i];
+        c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
     return vec4(c.rgb, 1.0);
 }
 
 //!HOOK OUTPUT
-//!BIND BLURRED
-//!SAVE BLURRED
+//!BIND METERING
+//!SAVE METERING
 //!WHEN spatial_stable_iterations 2 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
@@ -188,19 +188,19 @@ const vec2 dir    = vec2(0.0, 1.0);
 
 vec4 hook(){
     uint i = 0;
-    vec4 c = BLURRED_texOff(offset[i]) * weight[i];
+    vec4 c = METERING_texOff(offset[i]) * weight[i];
 
     for (i = 1; i < 4; i++) {
-        c += BLURRED_texOff( dir * offset[i]) * weight[i];
-        c += BLURRED_texOff(-dir * offset[i]) * weight[i];
+        c += METERING_texOff( dir * offset[i]) * weight[i];
+        c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
     return vec4(c.rgb, 1.0);
 }
 
 //!HOOK OUTPUT
-//!BIND BLURRED
-//!SAVE BLURRED
+//!BIND METERING
+//!SAVE METERING
 //!WHEN spatial_stable_iterations 3 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
@@ -210,19 +210,19 @@ const vec2 dir    = vec2(1.0, 0.0);
 
 vec4 hook(){
     uint i = 0;
-    vec4 c = BLURRED_texOff(offset[i]) * weight[i];
+    vec4 c = METERING_texOff(offset[i]) * weight[i];
 
     for (i = 1; i < 4; i++) {
-        c += BLURRED_texOff( dir * offset[i]) * weight[i];
-        c += BLURRED_texOff(-dir * offset[i]) * weight[i];
+        c += METERING_texOff( dir * offset[i]) * weight[i];
+        c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
     return vec4(c.rgb, 1.0);
 }
 
 //!HOOK OUTPUT
-//!BIND BLURRED
-//!SAVE BLURRED
+//!BIND METERING
+//!SAVE METERING
 //!WHEN spatial_stable_iterations 3 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
@@ -232,19 +232,19 @@ const vec2 dir    = vec2(0.0, 1.0);
 
 vec4 hook(){
     uint i = 0;
-    vec4 c = BLURRED_texOff(offset[i]) * weight[i];
+    vec4 c = METERING_texOff(offset[i]) * weight[i];
 
     for (i = 1; i < 4; i++) {
-        c += BLURRED_texOff( dir * offset[i]) * weight[i];
-        c += BLURRED_texOff(-dir * offset[i]) * weight[i];
+        c += METERING_texOff( dir * offset[i]) * weight[i];
+        c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
     return vec4(c.rgb, 1.0);
 }
 
 //!HOOK OUTPUT
-//!BIND BLURRED
-//!SAVE BLURRED
+//!BIND METERING
+//!SAVE METERING
 //!WHEN spatial_stable_iterations 4 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
@@ -254,19 +254,19 @@ const vec2 dir    = vec2(1.0, 0.0);
 
 vec4 hook(){
     uint i = 0;
-    vec4 c = BLURRED_texOff(offset[i]) * weight[i];
+    vec4 c = METERING_texOff(offset[i]) * weight[i];
 
     for (i = 1; i < 4; i++) {
-        c += BLURRED_texOff( dir * offset[i]) * weight[i];
-        c += BLURRED_texOff(-dir * offset[i]) * weight[i];
+        c += METERING_texOff( dir * offset[i]) * weight[i];
+        c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
     return vec4(c.rgb, 1.0);
 }
 
 //!HOOK OUTPUT
-//!BIND BLURRED
-//!SAVE BLURRED
+//!BIND METERING
+//!SAVE METERING
 //!WHEN spatial_stable_iterations 4 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
@@ -276,19 +276,19 @@ const vec2 dir    = vec2(0.0, 1.0);
 
 vec4 hook(){
     uint i = 0;
-    vec4 c = BLURRED_texOff(offset[i]) * weight[i];
+    vec4 c = METERING_texOff(offset[i]) * weight[i];
 
     for (i = 1; i < 4; i++) {
-        c += BLURRED_texOff( dir * offset[i]) * weight[i];
-        c += BLURRED_texOff(-dir * offset[i]) * weight[i];
+        c += METERING_texOff( dir * offset[i]) * weight[i];
+        c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
     return vec4(c.rgb, 1.0);
 }
 
 //!HOOK OUTPUT
-//!BIND BLURRED
-//!SAVE BLURRED
+//!BIND METERING
+//!SAVE METERING
 //!WHEN spatial_stable_iterations 5 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
@@ -298,19 +298,19 @@ const vec2 dir    = vec2(1.0, 0.0);
 
 vec4 hook(){
     uint i = 0;
-    vec4 c = BLURRED_texOff(offset[i]) * weight[i];
+    vec4 c = METERING_texOff(offset[i]) * weight[i];
 
     for (i = 1; i < 4; i++) {
-        c += BLURRED_texOff( dir * offset[i]) * weight[i];
-        c += BLURRED_texOff(-dir * offset[i]) * weight[i];
+        c += METERING_texOff( dir * offset[i]) * weight[i];
+        c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
     return vec4(c.rgb, 1.0);
 }
 
 //!HOOK OUTPUT
-//!BIND BLURRED
-//!SAVE BLURRED
+//!BIND METERING
+//!SAVE METERING
 //!WHEN spatial_stable_iterations 5 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
@@ -320,19 +320,19 @@ const vec2 dir    = vec2(0.0, 1.0);
 
 vec4 hook(){
     uint i = 0;
-    vec4 c = BLURRED_texOff(offset[i]) * weight[i];
+    vec4 c = METERING_texOff(offset[i]) * weight[i];
 
     for (i = 1; i < 4; i++) {
-        c += BLURRED_texOff( dir * offset[i]) * weight[i];
-        c += BLURRED_texOff(-dir * offset[i]) * weight[i];
+        c += METERING_texOff( dir * offset[i]) * weight[i];
+        c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
     return vec4(c.rgb, 1.0);
 }
 
 //!HOOK OUTPUT
-//!BIND BLURRED
-//!SAVE BLURRED
+//!BIND METERING
+//!SAVE METERING
 //!WHEN spatial_stable_iterations 6 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
@@ -342,19 +342,19 @@ const vec2 dir    = vec2(1.0, 0.0);
 
 vec4 hook(){
     uint i = 0;
-    vec4 c = BLURRED_texOff(offset[i]) * weight[i];
+    vec4 c = METERING_texOff(offset[i]) * weight[i];
 
     for (i = 1; i < 4; i++) {
-        c += BLURRED_texOff( dir * offset[i]) * weight[i];
-        c += BLURRED_texOff(-dir * offset[i]) * weight[i];
+        c += METERING_texOff( dir * offset[i]) * weight[i];
+        c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
     return vec4(c.rgb, 1.0);
 }
 
 //!HOOK OUTPUT
-//!BIND BLURRED
-//!SAVE BLURRED
+//!BIND METERING
+//!SAVE METERING
 //!WHEN spatial_stable_iterations 6 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
@@ -364,19 +364,19 @@ const vec2 dir    = vec2(0.0, 1.0);
 
 vec4 hook(){
     uint i = 0;
-    vec4 c = BLURRED_texOff(offset[i]) * weight[i];
+    vec4 c = METERING_texOff(offset[i]) * weight[i];
 
     for (i = 1; i < 4; i++) {
-        c += BLURRED_texOff( dir * offset[i]) * weight[i];
-        c += BLURRED_texOff(-dir * offset[i]) * weight[i];
+        c += METERING_texOff( dir * offset[i]) * weight[i];
+        c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
     return vec4(c.rgb, 1.0);
 }
 
 //!HOOK OUTPUT
-//!BIND BLURRED
-//!SAVE BLURRED
+//!BIND METERING
+//!SAVE METERING
 //!WHEN spatial_stable_iterations 7 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
@@ -386,19 +386,19 @@ const vec2 dir    = vec2(1.0, 0.0);
 
 vec4 hook(){
     uint i = 0;
-    vec4 c = BLURRED_texOff(offset[i]) * weight[i];
+    vec4 c = METERING_texOff(offset[i]) * weight[i];
 
     for (i = 1; i < 4; i++) {
-        c += BLURRED_texOff( dir * offset[i]) * weight[i];
-        c += BLURRED_texOff(-dir * offset[i]) * weight[i];
+        c += METERING_texOff( dir * offset[i]) * weight[i];
+        c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
     return vec4(c.rgb, 1.0);
 }
 
 //!HOOK OUTPUT
-//!BIND BLURRED
-//!SAVE BLURRED
+//!BIND METERING
+//!SAVE METERING
 //!WHEN spatial_stable_iterations 7 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
@@ -408,25 +408,25 @@ const vec2 dir    = vec2(0.0, 1.0);
 
 vec4 hook(){
     uint i = 0;
-    vec4 c = BLURRED_texOff(offset[i]) * weight[i];
+    vec4 c = METERING_texOff(offset[i]) * weight[i];
 
     for (i = 1; i < 4; i++) {
-        c += BLURRED_texOff( dir * offset[i]) * weight[i];
-        c += BLURRED_texOff(-dir * offset[i]) * weight[i];
+        c += METERING_texOff( dir * offset[i]) * weight[i];
+        c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
     return vec4(c.rgb, 1.0);
 }
 
 //!HOOK OUTPUT
-//!BIND BLURRED
+//!BIND METERING
 //!BIND MINMAX
 //!SAVE EMPTY
 //!COMPUTE 32 32
 //!DESC metering (max)
 
 void hook() {
-    vec4 color = texelFetch(BLURRED_raw, ivec2(gl_GlobalInvocationID.xy), 0);
+    vec4 color = texelFetch(METERING_raw, ivec2(gl_GlobalInvocationID.xy), 0);
 
     const vec3 RGB_to_Y = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
 
