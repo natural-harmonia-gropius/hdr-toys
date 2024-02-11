@@ -80,7 +80,7 @@ vec4 hook(){
     uint i = 0;
     vec4 c = BLURRED_texOff(offset[i]) * weight[i];
 
-    for (i = 1; i < 3; i++) {
+    for (i = 1; i < 4; i++) {
         c += BLURRED_texOff( dir * offset[i]) * weight[i];
         c += BLURRED_texOff(-dir * offset[i]) * weight[i];
     }
@@ -102,7 +102,7 @@ vec4 hook(){
     uint i = 0;
     vec4 c = BLURRED_texOff(offset[i]) * weight[i];
 
-    for (i = 1; i < 3; i++) {
+    for (i = 1; i < 4; i++) {
         c += BLURRED_texOff( dir * offset[i]) * weight[i];
         c += BLURRED_texOff(-dir * offset[i]) * weight[i];
     }
@@ -124,7 +124,7 @@ vec4 hook(){
     uint i = 0;
     vec4 c = BLURRED_texOff(offset[i]) * weight[i];
 
-    for (i = 1; i < 3; i++) {
+    for (i = 1; i < 4; i++) {
         c += BLURRED_texOff( dir * offset[i]) * weight[i];
         c += BLURRED_texOff(-dir * offset[i]) * weight[i];
     }
@@ -146,7 +146,7 @@ vec4 hook(){
     uint i = 0;
     vec4 c = BLURRED_texOff(offset[i]) * weight[i];
 
-    for (i = 1; i < 3; i++) {
+    for (i = 1; i < 4; i++) {
         c += BLURRED_texOff( dir * offset[i]) * weight[i];
         c += BLURRED_texOff(-dir * offset[i]) * weight[i];
     }
@@ -168,7 +168,7 @@ vec4 hook(){
     uint i = 0;
     vec4 c = BLURRED_texOff(offset[i]) * weight[i];
 
-    for (i = 1; i < 3; i++) {
+    for (i = 1; i < 4; i++) {
         c += BLURRED_texOff( dir * offset[i]) * weight[i];
         c += BLURRED_texOff(-dir * offset[i]) * weight[i];
     }
@@ -190,7 +190,7 @@ vec4 hook(){
     uint i = 0;
     vec4 c = BLURRED_texOff(offset[i]) * weight[i];
 
-    for (i = 1; i < 3; i++) {
+    for (i = 1; i < 4; i++) {
         c += BLURRED_texOff( dir * offset[i]) * weight[i];
         c += BLURRED_texOff(-dir * offset[i]) * weight[i];
     }
@@ -212,7 +212,7 @@ vec4 hook(){
     uint i = 0;
     vec4 c = BLURRED_texOff(offset[i]) * weight[i];
 
-    for (i = 1; i < 3; i++) {
+    for (i = 1; i < 4; i++) {
         c += BLURRED_texOff( dir * offset[i]) * weight[i];
         c += BLURRED_texOff(-dir * offset[i]) * weight[i];
     }
@@ -234,7 +234,7 @@ vec4 hook(){
     uint i = 0;
     vec4 c = BLURRED_texOff(offset[i]) * weight[i];
 
-    for (i = 1; i < 3; i++) {
+    for (i = 1; i < 4; i++) {
         c += BLURRED_texOff( dir * offset[i]) * weight[i];
         c += BLURRED_texOff(-dir * offset[i]) * weight[i];
     }
@@ -256,7 +256,7 @@ vec4 hook(){
     uint i = 0;
     vec4 c = BLURRED_texOff(offset[i]) * weight[i];
 
-    for (i = 1; i < 3; i++) {
+    for (i = 1; i < 4; i++) {
         c += BLURRED_texOff( dir * offset[i]) * weight[i];
         c += BLURRED_texOff(-dir * offset[i]) * weight[i];
     }
@@ -278,7 +278,7 @@ vec4 hook(){
     uint i = 0;
     vec4 c = BLURRED_texOff(offset[i]) * weight[i];
 
-    for (i = 1; i < 3; i++) {
+    for (i = 1; i < 4; i++) {
         c += BLURRED_texOff( dir * offset[i]) * weight[i];
         c += BLURRED_texOff(-dir * offset[i]) * weight[i];
     }
@@ -300,7 +300,7 @@ vec4 hook(){
     uint i = 0;
     vec4 c = BLURRED_texOff(offset[i]) * weight[i];
 
-    for (i = 1; i < 3; i++) {
+    for (i = 1; i < 4; i++) {
         c += BLURRED_texOff( dir * offset[i]) * weight[i];
         c += BLURRED_texOff(-dir * offset[i]) * weight[i];
     }
@@ -322,7 +322,7 @@ vec4 hook(){
     uint i = 0;
     vec4 c = BLURRED_texOff(offset[i]) * weight[i];
 
-    for (i = 1; i < 3; i++) {
+    for (i = 1; i < 4; i++) {
         c += BLURRED_texOff( dir * offset[i]) * weight[i];
         c += BLURRED_texOff(-dir * offset[i]) * weight[i];
     }
@@ -344,7 +344,7 @@ vec4 hook(){
     uint i = 0;
     vec4 c = BLURRED_texOff(offset[i]) * weight[i];
 
-    for (i = 1; i < 3; i++) {
+    for (i = 1; i < 4; i++) {
         c += BLURRED_texOff( dir * offset[i]) * weight[i];
         c += BLURRED_texOff(-dir * offset[i]) * weight[i];
     }
@@ -366,7 +366,7 @@ vec4 hook(){
     uint i = 0;
     vec4 c = BLURRED_texOff(offset[i]) * weight[i];
 
-    for (i = 1; i < 3; i++) {
+    for (i = 1; i < 4; i++) {
         c += BLURRED_texOff( dir * offset[i]) * weight[i];
         c += BLURRED_texOff(-dir * offset[i]) * weight[i];
     }
@@ -388,7 +388,7 @@ vec4 hook(){
     uint i = 0;
     vec4 c = BLURRED_texOff(offset[i]) * weight[i];
 
-    for (i = 1; i < 3; i++) {
+    for (i = 1; i < 4; i++) {
         c += BLURRED_texOff( dir * offset[i]) * weight[i];
         c += BLURRED_texOff(-dir * offset[i]) * weight[i];
     }
@@ -410,7 +410,7 @@ vec4 hook(){
     uint i = 0;
     vec4 c = BLURRED_texOff(offset[i]) * weight[i];
 
-    for (i = 1; i < 3; i++) {
+    for (i = 1; i < 4; i++) {
         c += BLURRED_texOff( dir * offset[i]) * weight[i];
         c += BLURRED_texOff(-dir * offset[i]) * weight[i];
     }
