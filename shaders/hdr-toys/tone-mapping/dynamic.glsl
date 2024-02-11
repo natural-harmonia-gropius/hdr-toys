@@ -521,7 +521,7 @@ uint peak_harmonic_mean() {
     return uint(x * 4096.0 + 0.5);
 }
 
-void peak_add(uint peak) {
+void peak_set(uint peak) {
     for (uint i = temporal_stable_frames - 1; i > 0; i--) {
         L_max_t[i] = L_max_t[i - 1];
     }
@@ -529,19 +529,19 @@ void peak_add(uint peak) {
     L_max = peak;
 }
 
-void peak_set_all() {
+void peak_set_all(uint peak) {
     for (uint i = 0; i < temporal_stable_frames; i++) {
-        L_max_t[i] = L_max;
+        L_max_t[i] = peak;
     }
 }
 
 void hook() {
     if (sence_changed()) {
-        peak_set_all();
+        peak_set_all(L_max);
         return;
     }
 
-    peak_add(peak_harmonic_mean());
+    peak_set(peak_harmonic_mean());
 }
 
 //!HOOK OUTPUT
