@@ -451,18 +451,29 @@ vec4 hook(){
 //!COMPUTE 32 32
 //!DESC metering (max)
 
+const float pq_m1 = 0.1593017578125;
+const float pq_m2 = 78.84375;
+const float pq_c1 = 0.8359375;
+const float pq_c2 = 18.8515625;
+const float pq_c3 = 18.6875;
+
+const float pq_C  = 10000.0;
+
+float Y_to_ST2084(float C) {
+    float L = C / pq_C;
+    float Lm = pow(L, pq_m1);
+    float N = (pq_c1 + pq_c2 * Lm) / (1.0 + pq_c3 * Lm);
+    N = pow(N, pq_m2);
+    return N;
+}
+
 void hook() {
     vec4 color = texelFetch(METERING_raw, ivec2(gl_GlobalInvocationID.xy), 0);
+    float intensity_min = Y_to_ST2084(L_sdr);
+    float intensity = max(max(max(max(color.r, color.g), color.b), color.w), intensity_min);
+    uint intensity_int = uint(intensity * 4096.0 + 0.5);
 
-    const vec3 RGB_to_Y = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
-
-    float y = dot(color.rgb, RGB_to_Y);
-    float m = max(max(color.r, color.g), color.b);
-
-    // value below 1 doesn't make sense, can also improve fade in.
-    float L = max(max(y, m), 1.0) * L_sdr;
-
-    atomicMax(L_max, uint(L + 0.5));
+    atomicMax(L_max, intensity_int);
 }
 
 //!HOOK OUTPUT
@@ -502,45 +513,20 @@ bool sence_changed() {
     return false;
 }
 
-const float pq_m1 = 0.1593017578125;
-const float pq_m2 = 78.84375;
-const float pq_c1 = 0.8359375;
-const float pq_c2 = 18.8515625;
-const float pq_c3 = 18.6875;
-
-const float pq_C  = 10000.0;
-
-float Y_to_ST2084(float C) {
-    float L = C / pq_C;
-    float Lm = pow(L, pq_m1);
-    float N = (pq_c1 + pq_c2 * Lm) / (1.0 + pq_c3 * Lm);
-    N = pow(N, pq_m2);
-    return N;
-}
-
-float ST2084_to_Y(float N) {
-    float Np = pow(N, 1.0 / pq_m2);
-    float L = Np - pq_c1;
-    if (L < 0.0 ) L = 0.0;
-    L = L / (pq_c2 - pq_c3 * Np);
-    L = pow(L, 1.0 / pq_m1);
-    return L * pq_C;
-}
-
 uint peak_harmonic_mean() {
-    float den = 1.0 / max(Y_to_ST2084(L_max), 1e-6);
-    for (uint i = 0; i < temporal_stable_frames - 1; i++) {
-        den += 1.0 / max(Y_to_ST2084(L_max_t[i]), 1e-6);
-    }
-    float peak = ST2084_to_Y(temporal_stable_frames / den);
-    return uint(peak);
+    float x = 0.0;
+    for (uint i = 0; i < temporal_stable_frames - 1; i++)
+        x += 1.0 / max(float(i > 0 ? L_max_t[i - 1] : L_max) / 4096.0, 1e-6);
+    x = temporal_stable_frames / x;
+    return uint(x * 4096.0 + 0.5);
 }
 
-void peak_add() {
+void peak_add(uint peak) {
     for (uint i = temporal_stable_frames - 1; i > 0; i--) {
         L_max_t[i] = L_max_t[i - 1];
     }
     L_max_t[0] = L_max;
+    L_max = peak;
 }
 
 void peak_set_all() {
@@ -555,9 +541,7 @@ void hook() {
         return;
     }
 
-    uint peak = peak_harmonic_mean();
-    peak_add();
-    L_max = peak;
+    peak_add(peak_harmonic_mean());
 }
 
 //!HOOK OUTPUT
@@ -910,7 +894,9 @@ vec3 LCH_to_Lab(vec3 LCH) {
 }
 
 void calc_user_params_from_metered() {
-    float L_max_ev = log2(L_max / L_sdr);
+    float L_max_i = float(L_max) / 4096.0;
+    float L_max_y = ST2084_to_Y(L_max_i);
+    float L_max_ev = log2(L_max_y / L_sdr);
     float L_hdr_ev = log2(L_hdr / L_sdr);
 
     shoulderLength = L_max_ev / L_hdr_ev;
