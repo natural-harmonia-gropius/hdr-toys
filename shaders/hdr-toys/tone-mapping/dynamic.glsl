@@ -515,9 +515,13 @@ bool sence_changed() {
 
 uint peak_harmonic_mean() {
     float x = 0.0;
-    for (uint i = 0; i < temporal_stable_frames - 1; i++)
-        x += 1.0 / max(float(i > 0 ? L_max_t[i - 1] : L_max) / 4096.0, 1e-6);
-    x = temporal_stable_frames / x;
+    for (uint i = 0; i <= temporal_stable_frames; i++) {
+        float current = float(i == 0 ? L_max : L_max_t[i - 1]);
+        current = current / 4096.0;
+        current = max(current, 1e-6);
+        x += 1.0 / current;
+    }
+    x = float(temporal_stable_frames + 1) / x;
     return uint(x * 4096.0 + 0.5);
 }
 
