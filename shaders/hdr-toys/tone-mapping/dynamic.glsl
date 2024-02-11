@@ -62,8 +62,34 @@ void hook() {
 //!HEIGHT 288
 //!DESC metering (spatial stabilization, downscaling)
 
+const float pq_m1 = 0.1593017578125;
+const float pq_m2 = 78.84375;
+const float pq_c1 = 0.8359375;
+const float pq_c2 = 18.8515625;
+const float pq_c3 = 18.6875;
+
+const float pq_C  = 10000.0;
+
+float Y_to_ST2084(float C) {
+    float L = C / pq_C;
+    float Lm = pow(L, pq_m1);
+    float N = (pq_c1 + pq_c2 * Lm) / (1.0 + pq_c3 * Lm);
+    N = pow(N, pq_m2);
+    return N;
+}
+
+const vec3 RGB_to_Y = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
+
 vec4 hook() {
-    return HOOKED_texOff(0);
+    vec4 color = HOOKED_texOff(0);
+    color.rgb *= L_sdr;
+    color.w = dot(color.rgb, RGB_to_Y);
+    return vec4(
+        Y_to_ST2084(color.r),
+        Y_to_ST2084(color.g),
+        Y_to_ST2084(color.b),
+        Y_to_ST2084(color.w)
+    );
 }
 
 //!HOOK OUTPUT
@@ -85,7 +111,7 @@ vec4 hook(){
         c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
-    return vec4(c.rgb, 1.0);
+    return c;
 }
 
 //!HOOK OUTPUT
@@ -107,7 +133,7 @@ vec4 hook(){
         c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
-    return vec4(c.rgb, 1.0);
+    return c;
 }
 
 //!HOOK OUTPUT
@@ -129,7 +155,7 @@ vec4 hook(){
         c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
-    return vec4(c.rgb, 1.0);
+    return c;
 }
 
 //!HOOK OUTPUT
@@ -151,7 +177,7 @@ vec4 hook(){
         c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
-    return vec4(c.rgb, 1.0);
+    return c;
 }
 
 //!HOOK OUTPUT
@@ -173,7 +199,7 @@ vec4 hook(){
         c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
-    return vec4(c.rgb, 1.0);
+    return c;
 }
 
 //!HOOK OUTPUT
@@ -195,7 +221,7 @@ vec4 hook(){
         c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
-    return vec4(c.rgb, 1.0);
+    return c;
 }
 
 //!HOOK OUTPUT
@@ -217,7 +243,7 @@ vec4 hook(){
         c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
-    return vec4(c.rgb, 1.0);
+    return c;
 }
 
 //!HOOK OUTPUT
@@ -239,7 +265,7 @@ vec4 hook(){
         c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
-    return vec4(c.rgb, 1.0);
+    return c;
 }
 
 //!HOOK OUTPUT
@@ -261,7 +287,7 @@ vec4 hook(){
         c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
-    return vec4(c.rgb, 1.0);
+    return c;
 }
 
 //!HOOK OUTPUT
@@ -283,7 +309,7 @@ vec4 hook(){
         c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
-    return vec4(c.rgb, 1.0);
+    return c;
 }
 
 //!HOOK OUTPUT
@@ -305,7 +331,7 @@ vec4 hook(){
         c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
-    return vec4(c.rgb, 1.0);
+    return c;
 }
 
 //!HOOK OUTPUT
@@ -327,7 +353,7 @@ vec4 hook(){
         c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
-    return vec4(c.rgb, 1.0);
+    return c;
 }
 
 //!HOOK OUTPUT
@@ -349,7 +375,7 @@ vec4 hook(){
         c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
-    return vec4(c.rgb, 1.0);
+    return c;
 }
 
 //!HOOK OUTPUT
@@ -371,7 +397,7 @@ vec4 hook(){
         c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
-    return vec4(c.rgb, 1.0);
+    return c;
 }
 
 //!HOOK OUTPUT
@@ -393,7 +419,7 @@ vec4 hook(){
         c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
-    return vec4(c.rgb, 1.0);
+    return c;
 }
 
 //!HOOK OUTPUT
@@ -415,7 +441,7 @@ vec4 hook(){
         c += METERING_texOff(-dir * offset[i]) * weight[i];
     }
 
-    return vec4(c.rgb, 1.0);
+    return c;
 }
 
 //!HOOK OUTPUT
