@@ -112,7 +112,6 @@ vec4 hook() { return AVG_tex(AVG_pos); }
 //!SAVE AVG
 //!WIDTH 1
 //!HEIGHT 1
-//!COMPONENTS 1
 //!DESC tone mapping (st2094-10, average, 1)
 vec4 hook() { return AVG_tex(AVG_pos); }
 
