@@ -26,7 +26,7 @@
 //!TYPE uint
 //!MINIMUM 0
 //!MAXIMUM 8
-4
+2
 
 //!PARAM temporal_stable_frames
 //!TYPE uint
