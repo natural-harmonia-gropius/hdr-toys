@@ -247,7 +247,6 @@ float curve(float x) {
     float c2 = coeffs.g;
     float c3 = coeffs.b;
 
-    x = clamp(x, x1, x3);
     x = (c1 + c2 * pow(x, n)) / (1.0 + c3 * pow(x, n));
     x = pow(min(max(((x / y3) * g) + o, 0.0), 1.0), p) * y3;
 
