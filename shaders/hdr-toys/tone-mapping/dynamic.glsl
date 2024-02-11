@@ -917,11 +917,11 @@ vec4 hook() {
 
     const vec3 RGB_to_Y = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
     float Y = dot(color.rgb, RGB_to_Y);
-    vec3 Y_tm = color.rgb * curve(Y) / Y;
+    vec3 Y_tm = color.rgb * curve(Y) / max(Y, 1e-6);
     vec3 Y_jab = RGB_to_Jzazbz(Y_tm);
 
     float M = max(max(color.r, color.g), color.b);
-    vec3 M_tm = color.rgb * curve(M) / M;
+    vec3 M_tm = color.rgb * curve(M) / max(M, 1e-6);
     vec3 M_jab = RGB_to_Jzazbz(M_tm);
 
     float N_j = mix(Y_jab.x, M_jab.x, S_jab.x * S_jch.y);
