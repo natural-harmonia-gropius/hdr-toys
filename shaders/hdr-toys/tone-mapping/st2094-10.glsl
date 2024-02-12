@@ -23,7 +23,7 @@
 //!TYPE float
 //!MINIMUM 0.0
 //!MAXIMUM 1.0
-0.5
+1.0
 
 //!HOOK OUTPUT
 //!BIND HOOKED
@@ -236,7 +236,7 @@ float curve(float x) {
     float x3 = L_hdr / L_sdr;
     float y3 = 1.0;
 
-    float x2 = clamp(avg, x1 + 0.1, 0.9 * x3);
+    float x2 = clamp(avg, x1 + 0.001, 0.9 * x3);
     float y2 = clamp(sqrt(x2 * sqrt(y3 * y1)), y1, 0.8 * y3);
 
     float a = x3 * y3 * (x1 - x2) + x2 * y2 * (x3 - x1) + x1 * y1 * (x2 - x3);
