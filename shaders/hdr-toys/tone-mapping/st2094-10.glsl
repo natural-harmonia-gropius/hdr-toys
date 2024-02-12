@@ -19,6 +19,12 @@
 //!MAXIMUM 1000000
 1000.0
 
+//!PARAM sigma
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 1.0
+0.5
+
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!SAVE AVG
@@ -230,7 +236,7 @@ float curve(float x) {
     float x3 = L_hdr / L_sdr;
     float y3 = 1.0;
 
-    float x2 = clamp(avg, x1, x3);
+    float x2 = clamp(avg, 1.01 * y1, 0.99 * x3);
     float y2 = clamp(sqrt(x2 * sqrt(y3 * y1)), y1, 0.8 * y3);
 
     float a = x3 * y3 * (x1 - x2) + x2 * y2 * (x3 - x1) + x1 * y1 * (x2 - x3);
@@ -253,6 +259,14 @@ float curve(float x) {
     return x;
 }
 
+vec3 tone_mapping_ictcp(vec3 ICtCp) {
+    float I2  = Y_to_ST2084(curve(ST2084_to_Y(ICtCp.x) / L_sdr) * L_sdr);
+    ICtCp.yz *= mix(1.0, min(ICtCp.x / I2, I2 / ICtCp.x), sigma);
+    ICtCp.x   = I2;
+
+    return ICtCp;
+}
+
 vec3 gamut_adjustment(vec3 f) {
     float c = 0.0;  // chroma compensation weight   [-0.5, 0.5]
     float s = 0.0;  // saturation gain              [-0.5, 0.5]
@@ -270,7 +284,7 @@ vec4 hook() {
     vec4 color = HOOKED_texOff(0);
 
     color.rgb = RGB_to_ICtCp(color.rgb);
-    color.x   = Y_to_ST2084(curve(ST2084_to_Y(color.x) / L_sdr) * L_sdr);
+    color.rgb = tone_mapping_ictcp(color.rgb);
     color.rgb = ICtCp_to_RGB(color.rgb);
     color.rgb = gamut_adjustment(color.rgb);
     color.rgb = detail_managenment(color.rgb);
