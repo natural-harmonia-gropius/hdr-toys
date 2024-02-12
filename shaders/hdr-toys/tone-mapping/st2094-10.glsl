@@ -236,7 +236,7 @@ float curve(float x) {
     float x3 = L_hdr / L_sdr;
     float y3 = 1.0;
 
-    float x2 = clamp(avg, 1.01 * y1, 0.99 * x3);
+    float x2 = clamp(avg, x1 + 0.1, 0.9 * x3);
     float y2 = clamp(sqrt(x2 * sqrt(y3 * y1)), y1, 0.8 * y3);
 
     float a = x3 * y3 * (x1 - x2) + x2 * y2 * (x3 - x1) + x1 * y1 * (x2 - x3);
@@ -253,8 +253,10 @@ float curve(float x) {
     float c2 = coeffs.g;
     float c3 = coeffs.b;
 
+    x = clamp(x, x1, x3);
     x = (c1 + c2 * pow(x, n)) / (1.0 + c3 * pow(x, n));
     x = pow(min(max(((x / y3) * g) + o, 0.0), 1.0), p) * y3;
+    x = clamp(x, y1, y3);
 
     return x;
 }
