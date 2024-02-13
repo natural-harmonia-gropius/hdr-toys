@@ -19,6 +19,12 @@
 //!MAXIMUM 1000000
 1000.0
 
+//!PARAM sigma
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 1.0
+1.0
+
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!DESC tone mapping (bt.2390)
@@ -160,9 +166,8 @@ float curve(float x) {
 
 vec3 tone_mapping_ictcp(vec3 ICtCp) {
     float I2  = curve(ICtCp.x);
-    ICtCp.yz *= min(ICtCp.x / I2, I2 / ICtCp.x);
+    ICtCp.yz *= mix(1.0, min(ICtCp.x / I2, I2 / ICtCp.x), sigma);
     ICtCp.x   = I2;
-
     return ICtCp;
 }
 

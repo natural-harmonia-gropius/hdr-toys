@@ -18,9 +18,15 @@
 //!MAXIMUM 1000000
 1000.0
 
+//!PARAM sigma
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 1.0
+1.0
+
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!DESC tone mapping (linear, ICtCp)
+//!DESC tone mapping (linear)
 
 const float pq_m1 = 0.1593017578125;
 const float pq_m2 = 78.84375;
@@ -124,14 +130,13 @@ float curve(float x) {
     float ow = Y_to_ST2084(L_sdr);
     float ob = Y_to_ST2084(1.0 / CONTRAST_sdr);
     float w = (iw - ib) / (ow - ob);
-    return x / w;
+    return x / w + ob;
 }
 
 vec3 tone_mapping_ictcp(vec3 ICtCp) {
     float I2  = curve(ICtCp.x);
-    ICtCp.yz *= min(ICtCp.x / I2, I2 / ICtCp.x);
+    ICtCp.yz *= mix(1.0, min(ICtCp.x / I2, I2 / ICtCp.x), sigma);
     ICtCp.x   = I2;
-
     return ICtCp;
 }
 
