@@ -919,8 +919,7 @@ vec4 hook() {
     vec3 S_jab = RGB_to_Jzazbz(color.rgb);
     vec3 S_jch = Lab_to_LCH(S_jab);
 
-    const vec3 RGB_to_Y = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
-    float Y = dot(color.rgb, RGB_to_Y);
+    float Y = RGB_to_XYZ(color.rgb).y;
     vec3 Y_tm = color.rgb * curve(Y) / max(Y, 1e-6);
     vec3 Y_jab = RGB_to_Jzazbz(Y_tm);
 

@@ -265,7 +265,6 @@ vec3 tone_mapping_ictcp(vec3 ICtCp) {
     float I2  = Y_to_ST2084(curve(ST2084_to_Y(ICtCp.x) / L_sdr) * L_sdr);
     ICtCp.yz *= mix(1.0, min(ICtCp.x / I2, I2 / ICtCp.x), sigma);
     ICtCp.x   = I2;
-
     return ICtCp;
 }
 
