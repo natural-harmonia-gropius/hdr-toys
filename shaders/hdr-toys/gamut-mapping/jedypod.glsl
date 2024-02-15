@@ -59,9 +59,9 @@ vec3 gamut_compress(vec3 rgb) {
 
     // Compressed distance
     vec3 cd = vec3(
-        parabolic(d.x, cyan_limit, cyan_threshold, 1.0),
-        parabolic(d.y, magenta_limit, magenta_threshold, 1.0),
-        parabolic(d.z, yellow_limit, yellow_threshold, 1.0)
+        parabolic(d.x, cyan_threshold, cyan_limit, 1.0),
+        parabolic(d.y, magenta_threshold, magenta_limit, 1.0),
+        parabolic(d.z, yellow_threshold, yellow_limit, 1.0)
     );
 
     // Inverse RGB Ratios to RGB
