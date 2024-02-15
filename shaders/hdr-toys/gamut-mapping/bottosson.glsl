@@ -302,10 +302,6 @@ vec3 softClipColor(vec3 color) {
     float maxRGB = max(max(color.r, color.g), color.b);
     float minRGB = min(min(color.r, color.g), color.b);
 
-    if (maxRGB <= 1e-6) {
-        return color;
-    }
-
     float grey = 0.2;
 
     vec3 x = color-grey;
@@ -332,10 +328,12 @@ vec4 hook() {
     float C = oklch.y;
     float h = oklch.z * pi / 180.0;
 
-    vec2 ST = approximateShape();
-    float C_smooth = (1.0 / ((ST.x / L) + (ST.y / max(1.0 - L, 1e-6))));
-    color.rgb = compute(L, h, C / sqrt(C * C / C_smooth / C_smooth + 1.0));
-    color.rgb = softClipColor(color.rgb);
+    if (C > 1e-6) {
+        vec2 ST = approximateShape();
+        float C_smooth = (1.0 / ((ST.x / L) + (ST.y / max(1.0 - L, 1e-6))));
+        color.rgb = compute(L, h, C / sqrt(C * C / C_smooth / C_smooth + 1.0));
+        color.rgb = softClipColor(color.rgb);
+    }
 
     return color;
 }
