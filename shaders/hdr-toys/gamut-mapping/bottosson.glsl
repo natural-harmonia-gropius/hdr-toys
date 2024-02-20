@@ -11,18 +11,6 @@
 //!BIND HOOKED
 //!DESC gamut mapping (bottosson, soft)
 
-const mat3 output_RGB_to_XYZ = mat3(
-    0.41239079926595934, 0.357584339383878,   0.1804807884018343,
-    0.21263900587151027, 0.715168678767756,   0.07219231536073371,
-    0.01933081871559182, 0.11919477979462598, 0.9505321522496607
-);
-
-const mat3 output_XYZ_to_RGB = mat3(
-     3.2409699419045226,  -1.537383177570094,   -0.4986107602930034,
-    -0.9692436362808796,   1.8759675015077202,   0.04155505740717559,
-     0.05563007969699366, -0.20397695888897652,  1.0569715142428786
-);
-
 float cbrt(float x) {
     return sign(x) * pow(abs(x), 1.0 / 3.0);
 }
@@ -134,6 +122,22 @@ vec3 LCH_to_Lab(vec3 LCH) {
 
 
 
+vec3 output_RGB_to_XYZ(vec3 RGB) {
+    mat3 M = mat3(
+        0.41239079926595934, 0.357584339383878,   0.1804807884018343,
+        0.21263900587151027, 0.715168678767756,   0.07219231536073371,
+        0.01933081871559182, 0.11919477979462598, 0.9505321522496607);
+    return RGB * M;
+}
+
+vec3 output_XYZ_to_RGB(vec3 XYZ) {
+    mat3 M = mat3(
+        3.2409699419045226,  -1.537383177570094,   -0.4986107602930034,
+        -0.9692436362808796,   1.8759675015077202,   0.04155505740717559,
+        0.05563007969699366, -0.20397695888897652,  1.0569715142428786);
+    return XYZ * M;
+}
+
 float findCenter(vec3 x) {
     float a = 1.9779985324311684 * x.x - 2.4285922420485799 * x.y + 0.4505937096174110 * x.z;
     float b = 0.0259040424655478 * x.x + 0.7827717124575296 * x.y - 0.8086757549230774 * x.z;
@@ -186,7 +190,7 @@ vec2 findCenterAndPurity(vec3 x) {
 
 
 vec3 toLms(vec3 c) {
-    vec3 lms_ = XYZ_to_LMS(c * output_RGB_to_XYZ);
+    vec3 lms_ = XYZ_to_LMS(output_RGB_to_XYZ(c));
     return sign(lms_)*pow(abs(lms_), vec3(1.0/3.0));
 }
 
@@ -282,7 +286,7 @@ vec3 compute(float L, float hue, float sat) {
 
     lms = lms*lms*lms;
 
-    vec3 rgb = LMS_to_XYZ(lms) * output_XYZ_to_RGB;
+    vec3 rgb = output_XYZ_to_RGB(LMS_to_XYZ(lms));
 
     return rgb;
 }
@@ -327,6 +331,11 @@ vec4 hook() {
     float L = oklch.x;
     float C = oklch.y;
     float h = oklch.z * pi / 180.0;
+
+    if (L >= 1.0)
+        return vec4(vec3(1.0, 1.0, 1.0), color.a);
+    if (L <= 0.0)
+        return vec4(vec3(0.0, 0.0, 0.0), color.a);
 
     if (C > 1e-6) {
         vec2 ST = approximateShape();
