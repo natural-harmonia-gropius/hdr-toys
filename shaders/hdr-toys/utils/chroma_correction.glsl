@@ -81,7 +81,7 @@ float f2(float x, float delta) {
 }
 
 vec3 XYZ_to_Lab(vec3 XYZ) {
-    vec3 XYZ_ref = RGB_to_XYZ(vec3(L_sdr));
+    vec3 XYZ_ref = XYZD65_to_XYZD50(RGB_to_XYZ(vec3(L_sdr)));
 
     float X = XYZ.x;
     float Y = XYZ.y;
@@ -99,7 +99,7 @@ vec3 XYZ_to_Lab(vec3 XYZ) {
 }
 
 vec3 Lab_to_XYZ(vec3 Lab) {
-    vec3 XYZ_ref = RGB_to_XYZ(vec3(L_sdr));
+    vec3 XYZ_ref = XYZD65_to_XYZD50(RGB_to_XYZ(vec3(L_sdr)));
 
     float L = Lab.x;
     float a = Lab.y;
