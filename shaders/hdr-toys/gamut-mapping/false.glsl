@@ -1,5 +1,3 @@
-// Invert colors that are out of gamut
-
 //!PARAM L_sdr
 //!TYPE float
 //!MINIMUM 0
@@ -10,29 +8,41 @@
 //!BIND HOOKED
 //!DESC gamut mapping (false color)
 
-const float pq_m1 = 0.1593017578125;
-const float pq_m2 = 78.84375;
-const float pq_c1 = 0.8359375;
-const float pq_c2 = 18.8515625;
-const float pq_c3 = 18.6875;
+const float m1 = 2610.0 / 4096.0 / 4.0;
+const float m2 = 2523.0 / 4096.0 * 128.0;
+const float c1 = 3424.0 / 4096.0;
+const float c2 = 2413.0 / 4096.0 * 32.0;
+const float c3 = 2392.0 / 4096.0 * 32.0;
+const float pw = 10000.0;
 
-const float pq_C  = 10000.0;
+float pq_eotf(float N) {
+    float M = pow(N, 1.0 / m2);
+    float L = pow(max(M - c1, 0.0) / (c2 - c3 * M), 1.0 / m1);
+    float C = L * pw;
+    return C;
+}
 
-float Y_to_ST2084(float C) {
-    float L = C / pq_C;
-    float Lm = pow(L, pq_m1);
-    float N = (pq_c1 + pq_c2 * Lm) / (1.0 + pq_c3 * Lm);
-    N = pow(N, pq_m2);
+vec3 pq_eotf(vec3 color) {
+    return vec3(
+        pq_eotf(color.r),
+        pq_eotf(color.g),
+        pq_eotf(color.b)
+    );
+}
+
+float pq_eotf_inv(float C) {
+    float L = C / pw;
+    float M = pow(L, m1);
+    float N = pow((c1 + c2 * M) / (1.0 + c3 * M), m2);
     return N;
 }
 
-float ST2084_to_Y(float N) {
-    float Np = pow(N, 1.0 / pq_m2);
-    float L = Np - pq_c1;
-    if (L < 0.0 ) L = 0.0;
-    L = L / (pq_c2 - pq_c3 * Np);
-    L = pow(L, 1.0 / pq_m1);
-    return L * pq_C;
+vec3 pq_eotf_inv(vec3 color) {
+    return vec3(
+        pq_eotf_inv(color.r),
+        pq_eotf_inv(color.g),
+        pq_eotf_inv(color.b)
+    );
 }
 
 vec3 RGB_to_XYZ(vec3 RGB) {
@@ -51,90 +61,60 @@ vec3 XYZ_to_RGB(vec3 XYZ) {
     return XYZ * M;
 }
 
-vec3 XYZ_to_Cone(vec3 XYZ) {
+vec3 XYZ_to_LMS(vec3 XYZ) {
     mat3 M = mat3(
-         0.41478972, 0.579999,  0.0146480,
-        -0.2015100,  1.120649,  0.0531008,
-        -0.0166008,  0.264800,  0.6684799);
+         0.3592832590121217,  0.6976051147779502, -0.0358915932320290,
+        -0.1920808463704993,  1.1004767970374321,  0.0753748658519118,
+         0.0070797844607479,  0.0748396662186362,  0.8433265453898765);
     return XYZ * M;
 }
 
-vec3 Cone_to_XYZ(vec3 LMS) {
+vec3 LMS_to_XYZ(vec3 LMS) {
     mat3 M = mat3(
-         1.9242264357876067,  -1.0047923125953657,  0.037651404030618,
-         0.35031676209499907,  0.7264811939316552, -0.06538442294808501,
-        -0.09098281098284752, -0.3127282905230739,  1.5227665613052603);
+         2.0701522183894223, -1.3263473389671563,  0.2066510476294053,
+         0.3647385209748072,  0.6805660249472273, -0.0453045459220347,
+        -0.0497472075358123, -0.0492609666966131,  1.1880659249923042);
     return LMS * M;
 }
 
-vec3 Cone_to_Iab(vec3 LMS) {
+vec3 LMS_to_ICtCp(vec3 LMS) {
     mat3 M = mat3(
-        0.5,       0.5,       0.0,
-        3.524000, -4.066708,  0.542708,
-        0.199076,  1.096799, -1.295875);
-    return LMS * M;
+         2048.0 / 4096.0,   2048.0 / 4096.0,    0.0 / 4096.0,
+         6610.0 / 4096.0, -13613.0 / 4096.0, 7003.0 / 4096.0,
+        17933.0 / 4096.0, -17390.0 / 4096.0, -543.0 / 4096.0);
+    return pq_eotf_inv(LMS) * M;
 }
 
-vec3 Iab_to_Cone(vec3 Iab) {
+vec3 ICtCp_to_LMS(vec3 ICtCp) {
     mat3 M = mat3(
-        1.0,                 0.1386050432715393,   0.05804731615611886,
-        0.9999999999999999, -0.1386050432715393,  -0.05804731615611886,
-        0.9999999999999998, -0.09601924202631895, -0.8118918960560388);
-    return Iab * M;
+        0.9999999999999998,  0.0086090370379328,  0.1110296250030260,
+        0.9999999999999998, -0.0086090370379328, -0.1110296250030259,
+        0.9999999999999998,  0.5600313357106791, -0.3206271749873188);
+    return pq_eotf(ICtCp * M);
 }
 
-const float b = 1.15;
-const float g = 0.66;
-
-const float d = -0.56;
-const float d0 = 1.6295499532821566e-11;
-
-vec3 RGB_to_Jzazbz(vec3 color) {
+vec3 RGB_to_ICtCp(vec3 color) {
     color *= L_sdr;
-
     color = RGB_to_XYZ(color);
-
-    float Xm = (b * color.x) - ((b - 1.0) * color.z);
-    float Ym = (g * color.y) - ((g - 1.0) * color.x);
-
-    color = XYZ_to_Cone(vec3(Xm, Ym, color.z));
-
-    color.r = Y_to_ST2084(color.r);
-    color.g = Y_to_ST2084(color.g);
-    color.b = Y_to_ST2084(color.b);
-
-    color = Cone_to_Iab(color);
-
-    color.r = ((1.0 + d) * color.r) / (1.0 + (d * color.r)) - d0;
-
+    color = XYZ_to_LMS(color);
+    color = LMS_to_ICtCp(color);
     return color;
 }
 
-vec3 Jzazbz_to_RGB(vec3 color) {
-    color.r = (color.r + d0) / (1.0 + d - d * (color.r + d0));
-
-    color = Iab_to_Cone(color);
-
-    color.r = ST2084_to_Y(color.r);
-    color.g = ST2084_to_Y(color.g);
-    color.b = ST2084_to_Y(color.b);
-
-    color = Cone_to_XYZ(color);
-
-    float Xa = (color.x + ((b - 1.0) * color.z)) / b;
-    float Ya = (color.y + ((g - 1.0) * Xa)) / g;
-
-    color = XYZ_to_RGB(vec3(Xa, Ya, color.z));
-
+vec3 ICtCp_to_RGB(vec3 color) {
+    color = ICtCp_to_LMS(color);
+    color = LMS_to_XYZ(color);
+    color = XYZ_to_RGB(color);
     color /= L_sdr;
-
     return color;
 }
 
+// BT.2020 to BT.709
 mat3 M = mat3(
-     1.6604910021084354,  -0.5876411387885495,  -0.07284986331988474,
-    -0.12455047452159074,  1.1328998971259596,  -0.008349422604369515,
-    -0.01815076335490526, -0.10057889800800737,  1.118729661362913);
+     1.66049100210843540, -0.58764113878854950,  -0.072849863319884740,
+    -0.12455047452159074,  1.13289989712595960,  -0.008349422604369515,
+    -0.01815076335490526, -0.10057889800800737,   1.118729661362913000
+);
 
 vec4 hook() {
     vec4 color = HOOKED_texOff(0);
@@ -142,15 +122,13 @@ vec4 hook() {
     vec3 color_dst = color.rgb * M;
     vec3 color_dst_cliped = clamp(color_dst, 0.0, 1.0);
 
-    if (color_dst != color_dst_cliped) {
-        color.rgb = RGB_to_Jzazbz(color.rgb);
-        color.yz  = -color.yz;
-        color.rgb = Jzazbz_to_RGB(color.rgb);
-        color.rgb = color.rgb * M;
-        return color;
-    }
-
-    color.rgb = color_dst_cliped;
+    color.rgb = RGB_to_ICtCp(color.rgb);
+    if (color_dst == color_dst_cliped)
+        color.yz *= 0.0;
+    else
+        color.x = 0.5;
+    color.rgb = ICtCp_to_RGB(color.rgb);
+    color.rgb = color.rgb * M;
 
     return color;
 }
