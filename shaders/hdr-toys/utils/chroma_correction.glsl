@@ -22,7 +22,7 @@
 //!TYPE float
 //!MINIMUM 0
 //!MAXIMUM 1
-0.05
+0.25
 
 //!HOOK OUTPUT
 //!BIND HOOKED
@@ -132,7 +132,6 @@ vec3 Lab_to_RGB(vec3 color) {
     return color;
 }
 
-const float pi = 3.141592653589793;
 const float epsilon = 1e-6;
 
 vec3 Lab_to_LCH(vec3 Lab) {
@@ -142,18 +141,15 @@ vec3 Lab_to_LCH(vec3 Lab) {
     float C = length(vec2(a, b));
     float H = 0.0;
 
-    if (!(abs(a) < epsilon && abs(b) < epsilon)) {
+    if (!(abs(a) < epsilon && abs(b) < epsilon))
         H = atan(b, a);
-        H = H * 180.0 / pi;
-        H = mod((mod(H, 360.0) + 360.0), 360.0);
-    }
 
     return vec3(Lab.x, C, H);
 }
 
 vec3 LCH_to_Lab(vec3 LCH) {
     float C = max(LCH.y, 0.0);
-    float H = LCH.z * pi / 180.0;
+    float H = LCH.z;
 
     float a = C * cos(H);
     float b = C * sin(H);
@@ -162,9 +158,8 @@ vec3 LCH_to_Lab(vec3 LCH) {
 }
 
 float chroma_correction(float L, float Lref, float Lmax, float sigma) {
-    if (L > Lref) {
+    if (L > Lref)
         return max(1.0 - sigma * (L - Lref) / (Lmax - Lref), 0.0);
-    }
 
     return 1.0;
 }
