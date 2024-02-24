@@ -1,7 +1,7 @@
 // The inverse crosstalk matrix is applied to ensure that
 // the original hues of input HDR images are recovered.
 
-//!PARAM alpha
+//!PARAM crosstalk_intensity
 //!TYPE float
 //!MINIMUM 0.00
 //!MAXIMUM 0.33
@@ -9,7 +9,7 @@
 
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!WHEN alpha
+//!WHEN crosstalk_intensity
 //!DESC crosstalk (inverse)
 
 vec3 crosstalk_inv(vec3 x, float a) {
@@ -25,7 +25,7 @@ vec3 crosstalk_inv(vec3 x, float a) {
 vec4 hook() {
     vec4 color = HOOKED_texOff(0);
 
-    color.rgb = crosstalk_inv(color.rgb, alpha);
+    color.rgb = crosstalk_inv(color.rgb, crosstalk_intensity);
 
     return color;
 }

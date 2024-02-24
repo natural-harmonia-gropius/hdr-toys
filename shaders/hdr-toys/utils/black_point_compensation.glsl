@@ -26,7 +26,7 @@ vec3 XYZ_to_RGB(vec3 XYZ) {
     return XYZ * M;
 }
 
-vec3 T(vec3 XYZ, float s, float d) {
+vec3 black_point_compensation(vec3 XYZ, float s, float d) {
     float r = (1.0 - d) / (1.0 - s);
     return r * XYZ + (1.0 - r) * RGB_to_XYZ(vec3(1.0));
 }
@@ -35,7 +35,7 @@ vec4 hook() {
     vec4 color = HOOKED_texOff(0);
 
     color.rgb = RGB_to_XYZ(color.rgb);
-    color.rgb = T(color.rgb, 0.0, 1.0 / CONTRAST_sdr);
+    color.rgb = black_point_compensation(color.rgb, 0.0, 1.0 / CONTRAST_sdr);
     color.rgb = XYZ_to_RGB(color.rgb);
 
     return color;

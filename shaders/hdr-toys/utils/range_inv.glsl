@@ -16,6 +16,14 @@
 //!BIND HOOKED
 //!DESC signal range scaling (inverse)
 
+float range_inv(float x, float w, float b) {
+    return (x - b) / (w - b);
+}
+
+vec3 range_inv(vec3 x, float w, float b) {
+    return (x - b) / (w - b);
+}
+
 vec4 hook() {
     vec4 color = HOOKED_texOff(0);
 
@@ -24,8 +32,7 @@ vec4 hook() {
     float b = l * black / d;
     float w = l * white / d;
 
-    color.rgb -= b;
-    color.rgb /= w - b;
+    color.rgb = range_inv(color.rgb, w, b);
 
     return color;
 }
