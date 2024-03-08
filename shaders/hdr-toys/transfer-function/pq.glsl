@@ -1,6 +1,9 @@
 // https://ieeexplore.ieee.org/document/7291452
 // https://www.itu.int/rec/R-REC-BT.2100
 
+// https://www.itu.int/pub/R-REP-BT.2390
+// pq ootf: 100.0 * bt1886_eotf(bt709_oetf(59.5208 * x), 2.4, 1.0, 0.0)
+
 //!PARAM L_sdr
 //!TYPE float
 //!MINIMUM 0

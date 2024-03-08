@@ -1,6 +1,9 @@
 // https://www.arib.or.jp/kikaku/kikaku_hoso/std-b67.html
 // https://www.itu.int/rec/R-REC-BT.2100
 
+// https://www.itu.int/pub/R-REP-BT.2390
+// extended gamma model: 1.2 * pow(1.111, log2(Lw / 1000.0))
+
 //!PARAM L_sdr
 //!TYPE float
 //!MINIMUM 0
