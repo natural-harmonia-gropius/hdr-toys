@@ -91,7 +91,6 @@ vec3 Lab_to_RGB(vec3 color) {
     return color;
 }
 
-const float pi = 3.141592653589793;
 const float epsilon = 1e-6;
 
 vec3 Lab_to_LCH(vec3 Lab) {
@@ -101,18 +100,15 @@ vec3 Lab_to_LCH(vec3 Lab) {
     float C = length(vec2(a, b));
     float H = 0.0;
 
-    if (!(abs(a) < epsilon && abs(b) < epsilon)) {
+    if (!(abs(a) < epsilon && abs(b) < epsilon))
         H = atan(b, a);
-        H = H * 180.0 / pi;
-        H = mod((mod(H, 360.0) + 360.0), 360.0);
-    }
 
     return vec3(Lab.x, C, H);
 }
 
 vec3 LCH_to_Lab(vec3 LCH) {
     float C = max(LCH.y, 0.0);
-    float H = LCH.z * pi / 180.0;
+    float H = LCH.z;
 
     float a = C * cos(H);
     float b = C * sin(H);
@@ -330,7 +326,7 @@ vec4 hook() {
     vec3 oklch = Lab_to_LCH(RGB_to_Lab(color.rgb));
     float L = oklch.x;
     float C = oklch.y;
-    float h = oklch.z * pi / 180.0;
+    float h = oklch.z;
 
     if (L >= 1.0)
         return vec4(vec3(1.0, 1.0, 1.0), color.a);

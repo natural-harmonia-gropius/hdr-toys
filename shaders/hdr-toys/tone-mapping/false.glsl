@@ -94,7 +94,6 @@ vec3 Lab_to_RGB(vec3 color) {
     return color;
 }
 
-const float pi = 3.141592653589793;
 const float epsilon = 1e-6;
 
 vec3 Lab_to_LCH(vec3 Lab) {
@@ -104,18 +103,15 @@ vec3 Lab_to_LCH(vec3 Lab) {
     float C = length(vec2(a, b));
     float H = 0.0;
 
-    if (!(abs(a) < epsilon && abs(b) < epsilon)) {
+    if (!(abs(a) < epsilon && abs(b) < epsilon))
         H = atan(b, a);
-        H = H * 180.0 / pi;
-        H = mod((mod(H, 360.0) + 360.0), 360.0);
-    }
 
     return vec3(Lab.x, C, H);
 }
 
 vec3 LCH_to_Lab(vec3 LCH) {
     float C = max(LCH.y, 0.0);
-    float H = LCH.z * pi / 180.0;
+    float H = LCH.z;
 
     float a = C * cos(H);
     float b = C * sin(H);
@@ -140,11 +136,11 @@ vec4 hook() {
     float l1 =   L_sdr;
     float l0 =   L_sdr / CONTRAST_sdr;
 
-    vec3 c5 = vec3(0.9, 0.1,   0.0);
-    vec3 c4 = vec3(0.7, 0.2,  29.2);
-    vec3 c3 = vec3(0.7, 0.2, 109.7);
-    vec3 c2 = vec3(0.7, 0.2, 142.5);
-    vec3 c1 = vec3(0.5, 0.2, 264.0);
+    vec3 c5 = vec3(0.9, 0.1, radians(0.0));
+    vec3 c4 = vec3(0.7, 0.2, radians(29.2));
+    vec3 c3 = vec3(0.7, 0.2, radians(109.7));
+    vec3 c2 = vec3(0.7, 0.2, radians(142.5));
+    vec3 c1 = vec3(0.5, 0.2, radians(264.0));
 
     if      (y > l5)    color.rgb = vec3(1.0);
     else if (y > l4)    color.rgb = Lab_to_RGB(LCH_to_Lab(mix(c4, c5, l(y, l4, l5))));
