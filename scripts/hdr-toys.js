@@ -34,6 +34,8 @@ var metadata = {
 };
 
 function set_L_sdr(x) {
+  if (x < 5) x = 10000;
+
   x = Math.min(Math.max(x, 10), 1000);
 
   if (x === current.L_sdr) return;
