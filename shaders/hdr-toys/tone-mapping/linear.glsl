@@ -1,4 +1,4 @@
-// Linear tone mapping of I in ICtCp.
+// Linear tone mapping curve applied to ICtCp.
 
 //!PARAM L_hdr
 //!TYPE float

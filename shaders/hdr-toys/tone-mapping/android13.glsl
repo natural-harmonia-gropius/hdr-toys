@@ -1,3 +1,6 @@
+// https://source.android.com/docs/core/display/tone-mapping
+
+// class ToneMapper13 : public ToneMapper
 // https://android.googlesource.com/platform/frameworks/native/+/refs/heads/main/libs/tonemap/tonemap.cpp#437
 
 //!PARAM L_hdr

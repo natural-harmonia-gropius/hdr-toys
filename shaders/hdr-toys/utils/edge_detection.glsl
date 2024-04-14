@@ -1,3 +1,5 @@
+// https://anirban-karchaudhuri.medium.com/edge-detection-methods-comparison-9e4b75a9bf87
+
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!DESC edge detection

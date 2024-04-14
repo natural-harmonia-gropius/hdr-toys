@@ -1,3 +1,5 @@
+// False color visualization applied to ICtCp
+
 //!PARAM L_sdr
 //!TYPE float
 //!MINIMUM 0

@@ -1,3 +1,5 @@
+// Reinhard tone mapping curve applied to pre-channel rgb (ARRI AWG4)
+
 //!PARAM L_hdr
 //!TYPE float
 //!MINIMUM 0

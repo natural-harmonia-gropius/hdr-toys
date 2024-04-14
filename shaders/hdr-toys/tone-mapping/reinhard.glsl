@@ -1,5 +1,6 @@
-// Extended mapping by Reinhard et al. 2002. which allows high luminances to burn out.
-// https://www.researchgate.net/publication/2908938_Photographic_Tone_Reproduction_For_Digital_Images
+// Photographic tone reproduction for digital images
+// by Reinhard et al.
+// https://doi.org/10.1145/566654.566575
 
 //!PARAM L_hdr
 //!TYPE float
