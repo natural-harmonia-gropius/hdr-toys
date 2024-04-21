@@ -60,6 +60,20 @@ function set_temporal_stable_frames(x) {
   current.temporal_stable_frames = x;
 }
 
+var c1 = 3424 / 4096;
+var c2 = 2413 / 128;
+var c3 = 2392 / 128;
+var m1 = 2610 / 16384;
+var m2 = 2523 / 32;
+var im1 = 16384 / 2610;
+var im2 = 32 / 2523;
+
+function pq_eotf(val) {
+  var num = Math.max(Math.pow(val, im2) - c1, 0);
+  var denom = c2 - c3 * Math.pow(val, im2);
+  return 10000 * Math.pow(num / denom, im1);
+}
+
 mp.observe_property("video-out-params", "native", function (property, value) {
   if (!value) return;
 
@@ -75,14 +89,16 @@ mp.observe_property("video-out-params", "native", function (property, value) {
   metadata.hdr10plus.maxR = value["scene-max-r"];
   metadata.hdr10plus.maxG = value["scene-max-g"];
   metadata.hdr10plus.maxB = value["scene-max-b"];
-  metadata.detect.max = value["max-pq-y"];
-  metadata.detect.avg = value["avg-pq-y"];
+  metadata.detect.max = value["max-pq-y"] && pq_eotf(value["max-pq-y"]);
+  metadata.detect.avg = value["avg-pq-y"] && pq_eotf(value["avg-pq-y"]);
 
-  set_L_hdr(
+  var L_hdr =
+    metadata.detect.max ||
     metadata.cta861_3.maxContentLightLevel ||
-      metadata.smpte2086.maxLuminance ||
-      1000
-  );
+    metadata.smpte2086.maxLuminance ||
+    1000;
+
+  set_L_hdr(L_hdr);
 });
 
 mp.observe_property("container-fps", "native", function (property, value) {
