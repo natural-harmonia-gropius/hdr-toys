@@ -93,27 +93,12 @@ const mat3 D65_to_D60_CAT = mat3(
     -0.0028413125165573776196, 0.0046851555780399034147,  0.92450665292696206889
 );
 
+// Power compression function
+// https://www.desmos.com/calculator/iwcyjg6av0
 float compress(float dist, float lim, float thr, float pwr) {
-    float comprDist;
-    float scl;
-    float nd;
-    float p;
-
-    if (dist < thr) {
-        comprDist = dist; // No compression below threshold
-    }
-    else {
-        // Calculate scale factor for y = 1 intersect
-        scl = (lim - thr) / pow(pow((1.0 - thr) / (lim - thr), -pwr) - 1.0, 1.0 / pwr);
-
-        // Normalize distance outside threshold by scale factor
-        nd = (dist - thr) / scl;
-        p = pow(nd, pwr);
-
-        comprDist = thr + scl * nd / (pow(1.0 + p, 1.0 / pwr)); // Compress
-    }
-
-    return comprDist;
+    float scl = (lim - thr) / pow(pow((1.0 - thr) / (lim - thr), -pwr) - 1.0, 1.0 / pwr);
+    float c = thr + (dist - thr) / (pow(1.0 + pow((dist - thr) / scl, pwr), 1.0 / pwr));
+    return (dist < thr ? dist : c);
 }
 
 vec3 reference_gamut_compress(vec3 rgb) {
