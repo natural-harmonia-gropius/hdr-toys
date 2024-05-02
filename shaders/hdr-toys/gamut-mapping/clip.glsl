@@ -9,7 +9,7 @@
 
 #define from    BT2020
 #define to      BT709
-#define cone    Bradford
+#define cone    CAT16
 
 
 // White points of standard illuminants
@@ -318,13 +318,18 @@ mat3 adaptation(vec2 W1, vec2 W2, mat3 cone) {
     return cone * scale * inverse(cone);
 }
 
+mat3 adaptation_2step(vec2 W1, vec2 W2, mat3 cone) {
+    return adaptation(W1, E, cone) * inverse(adaptation(W2, E, cone));
+}
+
 vec4 hook() {
     vec4 color = HOOKED_texOff(0);
 
     if (from != to) {
         color.rgb *= RGB_to_XYZ(from);
-        if (from.w != to.w)
-            color.rgb *= adaptation(from.w, to.w, cone);
+        if (from.w != to.w) {
+            color.rgb *= adaptation_2step(from.w, to.w, cone);
+        }
         color.rgb *= XYZ_to_RGB(to);
     }
 
