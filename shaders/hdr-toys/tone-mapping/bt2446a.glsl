@@ -79,7 +79,7 @@ vec3 tone_mapping(vec3 YCbCr) {
 
     float Ysdr = f(Y);
 
-    float Yr = Ysdr / (1.1 * Y);
+    float Yr = Ysdr / max(1.1 * Y, 1e-6);
     Cb *= Yr;
     Cr *= Yr;
     Y = Ysdr - max(0.1 * Cr, 0.0);
