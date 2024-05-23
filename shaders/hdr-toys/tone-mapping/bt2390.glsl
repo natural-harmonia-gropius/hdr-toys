@@ -7,6 +7,12 @@
 //!MAXIMUM 10000
 1000.0
 
+//!PARAM CONTRAST_hdr
+//!TYPE float
+//!MINIMUM 0
+//!MAXIMUM 1000000000
+1000000.0
+
 //!PARAM L_sdr
 //!TYPE float
 //!MINIMUM 0
@@ -25,33 +31,130 @@
 //!MAXIMUM 1.0
 1.0
 
+//!TEXTURE TONE
+//!SIZE 1024 1
+//!FORMAT rgba16f
+//!FILTER LINEAR
+//!BORDER REPEAT
+//!STORAGE
+
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!DESC tone mapping (bt.2390)
+//!BIND TONE
+//!SAVE GARB
+//!WIDTH 1024
+//!HEIGHT 1
+//!COMPUTE 32 32
+//!DESC tone curve (bt.2390)
 
-const float pq_m1 = 0.1593017578125;
-const float pq_m2 = 78.84375;
-const float pq_c1 = 0.8359375;
-const float pq_c2 = 18.8515625;
-const float pq_c3 = 18.6875;
+const float m1 = 2610.0 / 4096.0 / 4.0;
+const float m2 = 2523.0 / 4096.0 * 128.0;
+const float c1 = 3424.0 / 4096.0;
+const float c2 = 2413.0 / 4096.0 * 32.0;
+const float c3 = 2392.0 / 4096.0 * 32.0;
+const float pw = 10000.0;
 
-const float pq_C  = 10000.0;
-
-float Y_to_ST2084(float C) {
-    float L = C / pq_C;
-    float Lm = pow(L, pq_m1);
-    float N = (pq_c1 + pq_c2 * Lm) / (1.0 + pq_c3 * Lm);
-    N = pow(N, pq_m2);
+float pq_eotf_inv(float C) {
+    float L = C / pw;
+    float M = pow(L, m1);
+    float N = pow((c1 + c2 * M) / (1.0 + c3 * M), m2);
     return N;
 }
 
-float ST2084_to_Y(float N) {
-    float Np = pow(N, 1.0 / pq_m2);
-    float L = Np - pq_c1;
-    if (L < 0.0 ) L = 0.0;
-    L = L / (pq_c2 - pq_c3 * Np);
-    L = pow(L, 1.0 / pq_m1);
-    return L * pq_C;
+float bt2390_eetf(float x, float iw, float ib, float ow, float ob) {
+    float maxLum = (ow - ib) / (iw - ib);
+    float minLum = (ob - ib) / (iw - ib);
+
+    float KS = 1.5 * maxLum - 0.5;
+    float b = minLum;
+
+    // E1
+    x = (x - ib) / (iw - ib);
+
+    // E2
+    if (KS <= x) {
+        float TB  = (x - KS) / (1.0 - KS);
+        float TB2 = TB * TB;
+        float TB3 = TB * TB2;
+
+        float PB  = (2.0 * TB3 - 3.0 * TB2 + 1.0) * KS  +
+                    (TB3 - 2.0 * TB2 + TB) * (1.0 - KS) +
+                    (-2.0 * TB3 + 3.0 * TB2) * maxLum;
+
+        x = PB;
+    }
+
+    // E3
+    if (0.0 <= x) {
+        x = x + b * pow((1.0 - x), 4.0);
+    }
+
+    // E4
+    x = x * (iw - ib) + ib;
+
+    return x;
+}
+
+float curve(float x) {
+    float iw = pq_eotf_inv(L_hdr);
+    float ib = pq_eotf_inv(L_hdr / CONTRAST_hdr);
+    float ow = pq_eotf_inv(L_sdr);
+    float ob = pq_eotf_inv(L_sdr / CONTRAST_sdr);
+
+    if (x < ib)
+        return ob;
+    if (x > iw)
+        return ow;
+
+    return bt2390_eetf(x, iw, ib, ow, ob);
+}
+
+void hook() {
+    float x = HOOKED_pos.x * HOOKED_size.x / (HOOKED_size.x - 1.0);
+    float y = curve(x);
+    imageStore(TONE, ivec2(int(1023.0 * x), 0), vec4(vec3(y), 1.0));
+}
+
+//!HOOK OUTPUT
+//!BIND HOOKED
+//!BIND TONE
+//!DESC tone mapping (ICtCp)
+
+const float m1 = 2610.0 / 4096.0 / 4.0;
+const float m2 = 2523.0 / 4096.0 * 128.0;
+const float c1 = 3424.0 / 4096.0;
+const float c2 = 2413.0 / 4096.0 * 32.0;
+const float c3 = 2392.0 / 4096.0 * 32.0;
+const float pw = 10000.0;
+
+float pq_eotf(float N) {
+    float M = pow(N, 1.0 / m2);
+    float L = pow(max(M - c1, 0.0) / (c2 - c3 * M), 1.0 / m1);
+    float C = L * pw;
+    return C;
+}
+
+vec3 pq_eotf(vec3 color) {
+    return vec3(
+        pq_eotf(color.r),
+        pq_eotf(color.g),
+        pq_eotf(color.b)
+    );
+}
+
+float pq_eotf_inv(float C) {
+    float L = C / pw;
+    float M = pow(L, m1);
+    float N = pow((c1 + c2 * M) / (1.0 + c3 * M), m2);
+    return N;
+}
+
+vec3 pq_eotf_inv(vec3 color) {
+    return vec3(
+        pq_eotf_inv(color.r),
+        pq_eotf_inv(color.g),
+        pq_eotf_inv(color.b)
+    );
 }
 
 vec3 RGB_to_XYZ(vec3 RGB) {
@@ -87,14 +190,11 @@ vec3 LMS_to_XYZ(vec3 LMS) {
 }
 
 vec3 LMS_to_ICtCp(vec3 LMS) {
-    LMS.x = Y_to_ST2084(LMS.x);
-    LMS.y = Y_to_ST2084(LMS.y);
-    LMS.z = Y_to_ST2084(LMS.z);
     mat3 M = mat3(
          2048.0 / 4096.0,   2048.0 / 4096.0,    0.0 / 4096.0,
          6610.0 / 4096.0, -13613.0 / 4096.0, 7003.0 / 4096.0,
         17933.0 / 4096.0, -17390.0 / 4096.0, -543.0 / 4096.0);
-    return LMS * M;
+    return pq_eotf_inv(LMS) * M;
 }
 
 vec3 ICtCp_to_LMS(vec3 ICtCp) {
@@ -102,11 +202,7 @@ vec3 ICtCp_to_LMS(vec3 ICtCp) {
         0.9999999999999998,  0.0086090370379328,  0.1110296250030260,
         0.9999999999999998, -0.0086090370379328, -0.1110296250030259,
         0.9999999999999998,  0.5600313357106791, -0.3206271749873188);
-    ICtCp *= M;
-    ICtCp.x = ST2084_to_Y(ICtCp.x);
-    ICtCp.y = ST2084_to_Y(ICtCp.y);
-    ICtCp.z = ST2084_to_Y(ICtCp.z);
-    return ICtCp;
+    return pq_eotf(ICtCp * M);
 }
 
 vec3 RGB_to_ICtCp(vec3 color) {
@@ -126,42 +222,13 @@ vec3 ICtCp_to_RGB(vec3 color) {
 }
 
 float curve(float x) {
-    float iw = Y_to_ST2084(L_hdr);
-    float ib = Y_to_ST2084(0.0);
-    float ow = Y_to_ST2084(L_sdr);
-    float ob = Y_to_ST2084(L_sdr / CONTRAST_sdr);
-
-    float maxLum = (ow - ib) / (iw - ib);
-    float minLum = (ob - ib) / (iw - ib);
-
-    float KS = 1.5 * maxLum - 0.5;
-    float b = minLum;
-
-    // E1
-    x = (x - ib) / (iw - ib);
-
-    // E2
-    if (KS <= x) {
-        float TB  = (x - KS) / (1.0 - KS);
-        float TB2 = TB * TB;
-        float TB3 = TB * TB2;
-
-        float PB  = (2.0 * TB3 - 3.0 * TB2 + 1.0) * KS  +
-                    (TB3 - 2.0 * TB2 + TB) * (1.0 - KS) +
-                    (-2.0 * TB3 + 3.0 * TB2) * maxLum;
-
-        x = PB;
-    }
-
-    // E3
-    if (0.0 <= x) {
-        x = x + b * pow((1.0 - x), 4.0);
-    }
-
-    // E4
-    x = x * (iw - ib) + ib;
-
-    return x;
+    float i = 1023.0 * clamp(x, 0.0, 1.0);
+    float l = ceil(i);
+    float h = floor(i);
+    float d = i - l;
+    float lv = imageLoad(TONE, ivec2(l, 0)).x;
+    float hv = imageLoad(TONE, ivec2(h, 0)).x;
+    return mix(lv, hv, d);
 }
 
 vec3 tone_mapping_ictcp(vec3 ICtCp) {
@@ -177,6 +244,27 @@ vec4 hook() {
     color.rgb = RGB_to_ICtCp(color.rgb);
     color.rgb = tone_mapping_ictcp(color.rgb);
     color.rgb = ICtCp_to_RGB(color.rgb);
+
+    return color;
+}
+
+//!HOOK OUTPUT
+//!BIND HOOKED
+//!BIND TONE
+//!DESC tone curve (visualization)
+
+vec3 invert(vec3 x, float w) {
+    return -x + w;
+}
+
+vec4 hook() {
+    vec4 color = HOOKED_texOff(0);
+
+    float value = imageLoad(TONE, ivec2(int(1023.0 * HOOKED_pos.x), 0)).x;
+    float pos_y = 1.0 - HOOKED_pos.y * HOOKED_size.y / (HOOKED_size.y - 1.0);
+
+    if (abs(value - pos_y) < 1e-3)
+        color.rgb = invert(color.rgb, 1.0);
 
     return color;
 }
