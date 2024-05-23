@@ -38,6 +38,7 @@ mirror
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!DESC transform
+//!WHEN scale_x 1 - scale_y 1 - + translate_x + translate_y + skew_x + skew_y + rotate +
 
 vec4 hook() {
     vec2 pos = HOOKED_pos;
