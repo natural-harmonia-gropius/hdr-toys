@@ -289,9 +289,9 @@ mat3 RGB_to_XYZ(Chromaticity C) {
         s.x, 0.0, 0.0,
         0.0, s.y, 0.0,
         0.0, 0.0, s.z
-    ) * n;
+    );
 
-    return m;
+    return m * n;
 }
 
 mat3 XYZ_to_RGB(Chromaticity C) {
@@ -310,16 +310,17 @@ mat3 adaptation(vec2 W1, vec2 W2, mat3 cone) {
     vec3 dst_cone = dst_XYZ * cone;
 
     mat3 scale = mat3(
-        dst_cone.x / src_cone.x, 0.0, 0.0,
-        0.0, dst_cone.y / src_cone.y, 0.0,
-        0.0, 0.0, dst_cone.z / src_cone.z
+        dst_cone.r / src_cone.r, 0.0, 0.0,
+        0.0, dst_cone.g / src_cone.g, 0.0,
+        0.0, 0.0, dst_cone.b / src_cone.b
     );
 
     return cone * scale * inverse(cone);
 }
 
-mat3 adaptation_2step(vec2 W1, vec2 W2, mat3 cone) {
-    return adaptation(W1, E, cone) * inverse(adaptation(W2, E, cone));
+// https://www.researchgate.net/publication/318152296_Comprehensive_color_solutions_CAM16_CAT16_and_CAM16-UCS
+mat3 adaptation_two_step(vec2 W1, vec2 W2, mat3 cone) {
+    return adaptation(W1, E, cone) * adaptation(E, W2, cone);
 }
 
 vec4 hook() {
@@ -328,7 +329,7 @@ vec4 hook() {
     if (from != to) {
         color.rgb *= RGB_to_XYZ(from);
         if (from.w != to.w) {
-            color.rgb *= adaptation_2step(from.w, to.w, cone);
+            color.rgb *= adaptation_two_step(from.w, to.w, cone);
         }
         color.rgb *= XYZ_to_RGB(to);
     }
