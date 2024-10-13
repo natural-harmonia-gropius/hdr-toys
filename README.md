@@ -2,6 +2,8 @@
 
 A set of color conversion shaders for mpv-player (gpu-next).
 
+For more detailed information, please refer to the [wiki](https://github.com/natural-harmonia-gropius/hdr-toys/wiki).
+
 ## Getting started
 
 1. Download [hdr-toys.zip](https://github.com/natural-harmonia-gropius/hdr-toys/archive/refs/heads/master.zip), extract it and copy `shaders`, `scripts` and `hdr-toys.conf` to your mpv config folder.
@@ -31,7 +33,7 @@ A set of color conversion shaders for mpv-player (gpu-next).
   m   set glsl-shader-opts L_sdr=203
   ```
 
-  Due to an issue with mpv, only parameters changed after the shader is applied will take effect, so `glsl-shader-opts L_sdr=100` in mpv.conf will not work.
+  Due to an issue with mpv, only parameters changed after the shader is applied will take effect, so `glsl-shader-opts=L_sdr=100` in mpv.conf will not work.
 
 - **I'm not using BT.709 display.**
 
