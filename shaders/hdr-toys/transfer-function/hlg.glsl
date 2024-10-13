@@ -45,7 +45,7 @@ vec3 hlg_ootf_inv(vec3 color) {
 }
 
 vec3 hlg_eotf_inv(vec3 color) {
-    return (hlg_oetf(hlg_ootf_inv(color)) - beta) / (1.0 + beta);
+    return (hlg_oetf(hlg_ootf_inv(color)) - beta) / (1.0 - beta);
 }
 
 vec4 hook() {
