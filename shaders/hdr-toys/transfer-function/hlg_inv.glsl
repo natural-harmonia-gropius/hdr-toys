@@ -15,8 +15,9 @@ const vec3 RGB_to_Y = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646
 
 const float Lw   = 1000.0;
 const float Lb   = 0.0;
+const float Lamb = 5.0;
 
-const float gamma = 1.2 + 0.42 * log(Lw / 1000.0) / log(10.0);
+const float gamma = 1.2 + 0.42 * log(Lw / 1000.0) / log(10.0) - 0.076 * log(Lamb / 5.0) / log(10.0);
 const float alpha = Lw;
 const float beta  = sqrt(3.0 * pow((Lb / Lw), 1.0 / gamma));
 
