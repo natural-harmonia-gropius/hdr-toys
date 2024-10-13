@@ -34,7 +34,7 @@ A set of color conversion shaders for mpv-player (gpu-next).
 
 - **What does hdr-toys.js do?**
 
-  HDR videos typically include metadata with brightness information. However, shaders cannot access this information directly, so hdr-toys.js provides an indirect way to retrieve it.
+  HDR videos generally include metadata with luminance information. However, shaders cannot access this information directly, so hdr-toys.js provides an indirect way to retrieve it.
 
 - **I don't use mpv, can I use this set of shaders?**
 
