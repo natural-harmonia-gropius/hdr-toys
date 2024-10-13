@@ -15,9 +15,15 @@ A set of color conversion shaders for mpv-player (gpu-next).
 
   If you've confirmed these settings and don't get the correct result, please submit an issue.
 
+- **What does hdr-toys.js do?**
+
+  HDR videos generally include metadata with luminance information. However, shaders cannot access this information directly, so hdr-toys.js provides an indirect way to retrieve it.
+
 - **I feel the video is always dark.**
 
-  Append following lines to input.conf.
+  This issue arises from the inability to determine the reference white of the video, which is unfortunately not included in the metadata.
+
+  To adjust the reference white, append the following lines to input.conf.
   Press `n` when you feel so, press `m` to restore to default.
 
   ```ini
@@ -25,16 +31,12 @@ A set of color conversion shaders for mpv-player (gpu-next).
   m   set glsl-shader-opts L_sdr=203
   ```
 
-  Due to mpv's issue, only parameters changed after the shader is in effect will take effect, so `glsl-shader-opts L_sdr=100` in mpv.conf will have no effect.
+  Due to an issue with mpv, only parameters changed after the shader is applied will take effect, so `glsl-shader-opts L_sdr=100` in mpv.conf will not work.
 
 - **I'm not using BT.709 display.**
 
   Replace all `gamut-mapping/*` lines with `gamut-mapping/clip.glsl`.  
   Then change `#define to *` in clip.glsl to match your display.
-
-- **What does hdr-toys.js do?**
-
-  HDR videos generally include metadata with luminance information. However, shaders cannot access this information directly, so hdr-toys.js provides an indirect way to retrieve it.
 
 - **I don't use mpv, can I use this set of shaders?**
 
