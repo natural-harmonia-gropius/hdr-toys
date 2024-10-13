@@ -14,12 +14,12 @@
 
 vec3 crosstalk_inv(vec3 x, float a) {
     float b = 1.0 - a;
-    float c = 1.0 - 3.0 * a;
-    mat3  M = mat3(
-         b, -a, -a,
-        -a,  b, -a,
-        -a, -a,  b) / c;
-    return x * M;
+    float c_inv = 1.0 / (1.0 - 3.0 * a);
+    return vec3(
+        (x.x * b - (x.y + x.z) * a) * c_inv,
+        (x.y * b - (x.x + x.z) * a) * c_inv,
+        (x.z * b - (x.x + x.y) * a) * c_inv
+    );
 }
 
 vec4 hook() {

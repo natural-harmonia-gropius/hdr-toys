@@ -15,11 +15,11 @@
 
 vec3 crosstalk(vec3 x, float a) {
     float b = 1.0 - 2.0 * a;
-    mat3  M = mat3(
-        b, a, a,
-        a, b, a,
-        a, a, b);
-    return x * M;
+    return vec3(
+        x.x * b + (x.y + x.z) * a,
+        x.y * b + (x.x + x.z) * a,
+        x.z * b + (x.x + x.y) * a
+    );
 }
 
 vec4 hook() {
