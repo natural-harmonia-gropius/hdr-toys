@@ -11,8 +11,6 @@
 //!BIND HOOKED
 //!DESC transfer function (hlg, inverse)
 
-const vec3 RGB_to_Y = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
-
 const float Lw   = 1000.0;
 const float Lb   = 0.0;
 const float Lamb = 5.0;
@@ -24,6 +22,8 @@ const float beta  = sqrt(3.0 * pow((Lb / Lw), 1.0 / gamma));
 const float a = 0.17883277;
 const float b = 1.0 - 4.0 * a;
 const float c = 0.5 - a * log(4.0 * a);
+
+const vec3 y_coef = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
 
 float hlg_oetf_inv(float x) {
     return x <= 1.0 / 2.0 ? pow(x, 2.0) / 3.0 : (exp((x - c) / a) + b) / 12.0;
@@ -38,7 +38,7 @@ vec3 hlg_oetf_inv(vec3 color) {
 }
 
 vec3 hlg_ootf(vec3 color) {
-    float Y = dot(color, RGB_to_Y);
+    float Y = dot(color, y_coef);
     return alpha * pow(Y, gamma - 1.0) * color;
 }
 
