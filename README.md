@@ -13,9 +13,11 @@ For more detailed information, please refer to the [wiki](https://github.com/nat
 
 - **Shader not working / looks very wrong.**
 
-  This set of shaders is designed for [**vo=gpu-next**](https://mpv.io/manual/master/#video-output-drivers-gpu-next). Also, **DO NOT** set `target-peak`, `icc-profile` or other similar settings in in mpv.conf.
+  This set of shaders is designed for use with [**vo=gpu-next**](https://mpv.io/manual/master/#video-output-drivers-gpu-next). Also, **DO NOT** set `target-peak`, `icc-profile`, or other similar settings in in mpv.conf.
 
-  If you've confirmed these settings and don't get the correct result, please submit an issue.
+  For a complete usage example, refer to [natural-harmonia-gropius/mpv-config](https://github.com/natural-harmonia-gropius/mpv-config)
+
+  If you've confirmed these settings but still don't get the correct result, please submit an issue.
 
 - **What does hdr-toys.js do?**
 
