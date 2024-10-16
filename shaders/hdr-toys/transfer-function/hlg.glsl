@@ -2,7 +2,8 @@
 // https://www.itu.int/rec/R-REC-BT.2100
 
 // https://www.itu.int/pub/R-REP-BT.2390
-// extended gamma model: 1.2 * pow(1.111, log2(Lw / 1000.0)) * pow(0.98, log2(Lamb / 5.0))
+// extended gamma model for Lw is outside 400-2000 cd/m²:
+// 1.2 * pow(1.111, log2(Lw / 1000.0)) * pow(0.98, log2(Lamb / 5.0))
 
 //!PARAM L_sdr
 //!TYPE float
