@@ -21,7 +21,9 @@ For more detailed information, please visit the [wiki](https://github.com/natura
 
 - **What does hdr-toys.js do?**
 
-  HDR videos generally include metadata with luminance information, but shaders cannot access this data directly. `hdr-toys.js` provides an indirect way to retrieve it.
+  HDR videos generally include metadata with luminance information, but shaders cannot access this data directly. `hdr-toys.js` provides a way to indirectly pass the necessary information using the [glsl-shader-opts](https://mpv.io/manual/master/#options-glsl-shader-opts).
+
+  It also passes the number of frames for 1/3 second to reduce flickering, helping to smooth out rapid brightness changes.
 
 - **I feel the video always looks too dark.**
 
@@ -34,7 +36,7 @@ For more detailed information, please visit the [wiki](https://github.com/natura
   m   set glsl-shader-opts L_sdr=203
   ```
 
-  Note that, due to a limitation in mpv, only parameters changed after the shader is applied will take effect. Therefore, setting `glsl-shader-opts=L_sdr=100` in mpv.conf will not work.
+  Note that, due to a limitation in mpv, only parameters changed after the shader is applied will take effect. Therefore, setting `glsl-shader-opts=L_sdr=100` in `mpv.conf` will not work.
 
 - **I'm not using BT.709 display.**
 
@@ -42,4 +44,4 @@ For more detailed information, please visit the [wiki](https://github.com/natura
 
 - **I don't use mpv, can I use these shaders?**
 
-  The main dependency is libplacebo, ffmpeg and VLC should be able to use. In theory, porting to other shader languages is also very feasible.
+  These shaders use [mpv .hook syntax](https://libplacebo.org/custom-shaders/), which requires `libplacebo` for execution. ffmpeg and VLC should be able to use. In theory, porting to other shader languages is also very feasible.
