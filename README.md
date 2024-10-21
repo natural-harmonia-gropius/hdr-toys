@@ -2,10 +2,9 @@
 
 A set of color conversion shaders for mpv-player (gpu-next).
 
-| Red                                                                                                            | Green                                                                                                          | Blue                                                                                                           |
+| R                                                                                                              | G                                                                                                              | B                                                                                                              |
 | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | ![屏幕截图 2024-10-21 220701](https://github.com/user-attachments/assets/8fce1636-1a8f-49d5-88b5-6dfd2b8c3e9e) | ![屏幕截图 2024-10-21 220729](https://github.com/user-attachments/assets/e9d68096-aeb6-4dd0-8d2c-3c20aa201b94) | ![屏幕截图 2024-10-21 220749](https://github.com/user-attachments/assets/9078074b-be86-408d-9dcb-9dd171fdcac6) |
-
 
 For more detailed information, please visit the [wiki](https://github.com/natural-harmonia-gropius/hdr-toys/wiki).
 
