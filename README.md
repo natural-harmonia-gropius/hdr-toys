@@ -6,8 +6,9 @@ For more detailed information, please visit the [wiki](https://github.com/natura
 
 ## Getting Started
 
-1. Download [hdr-toys.zip](https://github.com/natural-harmonia-gropius/hdr-toys/archive/refs/heads/master.zip), extract it, and copy the `shaders`, `scripts`, and `hdr-toys.conf` files to your mpv config folder.
-2. Add `include=~~/hdr-toys.conf` to your `mpv.conf`.
+1. Download [hdr-toys.zip](https://github.com/natural-harmonia-gropius/hdr-toys/archive/refs/heads/master.zip), extract it.
+2. Copy the `shaders`, `scripts`, and `hdr-toys.conf` files to your [mpv config folder](https://mpv.io/manual/master/#configuration-files).
+3. Add `include=~~/hdr-toys.conf` to your `mpv.conf`.
 
 ## FAQ
 
