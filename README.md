@@ -20,6 +20,10 @@ For more detailed information, please visit the [wiki](https://github.com/natura
 
   If you've confirmed these settings and the problem persists, please submit an issue.
 
+- **UI/OSD looks washed out.**
+
+  To ensure the video input meets the standards, I use a little trick by setting `target-prim` and `target-trc` to match the input values. As a side effect, the OSD inevitably appears washed out.
+
 - **What does hdr-toys.js do?**
 
   HDR videos generally include metadata with luminance information, but shaders cannot access this data directly. `hdr-toys.js` provides a way to indirectly pass the necessary information using the [glsl-shader-opts](https://mpv.io/manual/master/#options-glsl-shader-opts).
