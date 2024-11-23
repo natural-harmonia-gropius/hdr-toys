@@ -18,11 +18,9 @@ const float c2 = 2413.0 / 4096.0 * 32.0;
 const float c3 = 2392.0 / 4096.0 * 32.0;
 const float pw = 10000.0;
 
-float pq_eotf(float N) {
-    float M = pow(N, 1.0 / m2);
-    float L = pow(max(M - c1, 0.0) / (c2 - c3 * M), 1.0 / m1);
-    float C = L * pw;
-    return C;
+float pq_eotf(float x) {
+    float t = pow(x, 1.0 / m2);
+    return pow(max(t - c1, 0.0) / (c2 - c3 * t), 1.0 / m1) * pw;
 }
 
 vec3 pq_eotf(vec3 color) {
