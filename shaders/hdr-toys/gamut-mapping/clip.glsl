@@ -4,12 +4,12 @@
 //!BIND HOOKED
 //!DESC gamut mapping (clip)
 
-// You can use custom chromaticity here
-// e.g. BT.709 with D93 white point: Chromaticity(BT709.r, BT709.g, BT709.b, D93)
+// You can use custom chromaticity here.
+// Example: BT.709 with a D93 white point: Chromaticity(BT709.r, BT709.g, BT709.b, D93)
+// You can also define custom coordinates: Chromaticity(vec2(0.7347, 0.2653), BT709.g, BT709.b, D65)
 
 #define from    BT2020
 #define to      BT709
-#define cone    CAT16
 
 
 // White points of standard illuminants
@@ -58,7 +58,7 @@ struct Chromaticity {
     vec2 r, g, b, w;
 };
 
-// ITU-R Recommendation BT.2020, BT.2100
+// ITU-R BT.2020, ITU-R BT.2100
 const Chromaticity BT2020 = Chromaticity(
     vec2(0.708, 0.292),
     vec2(0.170, 0.797),
@@ -66,7 +66,7 @@ const Chromaticity BT2020 = Chromaticity(
     D65
 );
 
-// ITU-R Recommendation BT.709, IEC 61966-2-1 (sRGB)
+// ITU-R BT.709, IEC 61966-2-1 (sRGB)
 const Chromaticity BT709 = Chromaticity(
     vec2(0.64, 0.33),
     vec2(0.30, 0.60),
@@ -74,15 +74,7 @@ const Chromaticity BT709 = Chromaticity(
     D65
 );
 
-// ITU-R Recommendation BT.601 (625 lines), BT.470 (B/G), EBU 3213-E
-const Chromaticity BT601_625 = Chromaticity(
-    vec2(0.64, 0.33),
-    vec2(0.29, 0.60),
-    vec2(0.15, 0.06),
-    D65
-);
-
-// ITU-R Recommendation BT.601 (525 lines), SMPTE ST 240
+// ITU-R BT.601 (525 lines), SMPTE ST 240
 const Chromaticity BT601_525 = Chromaticity(
     vec2(0.630, 0.340),
     vec2(0.310, 0.595),
@@ -90,7 +82,15 @@ const Chromaticity BT601_525 = Chromaticity(
     D65
 );
 
-// ITU-R Recommendation BT.470 (M)
+// ITU-R BT.601 (625 lines), BT.470 (B/G), EBU 3213-E
+const Chromaticity BT601_625 = Chromaticity(
+    vec2(0.64, 0.33),
+    vec2(0.29, 0.60),
+    vec2(0.15, 0.06),
+    D65
+);
+
+// ITU-R BT.470 (M)
 const Chromaticity BT470m = Chromaticity(
     vec2(0.67, 0.33),
     vec2(0.21, 0.71),
@@ -122,7 +122,7 @@ const Chromaticity P3D60 = Chromaticity(
     ACES
 );
 
-// ITU-T Recommendation H.273 (Generic film)
+// ITU-T H.273 (Generic film)
 const Chromaticity H273_8 = Chromaticity(
     vec2(0.681, 0.319),
     vec2(0.243, 0.692),
@@ -130,7 +130,7 @@ const Chromaticity H273_8 = Chromaticity(
     C
 );
 
-// ITU-T Recommendation H.273 (No corresponding industry specification identified)
+// ITU-T H.273 (No corresponding industry specification identified)
 const Chromaticity H273_22 = Chromaticity(
     vec2(0.630, 0.340),
     vec2(0.295, 0.605),
@@ -138,7 +138,15 @@ const Chromaticity H273_22 = Chromaticity(
     D65
 );
 
-// CIE 1931 XYZ
+// CIE RGB (CIE 1931 color space)
+const Chromaticity CIERGB = Chromaticity(
+    vec2(0.73474284, 0.26525716),
+    vec2(0.27377903, 0.7174777),
+    vec2(0.16655563, 0.00891073),
+    E
+);
+
+// CIE XYZ (CIE 1931 color space)
 const Chromaticity XYZ = Chromaticity(
     vec2(1.0, 0.0),
     vec2(0.0, 1.0),
@@ -146,7 +154,7 @@ const Chromaticity XYZ = Chromaticity(
     E
 );
 
-// CIE 1931 XYZ (D65 whitepoint)
+// CIE XYZ (CIE 1931 color space, D65 whitepoint)
 const Chromaticity XYZD65 = Chromaticity(
     XYZ.r,
     XYZ.g,
@@ -154,7 +162,7 @@ const Chromaticity XYZD65 = Chromaticity(
     D65
 );
 
-// CIE 1931 XYZ (D50 whitepoint)
+// CIE XYZ (CIE 1931 color space, D50 whitepoint)
 const Chromaticity XYZD50 = Chromaticity(
     XYZ.r,
     XYZ.g,
@@ -164,13 +172,13 @@ const Chromaticity XYZD50 = Chromaticity(
 
 // Grayscale, Monochrome
 const Chromaticity GRAY = Chromaticity(
-    vec2(0.0, 0.0),
-    vec2(0.0, 0.0),
-    vec2(0.0, 0.0),
+    vec2(0.0, 1.0),
+    vec2(0.0, 1.0),
+    vec2(0.0, 1.0),
     E
 );
 
-// Adobe RGB
+// Adobe RGB (1998)
 const Chromaticity AdobeRGB = Chromaticity(
     vec2(0.64, 0.33),
     vec2(0.21, 0.71),
@@ -208,6 +216,54 @@ const Chromaticity AP1 = Chromaticity(
     vec2(0.165, 0.830),
     vec2(0.128, 0.044),
     ACES
+);
+
+// ARRI Wide Gamut 4
+const Chromaticity AWG4 = Chromaticity(
+    vec2(0.7347,  0.2653),
+    vec2(0.1424,  0.8576),
+    vec2(0.0991, -0.0308),
+    D65
+);
+
+// FUJIFILM F-Gamut C
+const Chromaticity FGAMUTC = Chromaticity(
+    vec2(0.7347,  0.2653),
+    vec2(0.0263,  0.9737),
+    vec2(0.1173, -0.0224),
+    D65
+);
+
+// Sony S-Gamut3/S-Gamut
+const Chromaticity SGAMUT = Chromaticity(
+    vec2(0.73,  0.280),
+    vec2(0.14,  0.855),
+    vec2(0.10, -0.050),
+    D65
+);
+
+// Sony S-Gamut.Cine
+const Chromaticity SGAMUTCINE = Chromaticity(
+    vec2(0.766,  0.275),
+    vec2(0.225,  0.800),
+    vec2(0.089, -0.087),
+    D65
+);
+
+// Panasonic V-Gamut
+const Chromaticity VGAMUT = Chromaticity(
+    vec2(0.730,  0.28),
+    vec2(0.165,  0.84),
+    vec2(0.100, -0.03),
+    D65
+);
+
+// DJI D-Gamut
+const Chromaticity DGAMUT = Chromaticity(
+    vec2(0.71,  0.31),
+    vec2(0.21,  0.88),
+    vec2(0.09, -0.08),
+    D65
 );
 
 // Chromatic adaptation transform
@@ -264,11 +320,11 @@ vec3 xyY_to_XYZ(vec3 xyY) {
     float y = xyY.y;
     float Y = xyY.z;
 
-    float multiplo = Y / max(y, 1e-6);
+    float multiplier = Y / max(y, 1e-6);
 
     float z = 1.0 - x - y;
-    float X = x * multiplo;
-    float Z = z * multiplo;
+    float X = x * multiplier;
+    float Z = z * multiplier;
 
     return vec3(X, Y, Z);
 }
@@ -283,15 +339,16 @@ mat3 RGB_to_XYZ(Chromaticity C) {
     vec3 b = xyY_to_XYZ(vec3(C.b, 1.0));
     vec3 w = xyY_to_XYZ(vec3(C.w, 1.0));
 
-    mat3 n = transpose(mat3(r, g, b));
-    vec3 s = w * inverse(n);
-    mat3 m = mat3(
-        s.x, 0.0, 0.0,
-        0.0, s.y, 0.0,
-        0.0, 0.0, s.z
+    mat3 xyz = transpose(mat3(r, g, b));
+
+    vec3 scale = w * inverse(xyz);
+    mat3 scale_diag = mat3(
+        scale.x, 0.0, 0.0,
+        0.0, scale.y, 0.0,
+        0.0, 0.0, scale.z
     );
 
-    return m * n;
+    return scale_diag * xyz;
 }
 
 mat3 XYZ_to_RGB(Chromaticity C) {
@@ -302,37 +359,55 @@ mat3 XYZ_to_RGB(Chromaticity C) {
 }
 
 // http://www.brucelindbloom.com/index.html?Eqn_ChromAdapt.html
-mat3 adaptation(vec2 W1, vec2 W2, mat3 cone) {
-    vec3 src_XYZ = xyY_to_XYZ(vec3(W1, 1.0));
-    vec3 dst_XYZ = xyY_to_XYZ(vec3(W2, 1.0));
+mat3 adaptation(vec2 w1, vec2 w2, mat3 cat) {
+    vec3 src_xyz = xyY_to_XYZ(vec3(w1, 1.0));
+    vec3 dst_xyz = xyY_to_XYZ(vec3(w2, 1.0));
 
-    vec3 src_cone = src_XYZ * cone;
-    vec3 dst_cone = dst_XYZ * cone;
+    vec3 src_lms = src_xyz * cat;
+    vec3 dst_lms = dst_xyz * cat;
 
-    mat3 scale = mat3(
-        dst_cone.r / src_cone.r, 0.0, 0.0,
-        0.0, dst_cone.g / src_cone.g, 0.0,
-        0.0, 0.0, dst_cone.b / src_cone.b
+    vec3 scale = dst_lms / src_lms;
+    mat3 scale_diag = mat3(
+        scale.x, 0.0, 0.0,
+        0.0, scale.y, 0.0,
+        0.0, 0.0, scale.z
     );
 
-    return cone * scale * inverse(cone);
+    return cat * scale_diag * inverse(cat);
+}
+
+mat3 adaptation_two_step(vec2 w1, vec2 w2, vec2 wt, mat3 cat) {
+    return adaptation(w1, wt, cat) * adaptation(wt, w2, cat);
 }
 
 // https://www.researchgate.net/publication/318152296_Comprehensive_color_solutions_CAM16_CAT16_and_CAM16-UCS
-mat3 adaptation_two_step(vec2 W1, vec2 W2, mat3 cone) {
-    return adaptation(W1, E, cone) * adaptation(E, W2, cone);
+// CAT16 uses equal-energy illuminant (E) as wt.
+// https://android.googlesource.com/platform/frameworks/base/+/master/graphics/java/android/graphics/ColorSpace.java
+// Android uses Bradford as cat and D50 as wt.
+mat3 adaptation_two_step(vec2 w1, vec2 w2) {
+    return adaptation_two_step(w1, w2, E, CAT16);
+}
+
+mat3 RGB_to_RGB(Chromaticity c1, Chromaticity c2) {
+    mat3 m = Identity3;
+    if (from != to) {
+        m *= RGB_to_XYZ(c1);
+        if (from.w != to.w) {
+            m *= adaptation_two_step(c1.w, c2.w);
+        }
+        m *= XYZ_to_RGB(c2);
+    }
+    return m;
+}
+
+vec3 RGB_to_RGB(vec3 c, Chromaticity c1, Chromaticity c2) {
+    return c * RGB_to_RGB(c1, c2);
 }
 
 vec4 hook() {
     vec4 color = HOOKED_texOff(0);
 
-    if (from != to) {
-        color.rgb *= RGB_to_XYZ(from);
-        if (from.w != to.w) {
-            color.rgb *= adaptation_two_step(from.w, to.w, cone);
-        }
-        color.rgb *= XYZ_to_RGB(to);
-    }
+    color.rgb = RGB_to_RGB(color.rgb, from, to);
 
     return color;
 }
