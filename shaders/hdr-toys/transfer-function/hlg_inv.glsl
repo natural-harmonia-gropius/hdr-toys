@@ -1,4 +1,5 @@
 // https://www.arib.or.jp/kikaku/kikaku_hoso/std-b67.html
+// https://www.bbc.co.uk/rd/projects/high-dynamic-range
 // https://www.itu.int/rec/R-REC-BT.2100
 
 //!PARAM L_sdr
