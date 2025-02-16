@@ -1,16 +1,50 @@
-//!PARAM L_hdr
+//!PARAM min_luma
 //!TYPE float
-//!MINIMUM 0
-//!MAXIMUM 10000
-1000.0
+0.0
 
-//!PARAM L_sdr
+//!PARAM max_luma
+//!TYPE float
+0.0
+
+//!PARAM max_cll
+//!TYPE float
+0.0
+
+//!PARAM max_fall
+//!TYPE float
+0.0
+
+//!PARAM scene_max_r
+//!TYPE float
+0.0
+
+//!PARAM scene_max_g
+//!TYPE float
+0.0
+
+//!PARAM scene_max_b
+//!TYPE float
+0.0
+
+//!PARAM scene_avg
+//!TYPE float
+0.0
+
+//!PARAM max_pq_y
+//!TYPE float
+0.0
+
+//!PARAM avg_pq_y
+//!TYPE float
+0.0
+
+//!PARAM reference_white
 //!TYPE float
 //!MINIMUM 0
 //!MAXIMUM 1000
 203.0
 
-//!PARAM sigma
+//!PARAM chroma_correction_scaling
 //!TYPE float
 //!MINIMUM 0.0
 //!MAXIMUM 1.0
@@ -28,6 +62,12 @@
 //!MAXIMUM 120
 8
 
+//!PARAM enable_metering
+//!TYPE uint
+//!MINIMUM 0
+//!MAXIMUM 1
+1
+
 //!PARAM preview_metering
 //!TYPE uint
 //!MINIMUM 0
@@ -35,11 +75,11 @@
 0
 
 //!BUFFER METERED
-//!VAR uint L_max
+//!VAR uint metered_max_i
 //!STORAGE
 
 //!BUFFER METERED_TEMPORAL
-//!VAR uint L_max_t[128]
+//!VAR uint metered_max_i_t[128]
 //!STORAGE
 
 //!HOOK OUTPUT
@@ -48,7 +88,8 @@
 //!COMPONENTS 1
 //!WIDTH 512
 //!HEIGHT 288
-//!DESC metering (spatial stabilization, downscaling)
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = *
+//!DESC metering (feature map)
 
 const vec3 y_coef = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
 
@@ -66,7 +107,7 @@ float pq_eotf_inv(float x) {
 
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
-    float l = dot(color.rgb, y_coef) * L_sdr;
+    float l = dot(color.rgb * reference_white, y_coef);
     float i = pq_eotf_inv(l);
     return vec4(i, vec3(0.0));
 }
@@ -74,7 +115,7 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN spatial_stable_iterations 0 >
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 0 > *
 //!DESC metering (spatial stabilization, blur, horizonal)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -94,7 +135,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN spatial_stable_iterations 0 >
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 0 > *
 //!DESC metering (spatial stabilization, blur, vertical)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -114,7 +155,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN spatial_stable_iterations 1 >
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 1 > *
 //!DESC metering (spatial stabilization, blur, horizonal)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -134,7 +175,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN spatial_stable_iterations 1 >
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 1 > *
 //!DESC metering (spatial stabilization, blur, vertical)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -154,7 +195,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN spatial_stable_iterations 2 >
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 2 > *
 //!DESC metering (spatial stabilization, blur, horizonal)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -174,7 +215,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN spatial_stable_iterations 2 >
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 2 > *
 //!DESC metering (spatial stabilization, blur, vertical)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -194,7 +235,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN spatial_stable_iterations 3 >
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 3 > *
 //!DESC metering (spatial stabilization, blur, horizonal)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -214,7 +255,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN spatial_stable_iterations 3 >
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 3 > *
 //!DESC metering (spatial stabilization, blur, vertical)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -234,7 +275,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN spatial_stable_iterations 4 >
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 4 > *
 //!DESC metering (spatial stabilization, blur, horizonal)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -254,7 +295,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN spatial_stable_iterations 4 >
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 4 > *
 //!DESC metering (spatial stabilization, blur, vertical)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -274,7 +315,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN spatial_stable_iterations 5 >
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 5 > *
 //!DESC metering (spatial stabilization, blur, horizonal)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -294,7 +335,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN spatial_stable_iterations 5 >
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 5 > *
 //!DESC metering (spatial stabilization, blur, vertical)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -314,7 +355,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN spatial_stable_iterations 6 >
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 6 > *
 //!DESC metering (spatial stabilization, blur, horizonal)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -334,7 +375,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN spatial_stable_iterations 6 >
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 6 > *
 //!DESC metering (spatial stabilization, blur, vertical)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -354,7 +395,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN spatial_stable_iterations 7 >
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 7 > *
 //!DESC metering (spatial stabilization, blur, horizonal)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -374,7 +415,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN spatial_stable_iterations 7 >
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 7 > *
 //!DESC metering (spatial stabilization, blur, vertical)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -397,10 +438,11 @@ vec4 hook(){
 //!WIDTH 1
 //!HEIGHT 1
 //!COMPUTE 1 1
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = *
 //!DESC metering (data, initial)
 
 void hook() {
-    L_max = 0;
+    metered_max_i = 0;
 }
 
 //!HOOK OUTPUT
@@ -408,13 +450,14 @@ void hook() {
 //!BIND METERED
 //!SAVE EMPTY
 //!COMPUTE 32 32
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = *
 //!DESC metering (data, max)
 
 void hook() {
     ivec2 coord = ivec2(gl_GlobalInvocationID);
     float value = texelFetch(METERING_raw, coord, 0).r;
     uint rounded = uint(value * 4095.0 + 0.5);
-    atomicMax(L_max, rounded);
+    atomicMax(metered_max_i, rounded);
 }
 
 //!HOOK OUTPUT
@@ -424,20 +467,20 @@ void hook() {
 //!WIDTH 1
 //!HEIGHT 1
 //!COMPUTE 1 1
-//!WHEN temporal_stable_frames
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * temporal_stable_frames *
 //!DESC metering (temporal stabilization)
 
 void temporal_prepend() {
     for (uint i = temporal_stable_frames - 1; i > 0; i--) {
-        L_max_t[i] = L_max_t[i - 1];
+        metered_max_i_t[i] = metered_max_i_t[i - 1];
     }
-    L_max_t[0] = L_max;
+    metered_max_i_t[0] = metered_max_i;
 }
 
 float temporal_harmonic_mean() {
     float sum = 0.0;
     for (uint i = 0; i < temporal_stable_frames; i++) {
-        float current = float(L_max_t[i]);
+        float current = float(metered_max_i_t[i]);
         sum += 1.0 / max(current, 1e-6);
     }
     return temporal_stable_frames / sum;
@@ -445,7 +488,7 @@ float temporal_harmonic_mean() {
 
 void temporal_fill() {
     for (uint i = 0; i < temporal_stable_frames; i++) {
-        L_max_t[i] = L_max;
+        metered_max_i_t[i] = metered_max_i;
     }
 }
 
@@ -461,9 +504,9 @@ float temporal_predict() {
     for (int i = 0; i < n; i++) {
         float x = float(i + 1);
         sum_x += x;
-        sum_y += L_max_t[i];
+        sum_y += metered_max_i_t[i];
         sum_x2 += x * x;
-        sum_xy += x * L_max_t[i];
+        sum_xy += x * metered_max_i_t[i];
     }
 
     float a = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x);
@@ -474,7 +517,7 @@ float temporal_predict() {
 
 bool is_sence_changed(float m, float p) {
     float black = 16.0;
-    if (black > L_max)
+    if (black > metered_max_i)
         return true;
 
     float tolerance = 36.0;
@@ -494,19 +537,19 @@ void hook() {
         return;
     }
 
-    L_max = uint(m + 0.5);
+    metered_max_i = uint(m + 0.5);
 }
 
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!BIND METERING
 //!BIND METERED
-//!WHEN preview_metering
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * preview_metering *
 //!DESC metering (preview)
 
 vec4 hook() {
     float metering = METERING_tex(METERING_pos).r;
-    float lmi = float(L_max / 4095.0);
+    float lmi = float(metered_max_i / 4095.0);
     float delta = 720 * sqrt(pow(metering - lmi, 2.0));
 
     if (delta < 5.0)
@@ -682,27 +725,59 @@ float f(float x, float iw, float ib, float ow, float ob) {
     return clamp(x, ob, ow);
 }
 
+float get_max_i() {
+    if (max_pq_y > 0.0)
+        return max_pq_y;
+
+    if (scene_max_r > 0.0 || scene_max_g > 0.0 || scene_max_b > 0.0) {
+        vec3 scene_max_rgb = vec3(scene_max_r, scene_max_g, scene_max_b);
+        return pq_eotf_inv(RGB_to_XYZ(scene_max_rgb).y);
+    }
+
+    if (enable_metering > 0)
+        return float(metered_max_i / 4095.0);
+
+    if (max_cll > 0.0)
+        return pq_eotf_inv(max_cll);
+
+    if (max_luma > 0.0)
+        return pq_eotf_inv(max_luma);
+
+    return pq_eotf_inv(1000.0);
+}
+
+float get_min_i() {
+    if (min_luma > 0.0)
+        return pq_eotf_inv(min_luma);
+
+    return pq_eotf_inv(0.001);
+}
+
+float get_avg_i() {
+    if (avg_pq_y > 0.0)
+        return avg_pq_y;
+
+    if (scene_avg > 0.0)
+        return pq_eotf_inv(scene_avg);
+
+    if (max_fall > 0.0)
+        return pq_eotf_inv(max_fall);
+
+    return pq_eotf_inv(50.0);
+}
+
 float curve(float x) {
-    float ow = I_to_J(pq_eotf_inv(L_sdr));
-    float ob = I_to_J(pq_eotf_inv(L_sdr / 1000.0));
-    float iw = max(
-        min(
-            I_to_J(pq_eotf_inv(L_hdr)),
-            I_to_J(L_max / 4095.0)
-        ),
-        ow + 1e-3
-    );
-    float ib = min(
-        I_to_J(pq_eotf_inv(L_hdr / 1000000.0)),
-        ob - 1e-3
-    );
+    float ow = I_to_J(pq_eotf_inv(reference_white));
+    float ob = I_to_J(pq_eotf_inv(reference_white / 1000.0));
+    float iw = max(I_to_J(get_max_i()), ow + 1e-3);
+    float ib = min(I_to_J(get_min_i()), ob - 1e-3);
     return f(x, iw, ib, ow, ob);
 }
 
 vec2 chroma_correction(vec2 ab, float i1, float i2) {
     float r1 = i1 / max(i2, 1e-6);
     float r2 = i2 / max(i1, 1e-6);
-    return ab * mix(1.0, min(r1, r2), sigma);
+    return ab * mix(1.0, min(r1, r2), chroma_correction_scaling);
 }
 
 vec3 tone_mapping(vec3 iab) {
@@ -714,9 +789,9 @@ vec3 tone_mapping(vec3 iab) {
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
-    color.rgb = RGB_to_Jab(color.rgb * L_sdr);
+    color.rgb = RGB_to_Jab(color.rgb * reference_white);
     color.rgb = tone_mapping(color.rgb);
-    color.rgb = Jab_to_RGB(color.rgb) / L_sdr;
+    color.rgb = Jab_to_RGB(color.rgb) / reference_white;
 
     return color;
 }
