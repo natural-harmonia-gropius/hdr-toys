@@ -670,6 +670,7 @@ float J_to_I(float J) {
 }
 
 vec3 RGB_to_Jab(vec3 color) {
+    color *= reference_white;
     color = RGB_to_XYZ(color);
     color = XYZ_to_XYZm(color);
     color = XYZ_to_LMS(color);
@@ -686,43 +687,8 @@ vec3 Jab_to_RGB(vec3 color) {
     color = LMS_to_XYZ(color);
     color = XYZm_to_XYZ(color);
     color = XYZ_to_RGB(color);
+    color /= reference_white;
     return color;
-}
-
-float f(float x, float iw, float ib, float ow, float ob) {
-    float midgray   = 0.5 * ow;
-    float shadow    = mix(midgray, ob, 0.66);
-    float highlight = mix(midgray, ow, 0.10);
-
-    float x0 = ib;
-    float y0 = ob;
-    float x1 = shadow;
-    float y1 = shadow;
-    float x2 = highlight;
-    float y2 = highlight;
-    float x3 = iw;
-    float y3 = ow;
-
-    float al = (y2 - y1) / (x2 - x1);
-    float bl = y1 - al * x1;
-
-    float at = al * (x1 - x0) * (x1 - x0) * (y1 - y0) * (y1 - y0) / ((y1 - y0 - al * (x1 - x0)) * (y1 - y0 - al * (x1 - x0)));
-    float bt = al * (x1 - x0) * (x1 - x0) / (y1 - y0 - al * (x1 - x0));
-    float ct = (y1 - y0) * (y1 - y0) / (y1 - y0 - al * (x1 - x0)) + y0 - x0;
-
-    float as = al * (x2 - x3) * (x2 - x3) * (y2 - y3) * (y2 - y3) / ((al * (x2 - x3) - y2 + y3) * (al * (x2 - x3) - y2 + y3));
-    float bs = (al * x2 * (x3 - x2) + x3 * (y2 - y3)) / (al * (x2 - x3) - y2 + y3);
-    float cs = (y3 * (al * (x2 - x3) + y2) - (y2 * y2)) / (al * (x2 - x3) - y2 + y3);
-
-    if (x < x1) {
-        x = -at / (x + bt) + ct;
-    } else if (x < x2) {
-        x = al * x + bl;
-    } else if (x < x3) {
-        x = -as / (x + bs) + cs;
-    }
-
-    return clamp(x, ob, ow);
 }
 
 float get_max_i() {
@@ -766,6 +732,42 @@ float get_avg_i() {
     return pq_eotf_inv(50.0);
 }
 
+float f(float x, float iw, float ib, float ow, float ob) {
+    float midgray   = 0.5 * ow;
+    float shadow    = mix(midgray, ob, 0.66);
+    float highlight = mix(midgray, ow, 0.10);
+
+    float x0 = ib;
+    float y0 = ob;
+    float x1 = shadow;
+    float y1 = shadow;
+    float x2 = highlight;
+    float y2 = highlight;
+    float x3 = iw;
+    float y3 = ow;
+
+    float al = (y2 - y1) / (x2 - x1);
+    float bl = y1 - al * x1;
+
+    float at = al * (x1 - x0) * (x1 - x0) * (y1 - y0) * (y1 - y0) / ((y1 - y0 - al * (x1 - x0)) * (y1 - y0 - al * (x1 - x0)));
+    float bt = al * (x1 - x0) * (x1 - x0) / (y1 - y0 - al * (x1 - x0));
+    float ct = (y1 - y0) * (y1 - y0) / (y1 - y0 - al * (x1 - x0)) + y0 - x0;
+
+    float as = al * (x2 - x3) * (x2 - x3) * (y2 - y3) * (y2 - y3) / ((al * (x2 - x3) - y2 + y3) * (al * (x2 - x3) - y2 + y3));
+    float bs = (al * x2 * (x3 - x2) + x3 * (y2 - y3)) / (al * (x2 - x3) - y2 + y3);
+    float cs = (y3 * (al * (x2 - x3) + y2) - (y2 * y2)) / (al * (x2 - x3) - y2 + y3);
+
+    if (x < x1) {
+        x = -at / (x + bt) + ct;
+    } else if (x < x2) {
+        x = al * x + bl;
+    } else if (x < x3) {
+        x = -as / (x + bs) + cs;
+    }
+
+    return clamp(x, ob, ow);
+}
+
 float curve(float x) {
     float ow = I_to_J(pq_eotf_inv(reference_white));
     float ob = I_to_J(pq_eotf_inv(reference_white / 1000.0));
@@ -789,9 +791,9 @@ vec3 tone_mapping(vec3 iab) {
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
-    color.rgb = RGB_to_Jab(color.rgb * reference_white);
+    color.rgb = RGB_to_Jab(color.rgb);
     color.rgb = tone_mapping(color.rgb);
-    color.rgb = Jab_to_RGB(color.rgb) / reference_white;
+    color.rgb = Jab_to_RGB(color.rgb);
 
     return color;
 }
