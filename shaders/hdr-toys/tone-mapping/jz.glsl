@@ -523,7 +523,7 @@ bool is_sence_changed(float m, float p) {
     float tolerance = 36.0;
     float im = float(m / 4095.0);
     float ip = float(p / 4095.0);
-    float delta = 720 * sqrt(pow(im - ip, 2.0));
+    float delta = 720 * (im - ip);
     return delta > tolerance;
 }
 
@@ -550,7 +550,7 @@ void hook() {
 vec4 hook() {
     float metering = METERING_tex(METERING_pos).r;
     float lmi = float(metered_max_i / 4095.0);
-    float delta = 720 * sqrt(pow(metering - lmi, 2.0));
+    float delta = 720 * (metering - lmi);
 
     if (delta < 5.0)
         return vec4(vec3(1.0, 0.0, 0.0), 1.0);
