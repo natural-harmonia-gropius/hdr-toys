@@ -115,7 +115,7 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 0 > *
+//!WHEN spatial_stable_iterations 0 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -135,7 +135,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 0 > *
+//!WHEN spatial_stable_iterations 0 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -155,7 +155,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 1 > *
+//!WHEN spatial_stable_iterations 1 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -175,7 +175,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 1 > *
+//!WHEN spatial_stable_iterations 1 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -195,7 +195,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 2 > *
+//!WHEN spatial_stable_iterations 2 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -215,7 +215,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 2 > *
+//!WHEN spatial_stable_iterations 2 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -235,7 +235,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 3 > *
+//!WHEN spatial_stable_iterations 3 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -255,7 +255,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 3 > *
+//!WHEN spatial_stable_iterations 3 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -275,7 +275,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 4 > *
+//!WHEN spatial_stable_iterations 4 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -295,7 +295,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 4 > *
+//!WHEN spatial_stable_iterations 4 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -315,7 +315,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 5 > *
+//!WHEN spatial_stable_iterations 5 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -335,7 +335,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 5 > *
+//!WHEN spatial_stable_iterations 5 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -355,7 +355,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 6 > *
+//!WHEN spatial_stable_iterations 6 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -375,7 +375,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 6 > *
+//!WHEN spatial_stable_iterations 6 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -395,7 +395,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 7 > *
+//!WHEN spatial_stable_iterations 7 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -415,7 +415,7 @@ vec4 hook(){
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * spatial_stable_iterations 7 > *
+//!WHEN spatial_stable_iterations 7 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
@@ -433,12 +433,12 @@ vec4 hook(){
 }
 
 //!HOOK OUTPUT
+//!BIND METERING
 //!BIND METERED
 //!SAVE EMPTY
 //!WIDTH 1
 //!HEIGHT 1
 //!COMPUTE 1 1
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = *
 //!DESC metering (data, initial)
 
 void hook() {
@@ -450,7 +450,6 @@ void hook() {
 //!BIND METERED
 //!SAVE EMPTY
 //!COMPUTE 32 32
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = *
 //!DESC metering (data, max)
 
 void hook() {
@@ -461,13 +460,14 @@ void hook() {
 }
 
 //!HOOK OUTPUT
+//!BIND METERING
 //!BIND METERED
 //!BIND METERED_TEMPORAL
 //!SAVE EMPTY
 //!WIDTH 1
 //!HEIGHT 1
 //!COMPUTE 1 1
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * temporal_stable_frames *
+//!WHEN temporal_stable_frames
 //!DESC metering (temporal stabilization)
 
 void temporal_prepend() {
@@ -544,7 +544,7 @@ void hook() {
 //!BIND HOOKED
 //!BIND METERING
 //!BIND METERED
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * preview_metering *
+//!WHEN preview_metering
 //!DESC metering (preview)
 
 vec4 hook() {
