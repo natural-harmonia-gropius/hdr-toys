@@ -735,7 +735,7 @@ float get_avg_i() {
 float f(float x, float iw, float ib, float ow, float ob) {
     float midgray   = 0.5 * ow;
     float shadow    = mix(midgray, ob, 0.66);
-    float highlight = mix(midgray, ow, 0.10);
+    float highlight = mix(midgray, ow, 0.04);
 
     float x0 = ib;
     float y0 = ob;
@@ -751,18 +751,17 @@ float f(float x, float iw, float ib, float ow, float ob) {
 
     float at = al * (x1 - x0) * (x1 - x0) * (y1 - y0) * (y1 - y0) / ((y1 - y0 - al * (x1 - x0)) * (y1 - y0 - al * (x1 - x0)));
     float bt = al * (x1 - x0) * (x1 - x0) / (y1 - y0 - al * (x1 - x0));
-    float ct = (y1 - y0) * (y1 - y0) / (y1 - y0 - al * (x1 - x0)) + y0 - x0;
+    float ct = (y1 - y0) * (y1 - y0) / (y1 - y0 - al * (x1 - x0));
 
-    float as = al * (x2 - x3) * (x2 - x3) * (y2 - y3) * (y2 - y3) / ((al * (x2 - x3) - y2 + y3) * (al * (x2 - x3) - y2 + y3));
-    float bs = (al * x2 * (x3 - x2) + x3 * (y2 - y3)) / (al * (x2 - x3) - y2 + y3);
-    float cs = (y3 * (al * (x2 - x3) + y2) - (y2 * y2)) / (al * (x2 - x3) - y2 + y3);
+    float bs = al * (x3 - x2) / (y3 - y2);
+    float as = log(y3 - y2) - bs * log(x3 - x2);
 
     if (x < x1) {
-        x = -at / (x + bt) + ct;
+        x = -at / (x - x0 + bt) + ct + y0;
     } else if (x < x2) {
         x = al * x + bl;
-    } else if (x < x3) {
-        x = -as / (x + bs) + cs;
+    } else {
+        x = -exp(as + bs * log(max(-(x - x3), 1e-6))) + y3;
     }
 
     return clamp(x, ob, ow);
