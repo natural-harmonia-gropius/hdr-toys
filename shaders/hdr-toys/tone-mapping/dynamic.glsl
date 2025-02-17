@@ -4,10 +4,10 @@
 //!MAXIMUM 10000
 1000.0
 
-//!PARAM L_sdr
+//!PARAM reference_white
 //!TYPE float
-//!MINIMUM 0
-//!MAXIMUM 1000
+//!MINIMUM 0.0
+//!MAXIMUM 1000.0
 203.0
 
 //!PARAM CONTRAST_sdr
@@ -82,7 +82,7 @@ const vec3 RGB_to_Y = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646
 
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
-    color.rgb *= L_sdr;
+    color.rgb *= reference_white;
     color.w = dot(color.rgb, RGB_to_Y);
     return vec4(
         Y_to_ST2084(color.r),
@@ -469,7 +469,7 @@ float Y_to_ST2084(float C) {
 
 void hook() {
     vec4 color = texelFetch(METERING_raw, ivec2(gl_GlobalInvocationID.xy), 0);
-    float intensity_min = Y_to_ST2084(L_sdr);
+    float intensity_min = Y_to_ST2084(reference_white);
     float intensity = max(max(max(max(color.r, color.g), color.b), color.w), intensity_min);
     uint intensity_int = uint(intensity * 4095.0 + 0.5);
 
@@ -494,8 +494,8 @@ bool sence_changed() {
 
     // hard transition, stops
     float threshold = 1.5;
-    float prev_ev = log2(L_max_t[0] / L_sdr);
-    float curr_ev = log2(L_max / L_sdr);
+    float prev_ev = log2(L_max_t[0] / reference_white);
+    float curr_ev = log2(L_max / reference_white);
     float diff_ev = abs(prev_ev - curr_ev);
     if (diff_ev >= threshold) {
         return true;
@@ -506,7 +506,7 @@ bool sence_changed() {
     // for (uint i = 0; i < temporal_stable_frames; i++) {
     //     sum += L_max_t[i];
     // }
-    // if (L_sdr * (temporal_stable_frames - 1) > sum) {
+    // if (reference_white * (temporal_stable_frames - 1) > sum) {
     //     return true;
     // }
 
@@ -633,7 +633,7 @@ const float d = -0.56;
 const float d0 = 1.6295499532821566e-11;
 
 vec3 RGB_to_Jzazbz(vec3 color) {
-    color *= L_sdr;
+    color *= reference_white;
 
     color = RGB_to_XYZ(color);
 
@@ -669,7 +669,7 @@ vec3 Jzazbz_to_RGB(vec3 color) {
 
     color = XYZ_to_RGB(vec3(Xa, Ya, color.z));
 
-    color /= L_sdr;
+    color /= reference_white;
 
     return color;
 }
@@ -896,8 +896,8 @@ void calc_direct_params_from_user() {
 void calc_user_params_from_metered() {
     float L_max_i = float(L_max) / 4095.0;
     float L_max_y = ST2084_to_Y(L_max_i);
-    float L_max_ev = log2(L_max_y / L_sdr);
-    float L_hdr_ev = log2(L_hdr / L_sdr);
+    float L_max_ev = log2(L_max_y / reference_white);
+    float L_hdr_ev = log2(L_hdr / reference_white);
 
     shoulderLength = L_max_ev / L_hdr_ev;
     shoulderStrength = L_max_ev;

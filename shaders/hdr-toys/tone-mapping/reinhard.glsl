@@ -7,10 +7,10 @@
 //!MAXIMUM 10000
 1000.0
 
-//!PARAM L_sdr
+//!PARAM reference_white
 //!TYPE float
-//!MINIMUM 0
-//!MAXIMUM 1000
+//!MINIMUM 0.0
+//!MAXIMUM 1000.0
 203.0
 
 //!PARAM sigma
@@ -104,7 +104,7 @@ vec3 ICtCp_to_LMS(vec3 ICtCp) {
 }
 
 vec3 RGB_to_ICtCp(vec3 color) {
-    color *= L_sdr;
+    color *= reference_white;
     color = RGB_to_XYZ(color);
     color = XYZ_to_LMS(color);
     color = LMS_to_ICtCp(color);
@@ -115,7 +115,7 @@ vec3 ICtCp_to_RGB(vec3 color) {
     color = ICtCp_to_LMS(color);
     color = LMS_to_XYZ(color);
     color = XYZ_to_RGB(color);
-    color /= L_sdr;
+    color /= reference_white;
     return color;
 }
 
@@ -126,7 +126,7 @@ float curve(float x, float w) {
 }
 
 vec3 tone_mapping_ictcp(vec3 ICtCp) {
-    float I2  = Y_to_ST2084(curve(ST2084_to_Y(ICtCp.x) / L_sdr, L_hdr / L_sdr) * L_sdr);
+    float I2  = Y_to_ST2084(curve(ST2084_to_Y(ICtCp.x) / reference_white, L_hdr / reference_white) * reference_white);
     ICtCp.yz *= mix(1.0, min(ICtCp.x / I2, I2 / ICtCp.x), sigma);
     ICtCp.x   = I2;
     return ICtCp;

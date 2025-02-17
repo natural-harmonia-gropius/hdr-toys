@@ -4,7 +4,7 @@ var o = {
 };
 
 var current = {
-  L_sdr: 203,
+  reference_white: 203,
   L_hdr: 1000,
   temporal_stable_frames: 8,
 };
@@ -33,18 +33,18 @@ var metadata = {
   },
 };
 
-function set_L_sdr(x) {
+function set_reference_white(x) {
   if (x < 5) x = 10000;
 
   x = Math.min(Math.max(x, 10), 1000);
 
-  if (x === current.L_sdr) return;
-  mp.command("no-osd set glsl-shader-opts L_sdr=" + x);
-  current.L_sdr = x;
+  if (x === current.reference_white) return;
+  mp.command("no-osd set glsl-shader-opts reference_white=" + x);
+  current.reference_white = x;
 }
 
 function set_L_hdr(x) {
-  x = Math.min(Math.max(x, current.L_sdr + 1), 10000);
+  x = Math.min(Math.max(x, current.reference_white + 1), 10000);
 
   if (x === current.L_hdr) return;
   mp.command("no-osd set glsl-shader-opts L_hdr=" + x);

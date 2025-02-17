@@ -7,10 +7,10 @@
 //!MAXIMUM 10000
 1000.0
 
-//!PARAM L_sdr
+//!PARAM reference_white
 //!TYPE float
-//!MINIMUM 0
-//!MAXIMUM 1000
+//!MINIMUM 0.0
+//!MAXIMUM 1000.0
 203.0
 
 //!HOOK OUTPUT
@@ -53,7 +53,7 @@ float f(float Y) {
     Y = pow(Y, 1.0 / 2.4);
 
     float pHDR = 1.0 + 32.0 * pow(L_hdr / 10000.0, 1.0 / 2.4);
-    float pSDR = 1.0 + 32.0 * pow(L_sdr / 10000.0, 1.0 / 2.4);
+    float pSDR = 1.0 + 32.0 * pow(reference_white / 10000.0, 1.0 / 2.4);
 
     float Yp = log(1.0 + (pHDR - 1.0) * Y) / log(pHDR);
 
@@ -70,7 +70,7 @@ float f(float Y) {
 }
 
 vec3 tone_mapping(vec3 YCbCr) {
-    float W = L_hdr / L_sdr;
+    float W = L_hdr / reference_white;
     YCbCr /= W;
 
     float Y  = YCbCr.r;

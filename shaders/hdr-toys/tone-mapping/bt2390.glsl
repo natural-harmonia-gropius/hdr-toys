@@ -8,10 +8,10 @@
 //!MAXIMUM 10000
 1000.0
 
-//!PARAM L_sdr
+//!PARAM reference_white
 //!TYPE float
-//!MINIMUM 0
-//!MAXIMUM 1000
+//!MINIMUM 0.0
+//!MAXIMUM 1000.0
 203.0
 
 //!PARAM CONTRAST_sdr
@@ -111,7 +111,7 @@ vec3 ICtCp_to_LMS(vec3 ICtCp) {
 }
 
 vec3 RGB_to_ICtCp(vec3 color) {
-    color *= L_sdr;
+    color *= reference_white;
     color = RGB_to_XYZ(color);
     color = XYZ_to_LMS(color);
     color = LMS_to_ICtCp(color);
@@ -122,15 +122,15 @@ vec3 ICtCp_to_RGB(vec3 color) {
     color = ICtCp_to_LMS(color);
     color = LMS_to_XYZ(color);
     color = XYZ_to_RGB(color);
-    color /= L_sdr;
+    color /= reference_white;
     return color;
 }
 
 float curve(float x) {
     float iw = Y_to_ST2084(L_hdr);
     float ib = Y_to_ST2084(0.0);
-    float ow = Y_to_ST2084(L_sdr);
-    float ob = Y_to_ST2084(L_sdr / CONTRAST_sdr);
+    float ow = Y_to_ST2084(reference_white);
+    float ob = Y_to_ST2084(reference_white / CONTRAST_sdr);
 
     float maxLum = (ow - ib) / (iw - ib);
     float minLum = (ob - ib) / (iw - ib);

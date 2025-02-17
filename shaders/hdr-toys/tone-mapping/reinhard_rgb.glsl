@@ -6,10 +6,10 @@
 //!MAXIMUM 10000
 1000.0
 
-//!PARAM L_sdr
+//!PARAM reference_white
 //!TYPE float
-//!MINIMUM 0
-//!MAXIMUM 1000
+//!MINIMUM 0.0
+//!MAXIMUM 1000.0
 203.0
 
 //!HOOK OUTPUT
@@ -46,7 +46,7 @@ vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
     color.rgb *= BT2020_to_AWG4;
-    color.rgb  = tone_mapping(color.rgb, vec3(L_hdr / L_sdr) * BT2020_to_AWG4);
+    color.rgb  = tone_mapping(color.rgb, vec3(L_hdr / reference_white) * BT2020_to_AWG4);
     color.rgb *= AWG4_to_BT2020;
 
     return color;

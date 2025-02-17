@@ -6,10 +6,10 @@
 // extended gamma model for Lw is outside 400-2000 cd/m²:
 // 1.2 * pow(1.111, log2(Lw / 1000.0)) * pow(0.98, log2(Lamb / 5.0))
 
-//!PARAM L_sdr
+//!PARAM reference_white
 //!TYPE float
-//!MINIMUM 0
-//!MAXIMUM 1000
+//!MINIMUM 0.0
+//!MAXIMUM 1000.0
 203.0
 
 //!HOOK OUTPUT
@@ -54,7 +54,7 @@ vec3 hlg_eotf_inv(vec3 color) {
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
-    color.rgb = hlg_eotf_inv(color.rgb * L_sdr);
+    color.rgb = hlg_eotf_inv(color.rgb * reference_white);
 
     return color;
 }

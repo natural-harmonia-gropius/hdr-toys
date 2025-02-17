@@ -2,10 +2,10 @@
 // https://www.bbc.co.uk/rd/projects/high-dynamic-range
 // https://www.itu.int/rec/R-REC-BT.2100
 
-//!PARAM L_sdr
+//!PARAM reference_white
 //!TYPE float
-//!MINIMUM 0
-//!MAXIMUM 1000
+//!MINIMUM 0.0
+//!MAXIMUM 1000.0
 203.0
 
 //!HOOK OUTPUT
@@ -50,7 +50,7 @@ vec3 hlg_eotf(vec3 color) {
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
-    color.rgb = hlg_eotf(color.rgb) / L_sdr;
+    color.rgb = hlg_eotf(color.rgb) / reference_white;
 
     return color;
 }

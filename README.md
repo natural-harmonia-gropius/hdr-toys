@@ -41,11 +41,11 @@ For more detailed information, please visit the [wiki](https://github.com/natura
   To adjust the reference white, add the following lines to `input.conf`. Press `n` when you feel so, and press `m` to restore to the default.
 
   ```ini
-  n   set glsl-shader-opts L_sdr=100
-  m   set glsl-shader-opts L_sdr=203
+  n   set glsl-shader-opts reference_white=100
+  m   set glsl-shader-opts reference_white=203
   ```
 
-  Note that, due to a limitation in mpv, only parameters changed after the shader is applied will take effect. Therefore, setting `glsl-shader-opts=L_sdr=100` in `mpv.conf` will not work.
+  Note that, due to a limitation in mpv, only parameters changed after the shader is applied will take effect. Therefore, setting `glsl-shader-opts=reference_white=100` in `mpv.conf` will not work.
 
 - **I'm not using BT.709 display.**
 

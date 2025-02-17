@@ -4,10 +4,10 @@
 // https://www.itu.int/pub/R-REP-BT.2390
 // pq ootf: 100.0 * bt1886_eotf(bt709_oetf(59.5208 * x), 2.4, 1.0, 0.0)
 
-//!PARAM L_sdr
+//!PARAM reference_white
 //!TYPE float
-//!MINIMUM 0
-//!MAXIMUM 1000
+//!MINIMUM 0.0
+//!MAXIMUM 1000.0
 203.0
 
 //!HOOK OUTPUT
@@ -37,7 +37,7 @@ vec3 pq_eotf_inv(vec3 color) {
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
-    color.rgb = pq_eotf_inv(color.rgb * L_sdr);
+    color.rgb = pq_eotf_inv(color.rgb * reference_white);
 
     return color;
 }

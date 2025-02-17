@@ -1,10 +1,10 @@
 // https://ieeexplore.ieee.org/document/7291452
 // https://www.itu.int/rec/R-REC-BT.2100
 
-//!PARAM L_sdr
+//!PARAM reference_white
 //!TYPE float
-//!MINIMUM 0
-//!MAXIMUM 1000
+//!MINIMUM 0.0
+//!MAXIMUM 1000.0
 203.0
 
 //!HOOK OUTPUT
@@ -34,7 +34,7 @@ vec3 pq_eotf(vec3 color) {
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
-    color.rgb = pq_eotf(color.rgb) / L_sdr;
+    color.rgb = pq_eotf(color.rgb) / reference_white;
 
     return color;
 }
