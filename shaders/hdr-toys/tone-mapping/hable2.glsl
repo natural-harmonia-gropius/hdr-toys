@@ -1,5 +1,4 @@
 // Filmic Tonemapping with Piecewise Power Curves
-// by John Hable
 // http://filmicworlds.com/blog/filmic-tonemapping-with-piecewise-power-curves/
 
 //!PARAM L_hdr

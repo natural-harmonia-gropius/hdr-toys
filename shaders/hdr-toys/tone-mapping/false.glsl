@@ -1,4 +1,12 @@
-// False color visualization
+// Visualizes the luminance of the input image using false color.
+
+// Purple:  darker than SDR
+// Gray:    SDR range
+// Blue:    1000 nits
+// Green:   2000 nits
+// Yellow:  4000 nits
+// Red:     10000 nits
+// Pink:    >10000 nits
 
 //!PARAM reference_white
 //!TYPE float

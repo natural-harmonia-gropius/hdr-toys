@@ -1,5 +1,4 @@
 // Photographic tone reproduction for digital images
-// by Reinhard et al.
 // https://doi.org/10.1145/566654.566575
 
 //!PARAM L_hdr

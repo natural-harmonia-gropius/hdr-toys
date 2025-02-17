@@ -1,4 +1,4 @@
-// https://github.com/ampas/aces-dev/blob/dev/transforms/ctl/lib/ACESlib.Utilities_Color.ctl
+// https://github.com/ampas/aces-core/blob/dev/lib/Lib.Academy.DisplayEncoding.ctl
 // moncurve with gamma of 2.4 and offset of 0.055 matches the EOTF found in IEC 61966-2-1:1999 (sRGB)
 
 //!HOOK OUTPUT

@@ -1,5 +1,5 @@
 // The Academy Color Encoding System (ACES)
-// https://github.com/ampas/aces-dev
+// https://github.com/ampas/aces-core/tree/v1.3.1
 
 //             |-------|           |-------|          |-------|
 //             |       |           |       |          |       |

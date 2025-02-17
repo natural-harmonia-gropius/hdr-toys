@@ -1,5 +1,6 @@
 // ITU-R BT.2390 EETF
 // https://www.itu.int/pub/R-REP-BT.2390
+// https://www.itu.int/pub/R-REP-BT.2408
 
 //!PARAM L_hdr
 //!TYPE float

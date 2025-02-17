@@ -1,3 +1,4 @@
+// Tone Mapping HDR Luminance to an SDR-compatible Range
 // https://source.android.com/docs/core/display/tone-mapping
 
 // class ToneMapper13 : public ToneMapper

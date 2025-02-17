@@ -1,4 +1,4 @@
-// False color visualization
+// Visualizes the out of gamut colors using false color.
 
 //!HOOK OUTPUT
 //!BIND HOOKED
