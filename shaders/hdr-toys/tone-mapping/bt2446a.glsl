@@ -1,11 +1,13 @@
 // ITU-R BT.2446 Conversion Method A
 // https://www.itu.int/pub/R-REP-BT.2446
 
-//!PARAM L_hdr
+//!PARAM max_luma
 //!TYPE float
-//!MINIMUM 0
-//!MAXIMUM 10000
-1000.0
+0.0
+
+//!PARAM max_cll
+//!TYPE float
+0.0
 
 //!PARAM reference_white
 //!TYPE float
@@ -17,11 +19,11 @@
 //!BIND HOOKED
 //!DESC tone mapping (bt.2446a)
 
-const vec3 RGB_to_Y = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
+const vec3 y_coef = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
 
-const float a = RGB_to_Y.x;
-const float b = RGB_to_Y.y;
-const float c = RGB_to_Y.z;
+const float a = y_coef.x;
+const float b = y_coef.y;
+const float c = y_coef.z;
 const float d = 2.0 * (1.0 - c);
 const float e = 2.0 * (1.0 - a);
 
@@ -49,10 +51,20 @@ vec3 YCbCr_to_RGB(vec3 YCbCr) {
     return vec3(R, G, B);
 }
 
+float get_max_l() {
+    if (max_cll > 0.0)
+        return max_cll;
+
+    if (max_luma > 0.0)
+        return max_luma;
+
+    return 1000.0;
+}
+
 float f(float Y) {
     Y = pow(Y, 1.0 / 2.4);
 
-    float pHDR = 1.0 + 32.0 * pow(L_hdr / 10000.0, 1.0 / 2.4);
+    float pHDR = 1.0 + 32.0 * pow(get_max_l() / 10000.0, 1.0 / 2.4);
     float pSDR = 1.0 + 32.0 * pow(reference_white / 10000.0, 1.0 / 2.4);
 
     float Yp = log(1.0 + (pHDR - 1.0) * Y) / log(pHDR);
@@ -69,15 +81,18 @@ float f(float Y) {
     return Y;
 }
 
+float curve(float Y) {
+    return f(Y);
+}
+
 vec3 tone_mapping(vec3 YCbCr) {
-    float W = L_hdr / reference_white;
-    YCbCr /= W;
+    YCbCr /= get_max_l() / reference_white;
 
     float Y  = YCbCr.r;
     float Cb = YCbCr.g;
     float Cr = YCbCr.b;
 
-    float Ysdr = f(Y);
+    float Ysdr = curve(Y);
 
     float Yr = Ysdr / max(1.1 * Y, 1e-6);
     Cb *= Yr;
