@@ -24,16 +24,6 @@ For more detailed information, please visit the [wiki](https://github.com/natura
 
   If you've confirmed these settings and the problem persists, please submit an issue.
 
-- **UI/OSD looks washed out.**
-
-  To ensure the video input meets the standards, I use a little trick by setting `target-prim` and `target-trc` to match the input values. As a side effect, the OSD inevitably appears washed out.
-
-- **What does hdr-toys.js do?**
-
-  HDR videos generally include metadata with luminance information, but shaders cannot access this data directly. `hdr-toys.js` provides a way to indirectly pass the necessary information using the [glsl-shader-opts](https://mpv.io/manual/master/#options-glsl-shader-opts).
-
-  It also passes the number of frames for 1/3 second to reduce flickering, helping to smooth out rapid brightness changes.
-
 - **I feel the video always looks too dark.**
 
   This issue arises from the inability to determine the reference white of the video, which is unfortunately not included in the metadata.
@@ -47,10 +37,20 @@ For more detailed information, please visit the [wiki](https://github.com/natura
 
   Note that, due to a limitation in mpv, only parameters changed after the shader is applied will take effect. Therefore, setting `glsl-shader-opts=reference_white=100` in `mpv.conf` will not work.
 
+- **UI/OSD looks washed out.**
+
+  To ensure the video input meets the standards, I use a little trick by setting `target-prim` and `target-trc` to match the input values. As a side effect, the OSD inevitably appears washed out.
+
 - **I'm not using BT.709 display.**
 
-  Replace all `gamut-mapping/*` lines with `gamut-mapping/clip.glsl`. Then modify the `#define to *` in `clip.glsl` to match your display.
+  Replace all `gamut-mapping/*` lines in `hdr-toys.conf` with `gamut-mapping/clip.glsl`. Then modify the `#define to *` in `clip.glsl` to match your display.
+
+- **What does hdr-toys.js do?**
+
+  this provides a way to indirectly pass the necessary information using the [glsl-shader-opts](https://mpv.io/manual/master/#options-glsl-shader-opts).
+
+  - the number of frames for 1/3 second, for reduce flickering.
 
 - **I don't use mpv, can I use these shaders?**
 
-  These shaders use [mpv .hook syntax](https://libplacebo.org/custom-shaders/), which requires `libplacebo` for execution. ffmpeg and VLC should be able to use. In theory, porting to other shader languages is also very feasible.
+  These shaders use [mpv .hook syntax](https://libplacebo.org/custom-shaders/), which requires `libplacebo` for execution. ffmpeg and VLC should be able to use. In theory, porting to other shader languages is very feasible.
