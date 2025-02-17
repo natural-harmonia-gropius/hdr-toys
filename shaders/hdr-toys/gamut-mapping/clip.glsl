@@ -496,7 +496,7 @@ vec3 RGB_to_RGB(vec3 c, Chromaticity c1, Chromaticity c2) {
 }
 
 vec4 hook() {
-    vec4 color = HOOKED_texOff(0);
+    vec4 color = HOOKED_tex(HOOKED_pos);
 
     color.rgb = RGB_to_RGB(color.rgb, from, to);
 

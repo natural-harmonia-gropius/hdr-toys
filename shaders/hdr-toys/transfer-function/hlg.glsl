@@ -52,7 +52,7 @@ vec3 hlg_eotf_inv(vec3 color) {
 }
 
 vec4 hook() {
-    vec4 color = HOOKED_texOff(0);
+    vec4 color = HOOKED_tex(HOOKED_pos);
 
     color.rgb = hlg_eotf_inv(color.rgb * L_sdr);
 

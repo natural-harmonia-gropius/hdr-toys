@@ -78,7 +78,7 @@ mat3 M = mat3(
 );
 
 vec4 hook() {
-    vec4 color = HOOKED_texOff(0);
+    vec4 color = HOOKED_tex(HOOKED_pos);
 
     color.rgb = gamut_compress(color.rgb * M);
 

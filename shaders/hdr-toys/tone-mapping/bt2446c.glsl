@@ -38,7 +38,7 @@ vec3 crosstalk(vec3 x, float a) {
 }
 
 vec4 hook() {
-    vec4 color = HOOKED_texOff(0);
+    vec4 color = HOOKED_tex(HOOKED_pos);
 
     color.rgb = crosstalk(color.rgb, alpha);
 
@@ -172,7 +172,7 @@ float chroma_correction(float L, float Lref, float Lmax, float sigma) {
 }
 
 vec4 hook() {
-    vec4 color = HOOKED_texOff(0);
+    vec4 color = HOOKED_tex(HOOKED_pos);
 
     const float Lref = RGB_to_Lab(vec3(1.0)).x;
     const float Lmax = RGB_to_Lab(vec3(1000.0 / reference_white)).x;
@@ -253,7 +253,7 @@ float curve(float x) {
 }
 
 vec4 hook() {
-    vec4 color = HOOKED_texOff(0);
+    vec4 color = HOOKED_tex(HOOKED_pos);
 
     color.rgb = RGB_to_XYZ(color.rgb);
     color.rgb = XYZ_to_xyY(color.rgb);
@@ -284,7 +284,7 @@ vec3 crosstalk_inv(vec3 x, float a) {
 }
 
 vec4 hook() {
-    vec4 color = HOOKED_texOff(0);
+    vec4 color = HOOKED_tex(HOOKED_pos);
 
     color.rgb = crosstalk_inv(color.rgb, alpha);
 

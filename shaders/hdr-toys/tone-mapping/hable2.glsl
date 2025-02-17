@@ -325,7 +325,7 @@ vec3 tone_mapping_ictcp(vec3 ICtCp) {
 }
 
 vec4 hook() {
-    vec4 color = HOOKED_texOff(0);
+    vec4 color = HOOKED_tex(HOOKED_pos);
 
     calc_direct_params_from_user();
     color.rgb = RGB_to_ICtCp(color.rgb);

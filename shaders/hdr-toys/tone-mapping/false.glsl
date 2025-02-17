@@ -125,7 +125,7 @@ float l(float x, float a, float b) {
 }
 
 vec4 hook() {
-    vec4 color = HOOKED_texOff(0);
+    vec4 color = HOOKED_tex(HOOKED_pos);
 
     float y = RGB_to_XYZ(color.rgb).y * reference_white;
 

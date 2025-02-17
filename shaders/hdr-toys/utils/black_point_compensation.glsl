@@ -32,7 +32,7 @@ vec3 black_point_compensation(vec3 XYZ, float s, float d) {
 }
 
 vec4 hook() {
-    vec4 color = HOOKED_texOff(0);
+    vec4 color = HOOKED_tex(HOOKED_pos);
 
     color.rgb = RGB_to_XYZ(color.rgb);
     color.rgb = black_point_compensation(color.rgb, 0.0, 1.0 / CONTRAST_sdr);

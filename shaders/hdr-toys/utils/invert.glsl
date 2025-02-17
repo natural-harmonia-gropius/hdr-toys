@@ -13,7 +13,7 @@ vec3 invert(vec3 x, float w) {
 }
 
 vec4 hook() {
-    vec4 color = HOOKED_texOff(0);
+    vec4 color = HOOKED_tex(HOOKED_pos);
 
     color.rgb = invert(color.rgb, 1.0);
 

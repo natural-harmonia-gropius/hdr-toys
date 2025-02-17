@@ -88,7 +88,7 @@ vec3 Lab_to_RGB(vec3 color) {
 }
 
 vec4 hook() {
-    vec4 color = HOOKED_texOff(0);
+    vec4 color = HOOKED_tex(HOOKED_pos);
 
     vec3 color_dst = color.rgb * M;
     vec3 color_dst_cliped = clamp(color_dst, 0.0, 1.0);

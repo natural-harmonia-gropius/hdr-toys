@@ -43,7 +43,7 @@ vec3 tone_mapping(vec3 color, vec3 w) {
 }
 
 vec4 hook() {
-    vec4 color = HOOKED_texOff(0);
+    vec4 color = HOOKED_tex(HOOKED_pos);
 
     color.rgb *= BT2020_to_AWG4;
     color.rgb  = tone_mapping(color.rgb, vec3(L_hdr / L_sdr) * BT2020_to_AWG4);

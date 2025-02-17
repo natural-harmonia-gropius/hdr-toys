@@ -22,7 +22,7 @@ vec3 bt709_oetf_inv(vec3 color) {
 }
 
 vec4 hook() {
-    vec4 color = HOOKED_texOff(0);
+    vec4 color = HOOKED_tex(HOOKED_pos);
 
     color.rgb = bt709_oetf_inv(color.rgb);
 

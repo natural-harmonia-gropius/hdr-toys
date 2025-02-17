@@ -36,7 +36,7 @@
 const vec3 RGB_to_Y = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
 
 vec4 hook() {
-    vec4 color = HOOKED_texOff(0);
+    vec4 color = HOOKED_tex(HOOKED_pos);
     float y = dot(color.rgb, RGB_to_Y);
     return vec4(y, 0.0, 0.0, 0.0);
 }
@@ -282,7 +282,7 @@ vec3 detail_managenment(vec3 p) {
 }
 
 vec4 hook() {
-    vec4 color = HOOKED_texOff(0);
+    vec4 color = HOOKED_tex(HOOKED_pos);
 
     color.rgb = RGB_to_ICtCp(color.rgb);
     color.rgb = tone_mapping_ictcp(color.rgb);

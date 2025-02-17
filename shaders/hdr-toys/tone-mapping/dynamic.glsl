@@ -81,7 +81,7 @@ float Y_to_ST2084(float C) {
 const vec3 RGB_to_Y = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
 
 vec4 hook() {
-    vec4 color = HOOKED_texOff(0);
+    vec4 color = HOOKED_tex(HOOKED_pos);
     color.rgb *= L_sdr;
     color.w = dot(color.rgb, RGB_to_Y);
     return vec4(
@@ -907,7 +907,7 @@ void calc_user_params_from_metered() {
 }
 
 vec4 hook() {
-    vec4 color = HOOKED_texOff(0);
+    vec4 color = HOOKED_tex(HOOKED_pos);
 
     calc_user_params_from_metered();
     calc_direct_params_from_user();

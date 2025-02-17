@@ -321,7 +321,7 @@ vec3 softClipColor(vec3 color) {
 
 
 vec4 hook() {
-    vec4 color = HOOKED_texOff(0);
+    vec4 color = HOOKED_tex(HOOKED_pos);
 
     vec3 oklch = Lab_to_LCH(RGB_to_Lab(color.rgb));
     float L = oklch.x;

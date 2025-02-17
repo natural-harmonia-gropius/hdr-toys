@@ -20,7 +20,7 @@ vec3 exposure(vec3 x, float ev) {
 }
 
 vec4 hook() {
-    vec4 color = HOOKED_texOff(0);
+    vec4 color = HOOKED_tex(HOOKED_pos);
 
     color.rgb = exposure(color.rgb, exposure_value);
 
