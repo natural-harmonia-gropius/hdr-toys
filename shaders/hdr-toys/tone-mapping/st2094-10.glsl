@@ -13,12 +13,6 @@
 //!MAXIMUM 1000.0
 203.0
 
-//!PARAM CONTRAST_sdr
-//!TYPE float
-//!MINIMUM 0
-//!MAXIMUM 1000000
-1000.0
-
 //!PARAM sigma
 //!TYPE float
 //!MINIMUM 0.0
@@ -231,7 +225,7 @@ float curve(float x) {
     float avg = AVG_tex(vec2(0.0)).x;
 
     float x1 = 0.0;
-    float y1 = 1.0 / CONTRAST_sdr;
+    float y1 = 0.001;
 
     float x3 = L_hdr / reference_white;
     float y3 = 1.0;

@@ -12,12 +12,6 @@
 //!MAXIMUM 1000.0
 203.0
 
-//!PARAM CONTRAST_sdr
-//!TYPE float
-//!MINIMUM 0
-//!MAXIMUM 1000000
-1000.0
-
 //!PARAM sigma
 //!TYPE float
 //!MINIMUM 0.0
@@ -128,7 +122,7 @@ float curve(float x) {
     float iw = Y_to_ST2084(L_hdr);
     float ib = 0.0;
     float ow = Y_to_ST2084(reference_white);
-    float ob = Y_to_ST2084(reference_white / CONTRAST_sdr);
+    float ob = Y_to_ST2084(reference_white / 1000.0);
     float w = (iw - ib) / (ow - ob);
     return x / w + ob;
 }

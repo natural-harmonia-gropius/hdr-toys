@@ -1,11 +1,5 @@
 // https://www.color.org/WP40-Black_Point_Compensation_2010-07-27.pdf
 
-//!PARAM CONTRAST_sdr
-//!TYPE float
-//!MINIMUM 0
-//!MAXIMUM 1000000
-1000.0
-
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!DESC black point compensation
@@ -35,7 +29,7 @@ vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
     color.rgb = RGB_to_XYZ(color.rgb);
-    color.rgb = black_point_compensation(color.rgb, 0.0, 1.0 / CONTRAST_sdr);
+    color.rgb = black_point_compensation(color.rgb, 0.0, 0.001);
     color.rgb = XYZ_to_RGB(color.rgb);
 
     return color;
