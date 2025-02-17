@@ -1,24 +1,209 @@
 // ITU-R BT.2446 Conversion Method C
 // https://www.itu.int/pub/R-REP-BT.2446
 
+//!PARAM reference_white
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 1000.0
+203.0
+
+//!PARAM alpha
+//!TYPE float
+//!MINIMUM 0.00
+//!MAXIMUM 0.33
+0.04
+
+//!PARAM sigma
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 1.0
+0.33
+
+//!HOOK OUTPUT
+//!BIND HOOKED
+//!WHEN alpha
+//!DESC tone mapping (bt.2446c, crosstalk)
+
+// The crosstalk matrix is applied such that saturations of linear signals are reduced to achromatic to
+// avoid hue changes caused by clipping of compressed highlight parts.
+
+vec3 crosstalk(vec3 x, float a) {
+    float b = 1.0 - 2.0 * a;
+    mat3 transform = mat3(
+        b, a, a,
+        a, b, a,
+        a, a, b
+    );
+    return x * transform;
+}
+
+vec4 hook() {
+    vec4 color = HOOKED_texOff(0);
+
+    color.rgb = crosstalk(color.rgb, alpha);
+
+    return color;
+}
+
+//!HOOK OUTPUT
+//!BIND HOOKED
+//!WHEN sigma
+//!DESC tone mapping (bt.2446c, chroma correction)
+
+// Optional processing of chroma correction above HDR Reference White
+
+// In SDR production, highlight parts are sometimes intentionally expressed as white. The processing
+// described in this section is optionally used to shift chroma above HDR Reference White to achromatic
+// when the converted SDR content requires a degree of consistency for SDR production content. This
+// processing is applied as needed before the tone-mapping processing.
+
+vec3 RGB_to_XYZ(vec3 RGB) {
+    return RGB * mat3(
+        0.6369580483012914, 0.14461690358620832,  0.1688809751641721,
+        0.2627002120112671, 0.6779980715188708,   0.05930171646986196,
+        0.000000000000000,  0.028072693049087428, 1.060985057710791
+    );
+}
+
+vec3 XYZ_to_RGB(vec3 XYZ) {
+    return XYZ * mat3(
+         1.716651187971268,  -0.355670783776392, -0.253366281373660,
+        -0.666684351832489,   1.616481236634939,  0.0157685458139111,
+         0.017639857445311,  -0.042770613257809,  0.942103121235474
+    );
+}
+
+float cbrt(float x) {
+    return sign(x) * pow(abs(x), 1.0 / 3.0);
+}
+
+const float delta = 6.0 / 29.0;
+const float deltac = delta * 2.0 / 3.0;
+
+float f(float x) {
+    return x > pow(delta, 3.0) ?
+        cbrt(x) :
+        deltac + x / (3.0 * pow(delta, 2.0));
+}
+
+vec3 f(vec3 x) {
+    return vec3(f(x.x), f(x.y), f(x.z));
+}
+
+float f_inv(float x) {
+    return x > delta ?
+        pow(x, 3.0) :
+        (x - deltac) * (3.0 * pow(delta, 2.0));
+}
+
+vec3 f_inv(vec3 x) {
+    return vec3(f_inv(x.x), f_inv(x.y), f_inv(x.z));
+}
+
+const vec3 XYZn = vec3(0.95047, 1.00000, 1.08883);
+
+vec3 XYZ_to_Lab(vec3 XYZ) {
+    XYZ = f(XYZ / XYZn);
+
+    float X = XYZ.x;
+    float Y = XYZ.y;
+    float Z = XYZ.z;
+
+    float L = 116.0 * Y - 16.0;
+    float a = 500.0 * (X - Y);
+    float b = 200.0 * (Y - Z);
+
+    return vec3(L, a, b);
+}
+
+vec3 Lab_to_XYZ(vec3 Lab) {
+    float L = Lab.x;
+    float a = Lab.y;
+    float b = Lab.z;
+
+    float Y = (L + 16.0) / 116.0;
+    float X = Y + a / 500.0;
+    float Z = Y - b / 200.0;
+
+    vec3 XYZ = f_inv(vec3(X, Y, Z)) * XYZn;
+
+    return XYZ;
+}
+
+vec3 RGB_to_Lab(vec3 color) {
+    color  = RGB_to_XYZ(color);
+    color  = XYZ_to_Lab(color);
+    return color;
+}
+
+vec3 Lab_to_RGB(vec3 color) {
+    color  = Lab_to_XYZ(color);
+    color  = XYZ_to_RGB(color);
+    return color;
+}
+
+const float epsilon = 1e-6;
+
+vec3 Lab_to_LCH(vec3 Lab) {
+    float a = Lab.y;
+    float b = Lab.z;
+
+    float C = length(vec2(a, b));
+    float H = 0.0;
+
+    if (!(abs(a) < epsilon && abs(b) < epsilon))
+        H = atan(b, a);
+
+    return vec3(Lab.x, C, H);
+}
+
+vec3 LCH_to_Lab(vec3 LCH) {
+    float C = max(LCH.y, 0.0);
+    float H = LCH.z;
+
+    float a = C * cos(H);
+    float b = C * sin(H);
+
+    return vec3(LCH.x, a, b);
+}
+
+float chroma_correction(float L, float Lref, float Lmax, float sigma) {
+    return L <= Lref ? 1.0 : max(1.0 - sigma * (L - Lref) / (Lmax - Lref), 0.0);
+}
+
+vec4 hook() {
+    vec4 color = HOOKED_texOff(0);
+
+    const float Lref = RGB_to_Lab(vec3(1.0)).x;
+    const float Lmax = RGB_to_Lab(vec3(1000.0 / reference_white)).x;
+
+    color.rgb = RGB_to_Lab(color.rgb);
+    color.rgb = Lab_to_LCH(color.rgb);
+    color.y  *= chroma_correction(color.x, Lref, Lmax, sigma);
+    color.rgb = LCH_to_Lab(color.rgb);
+    color.rgb = Lab_to_RGB(color.rgb);
+
+    return color;
+}
+
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!DESC tone mapping (bt.2446c)
 
 vec3 RGB_to_XYZ(vec3 RGB) {
-    mat3 M = mat3(
+    return RGB * mat3(
         0.6369580483012914, 0.14461690358620832,  0.1688809751641721,
         0.2627002120112671, 0.6779980715188708,   0.05930171646986196,
-        0.000000000000000,  0.028072693049087428, 1.060985057710791);
-    return RGB * M;
+        0.000000000000000,  0.028072693049087428, 1.060985057710791
+    );
 }
 
 vec3 XYZ_to_RGB(vec3 XYZ) {
-    mat3 M = mat3(
+    return XYZ * mat3(
          1.716651187971268,  -0.355670783776392, -0.253366281373660,
         -0.666684351832489,   1.616481236634939,  0.0157685458139111,
-         0.017639857445311,  -0.042770613257809,  0.942103121235474);
-    return XYZ * M;
+         0.017639857445311,  -0.042770613257809,  0.942103121235474
+    );
 }
 
 vec3 XYZ_to_xyY(vec3 XYZ) {
@@ -40,11 +225,11 @@ vec3 xyY_to_XYZ(vec3 xyY) {
     float y = xyY.y;
     float Y = xyY.z;
 
-    float multiplo = Y / max(y, 1e-6);
+    float multiplier = Y / max(y, 1e-6);
 
     float z = 1.0 - x - y;
-    float X = x * multiplo;
-    float Z = z * multiplo;
+    float X = x * multiplier;
+    float Z = z * multiplier;
 
     return vec3(X, Y, Z);
 }
@@ -75,6 +260,33 @@ vec4 hook() {
     color.z   = curve(color.z);
     color.rgb = xyY_to_XYZ(color.rgb);
     color.rgb = XYZ_to_RGB(color.rgb);
+
+    return color;
+}
+
+//!HOOK OUTPUT
+//!BIND HOOKED
+//!WHEN alpha
+//!DESC tone mapping (bt.2446c, inverse crosstalk)
+
+// The inverse crosstalk matrix is applied to ensure that the original hues of input HDR images are
+// recovered.
+
+vec3 crosstalk_inv(vec3 x, float a) {
+    float b = 1.0 - a;
+    float c = 1.0 / (1.0 - 3.0 * a);
+    mat3 transform = mat3(
+        b, -a, -a,
+        -a, b, -a,
+        -a, -a, b
+    );
+    return x * transform * c;
+}
+
+vec4 hook() {
+    vec4 color = HOOKED_texOff(0);
+
+    color.rgb = crosstalk_inv(color.rgb, alpha);
 
     return color;
 }
