@@ -747,27 +747,18 @@ float f(float x, float iw, float ib, float ow, float ob) {
     float y3 = ow;
 
     float al = (y2 - y1) / (x2 - x1);
-    float bl = y1 - al * x1;
-
-    float at = al * (x1 - x0) * (x1 - x0) * (y1 - y0) * (y1 - y0) / ((y1 - y0 - al * (x1 - x0)) * (y1 - y0 - al * (x1 - x0)));
-    float bt = al * (x1 - x0) * (x1 - x0) / (y1 - y0 - al * (x1 - x0));
-    float ct = (y1 - y0) * (y1 - y0) / (y1 - y0 - al * (x1 - x0));
-
-    // float as = al * (x2 - x3) * (x2 - x3) * (y2 - y3) * (y2 - y3) / ((al * (x2 - x3) - y2 + y3) * (al * (x2 - x3) - y2 + y3));
-    // float bs = (al * x2 * (x3 - x2) + x3 * (y2 - y3)) / (al * (x2 - x3) - y2 + y3);
-    // float cs = (y3 * (al * (x2 - x3) + y2) - (y2 * y2)) / (al * (x2 - x3) - y2 + y3);
-
-    // float bt = al * (x1 - x0) / (y1 - y0);
-    // float at = log(y1 - y0) - bt * log(x1 - x0);
-
-    float bs = al * (x3 - x2) / (y3 - y2);
-    float as = log(y3 - y2) - bs * log(x3 - x2);
 
     if (x < x1) {
+        float at = al * (x1 - x0) * (x1 - x0) * (y1 - y0) * (y1 - y0) / ((y1 - y0 - al * (x1 - x0)) * (y1 - y0 - al * (x1 - x0)));
+        float bt = al * (x1 - x0) * (x1 - x0) / (y1 - y0 - al * (x1 - x0));
+        float ct = (y1 - y0) * (y1 - y0) / (y1 - y0 - al * (x1 - x0));
         x = -at / (x - x0 + bt) + ct + y0;
     } else if (x < x2) {
+        float bl = y1 - al * x1;
         x = al * x + bl;
     } else {
+        float bs = al * (x3 - x2) / (y3 - y2);
+        float as = log(y3 - y2) - bs * log(x3 - x2);
         x = -exp(as + bs * log(max(-(x - x3), 1e-6))) + y3;
     }
 
