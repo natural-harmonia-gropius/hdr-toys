@@ -71,7 +71,7 @@ vec3 LMS_to_Lab(vec3 LMS) {
 }
 
 vec3 Lab_to_LMS(vec3 Lab) {
-    Lab = Lab * mat3(
+    return Lab * mat3(
         1.0000000000000000,  0.3963377773761749,  0.2158037573099136,
         1.0000000000000000, -0.1055613458156586, -0.0638541728258133,
         1.0000000000000000, -0.0894841775298119, -1.2914855480194092
@@ -88,7 +88,7 @@ vec3 RGB_to_Lab(vec3 color) {
 
 vec3 Lab_to_RGB(vec3 color) {
     color = Lab_to_LMS(color);
-    color = pow(color, 3.0);
+    color = vec3(pow(color.r, 3.0), pow(color.g, 3.0), pow(color.b, 3.0));
     color = LMS_to_XYZ(color);
     color = XYZ_to_RGB(color);
     return color;
