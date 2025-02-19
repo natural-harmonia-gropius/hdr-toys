@@ -9,6 +9,22 @@
 //!TYPE float
 0.0
 
+//!PARAM scene_max_r
+//!TYPE float
+0.0
+
+//!PARAM scene_max_g
+//!TYPE float
+0.0
+
+//!PARAM scene_max_b
+//!TYPE float
+0.0
+
+//!PARAM max_pq_y
+//!TYPE float
+0.0
+
 //!PARAM reference_white
 //!TYPE float
 //!MINIMUM 0.0
@@ -149,7 +165,7 @@ float f(float x, float w) {
 }
 
 float curve(float x) {
-    float w = get_max_l()
+    float w = get_max_l();
     return f(x, w);
 }
 
