@@ -1,12 +1,16 @@
-// Visualizes the luminance of the input image using false color.
+// Visualizes the luminance of the image using false color
 
-// Purple:  darker than SDR
-// Gray:    SDR range
-// Blue:    1000 nits
-// Green:   2000 nits
-// Yellow:  4000 nits
-// Red:     10000 nits
-// Pink:    >10000 nits
+// You can preview the colors in Visual Studio Code by the following plugin
+// https://marketplace.visualstudio.com/items?itemName=naumovs.color-highlight
+
+// oklch(0.99500 0.00 000.0)    >10000 nits
+// oklch(0.94659 0.11 005.0)    10000 nits
+// oklch(0.83878 0.33 025.0)    4000 nits
+// oklch(0.73097 0.33 090.0)    2000 nits
+// oklch(0.52324 0.33 130.0)    1000 nits
+// oklch(0.33922 0.24 245.0)    brighter than SDR
+// oklch(0.56925 0.00 000.0)    SDR
+// oklch(0.20104 0.08 350.0)    darker than SDR
 
 //!PARAM reference_white
 //!TYPE float
@@ -136,20 +140,21 @@ vec4 hook() {
     float l1 = reference_white;
     float l0 = reference_white / 1000.0;
 
-    vec3 c5 = vec3(0.9, 0.1, radians(0.0));
-    vec3 c4 = vec3(0.7, 0.2, radians(29.2));
-    vec3 c3 = vec3(0.7, 0.2, radians(109.7));
-    vec3 c2 = vec3(0.7, 0.2, radians(142.5));
-    vec3 c1 = vec3(0.5, 0.2, radians(264.0));
-    vec3 cn = vec3(0.3, 0.1, radians(328.0));
+    vec3 cw = vec3(0.99500, 0.00, radians(000.0));
+    vec3 c5 = vec3(0.94659, 0.11, radians(005.0));
+    vec3 c4 = vec3(0.83878, 0.33, radians(025.0));
+    vec3 c3 = vec3(0.73097, 0.33, radians(090.0));
+    vec3 c2 = vec3(0.52324, 0.33, radians(130.0));
+    vec3 c1 = vec3(0.33922, 0.24, radians(245.0));
+    vec3 cb = vec3(0.20104, 0.08, radians(350.0));
 
-    if      (y > l5)    color.rgb = vec3(1.0);
+    if      (y > l5)    color.rgb = Lab_to_RGB(LCH_to_Lab(cw));
     else if (y > l4)    color.rgb = Lab_to_RGB(LCH_to_Lab(mix(c4, c5, l(y, l4, l5))));
     else if (y > l3)    color.rgb = Lab_to_RGB(LCH_to_Lab(mix(c3, c4, l(y, l3, l4))));
     else if (y > l2)    color.rgb = Lab_to_RGB(LCH_to_Lab(mix(c2, c3, l(y, l2, l3))));
     else if (y > l1)    color.rgb = Lab_to_RGB(LCH_to_Lab(mix(c1, c2, l(y, l1, l2))));
     else if (y > l0)    color.rgb = vec3(l(y, l0, l1));
-    else                color.rgb = Lab_to_RGB(LCH_to_Lab(cn));
+    else                color.rgb = Lab_to_RGB(LCH_to_Lab(cb));
 
     return color;
 }
