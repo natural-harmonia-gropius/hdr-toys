@@ -562,14 +562,24 @@ void hook() {
 //!WHEN preview_metering
 //!DESC metering (preview)
 
-vec4 hook() {
-    float metering = METERING_tex(METERING_pos).r;
-    float lmi = float(metered_max_i / 4095.0);
-    float delta = 720 * abs(metering - lmi);
+bool almost_equal(float a, float b, float epsilon) {
+    return abs(a - b) < epsilon;
+}
 
-    if (delta < 5.0)
-        return vec4(vec3(1.0, 0.0, 0.0), 1.0);
-    return vec4(vec3(metering), 1.0);
+vec4 hook() {
+    float metering = METERING_tex(METERING_pos).x;
+    float lmi = float(metered_max_i / 4095.0);
+
+    vec3 color = vec3(metering);
+
+    float delta = 720 * abs(metering - lmi);
+    if (delta < 4.0)
+        color = vec3(1.0, 0.0, 0.0);
+
+    if (almost_equal(1.0 - METERING_pos.y, lmi, 1e-3))
+        color = vec3(0.0, 1.0, 0.0);
+
+    return vec4(color, 1.0);
 }
 
 //!HOOK OUTPUT
