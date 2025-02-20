@@ -445,27 +445,33 @@ vec4 hook(){
 //!BIND METERING
 //!BIND METERED
 //!SAVE EMPTY
-//!WIDTH 1
-//!HEIGHT 1
-//!COMPUTE 1 1
-//!DESC metering (data, initial)
-
-void hook() {
-    metered_max_i = 0;
-}
-
-//!HOOK OUTPUT
-//!BIND METERING
-//!BIND METERED
-//!SAVE EMPTY
 //!COMPUTE 32 32
 //!DESC metering (data, max)
 
+shared uint local_max;
+
 void hook() {
-    ivec2 coord = ivec2(gl_GlobalInvocationID);
-    float value = texelFetch(METERING_raw, coord, 0).r;
+    if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0) {
+        metered_max_i = 0;
+    }
+
+    if (gl_LocalInvocationIndex == 0) {
+        local_max = 0;
+    }
+
+    memoryBarrierShared();
+    barrier();
+
+    float value = METERING_tex(METERING_pos).x;
     uint rounded = uint(value * 4095.0 + 0.5);
-    atomicMax(metered_max_i, rounded);
+    atomicMax(local_max, rounded);
+
+    memoryBarrierShared();
+    barrier();
+
+    if (gl_LocalInvocationIndex == 0) {
+        atomicMax(metered_max_i, local_max);
+    }
 }
 
 //!HOOK OUTPUT
