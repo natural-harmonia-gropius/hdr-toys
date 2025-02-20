@@ -1,3 +1,5 @@
+// Linear applies a simple scaling to the I component
+
 //!PARAM min_luma
 //!TYPE float
 0.0
