@@ -536,8 +536,8 @@ bool is_sence_changed(float m, float p) {
         return true;
 
     float tolerance = 36.0;
-    float im = float(m / 4095.0);
-    float ip = float(p / 4095.0);
+    float im = float(m) / 4095.0;
+    float ip = float(p) / 4095.0;
     float delta = 720 * abs(im - ip);
     return delta > tolerance;
 }
@@ -568,7 +568,7 @@ bool almost_equal(float a, float b, float epsilon) {
 
 vec4 hook() {
     float metering = METERING_tex(METERING_pos).x;
-    float lmi = float(metered_max_i / 4095.0);
+    float lmi = float(metered_max_i) / 4095.0;
 
     vec3 color = vec3(metering);
 
@@ -726,7 +726,7 @@ float get_max_i() {
     }
 
     if (enable_metering > 0)
-        return float(metered_max_i / 4095.0);
+        return float(metered_max_i) / 4095.0;
 
     if (max_cll > 0.0)
         return pq_eotf_inv(max_cll);
