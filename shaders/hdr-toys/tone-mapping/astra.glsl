@@ -754,7 +754,7 @@ float get_avg_i() {
     if (max_fall > 0.0)
         return pq_eotf_inv(max_fall);
 
-    return pq_eotf_inv(50.0);
+    return pq_eotf_inv(58.535);
 }
 
 float f(float x, float iw, float ib, float ow, float ob) {
@@ -810,9 +810,16 @@ vec3 tone_mapping(vec3 iab) {
     return vec3(i2, ab2);
 }
 
+vec3 auto_exposure(vec3 color) {
+    float avg = pq_eotf(get_avg_i());
+    float ev = min(log2(58.535 / avg), 0.0);
+    return color * exp2(ev);
+}
+
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
+    color.rgb = auto_exposure(color.rgb);
     color.rgb = RGB_to_Jab(color.rgb);
     color.rgb = tone_mapping(color.rgb);
     color.rgb = Jab_to_RGB(color.rgb);
