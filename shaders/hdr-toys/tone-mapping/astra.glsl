@@ -694,6 +694,47 @@ float J_to_I(float J) {
     return (J + d0) / (1.0 + d - d * (J + d0));
 }
 
+const float a = 0.4;
+
+float J_to_Jhk(vec3 JCh) {
+    float J = JCh.x;
+    float C = JCh.y;
+    float h = JCh.z;
+    return sqrt(J * J + a * C);
+}
+
+float Jhk_to_J(vec3 JCh) {
+    float J = JCh.x;
+    float C = JCh.y;
+    float h = JCh.z;
+    return sqrt(J * J - a * C);
+}
+
+const float epsilon = 1e-6;
+
+vec3 Lab_to_LCh(vec3 Lab) {
+    float L = Lab.x;
+    float a = Lab.y;
+    float b = Lab.z;
+
+    float C = length(vec2(a, b));
+    float h = !(abs(a) < epsilon && abs(b) < epsilon) ? atan(b, a) : 0.0;
+
+    return vec3(L, C, h);
+}
+
+vec3 LCh_to_Lab(vec3 LCh) {
+    float L = LCh.x;
+    float C = LCh.y;
+    float h = LCh.z;
+
+    C = max(C, 0.0);
+    float a = C * cos(h);
+    float b = C * sin(h);
+
+    return vec3(L, a, b);
+}
+
 vec3 RGB_to_Jab(vec3 color) {
     color *= reference_white;
     color = RGB_to_XYZ(color);
@@ -702,10 +743,12 @@ vec3 RGB_to_Jab(vec3 color) {
     color = pq_eotf_inv(color);
     color = LMS_to_Iab(color);
     color.x = I_to_J(color.x);
+    color.x = J_to_Jhk(Lab_to_LCh(color));
     return color;
 }
 
 vec3 Jab_to_RGB(vec3 color) {
+    color.x = Jhk_to_J(Lab_to_LCh(color));
     color.x = J_to_I(color.x);
     color = Iab_to_LMS(color);
     color = pq_eotf(color);
