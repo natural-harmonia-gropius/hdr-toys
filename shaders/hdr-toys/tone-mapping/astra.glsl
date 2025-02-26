@@ -790,11 +790,22 @@ float f(float x, float iw, float ib, float ow, float ob) {
     return clamp(x, ob, ow);
 }
 
+float ev = 0.0;
+
 float curve(float x) {
     float ow = I_to_J(pq_eotf_inv(reference_white));
     float ob = I_to_J(pq_eotf_inv(reference_white / 1000.0));
-    float iw = max(I_to_J(get_max_i()), ow + 1e-3);
-    float ib = min(I_to_J(get_min_i()), ob - 1e-3);
+    float iw = get_max_i();
+    float ib = get_min_i();
+
+    if (ev != 0.0) {
+        iw = pq_eotf_inv(pq_eotf(iw) * exp2(ev));
+        ib = pq_eotf_inv(pq_eotf(ib) * exp2(ev));
+    }
+
+    iw = max(I_to_J(iw), ow + 1e-3);
+    ib = min(I_to_J(ib), ob - 1e-3);
+
     return f(x, iw, ib, ow, ob);
 }
 
@@ -812,7 +823,15 @@ vec3 tone_mapping(vec3 iab) {
 
 vec3 auto_exposure(vec3 color) {
     float avg = pq_eotf(get_avg_i());
-    float ev = min(log2(58.535 / avg), 0.0);
+    float mxx = pq_eotf(get_max_i());
+    float ref = reference_white;
+
+    ev = clamp(
+        log2(max(58.535 / avg, 1e-6)),
+        log2(max(ref / mxx, 1e-6)),
+        0.0
+    );
+
     return color * exp2(ev);
 }
 
