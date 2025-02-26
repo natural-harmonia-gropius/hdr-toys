@@ -768,6 +768,9 @@ float get_max_i() {
 }
 
 float get_min_i() {
+    if (enable_metering > 0)
+        return float(metered_min_i) / 4095.0;
+
     if (min_luma > 0.0)
         return pq_eotf_inv(min_luma);
 
@@ -781,10 +784,10 @@ float get_avg_i() {
     if (scene_avg > 0.0)
         return pq_eotf_inv(scene_avg);
 
-    if (max_fall > 0.0)
-        return pq_eotf_inv(max_fall);
+    // if (max_fall > 0.0)
+    //     return pq_eotf_inv(max_fall);
 
-    return pq_eotf_inv(58.535);
+    return 0.0;
 }
 
 float f(float x, float iw, float ib, float ow, float ob) {
@@ -852,7 +855,12 @@ vec3 tone_mapping(vec3 iab) {
 }
 
 vec3 auto_exposure(vec3 color) {
-    float avg = pq_eotf(get_avg_i());
+    float avg_i = get_avg_i();
+
+    if (avg_i <= 0.0)
+        return color;
+
+    float avg = pq_eotf(avg_i);
     float mxx = pq_eotf(get_max_i());
     float ref = reference_white;
 
