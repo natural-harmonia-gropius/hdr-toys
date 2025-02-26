@@ -85,6 +85,8 @@
 
 //!BUFFER METERED
 //!VAR uint metered_max_i
+//!VAR uint metered_min_i
+//!VAR uint metered_avg_i
 //!STORAGE
 
 //!BUFFER METERED_TEMPORAL
@@ -446,17 +448,20 @@ vec4 hook(){
 //!BIND METERED
 //!SAVE EMPTY
 //!COMPUTE 32 32
-//!DESC metering (data, max)
+//!DESC metering (data, max, min)
 
 shared uint local_max;
+shared uint local_min;
 
 void hook() {
     if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0) {
         metered_max_i = 0;
+        metered_min_i = 4095;
     }
 
     if (gl_LocalInvocationIndex == 0) {
         local_max = 0;
+        local_min = 4095;
     }
 
     memoryBarrierShared();
@@ -465,13 +470,25 @@ void hook() {
     float value = METERING_tex(METERING_pos).x;
     uint rounded = uint(value * 4095.0 + 0.5);
     atomicMax(local_max, rounded);
+    atomicMin(local_min, rounded);
 
     memoryBarrierShared();
     barrier();
 
     if (gl_LocalInvocationIndex == 0) {
         atomicMax(metered_max_i, local_max);
+        atomicMin(metered_min_i, local_min);
     }
+}
+
+//!HOOK OUTPUT
+//!BIND METERING
+//!BIND METERED
+//!SAVE EMPTY
+//!COMPUTE 32 32
+//!DESC metering (data, avg)
+
+void hook() {
 }
 
 //!HOOK OUTPUT
@@ -567,16 +584,29 @@ bool almost_equal(float a, float b, float epsilon) {
 }
 
 vec4 hook() {
-    float metering = METERING_tex(METERING_pos).x;
-    float lmi = float(metered_max_i) / 4095.0;
+    float value = METERING_tex(METERING_pos).x;
+    vec3 color = vec3(value);
 
-    vec3 color = vec3(metering);
+    float max_i = float(metered_max_i) / 4095.0;
+    float min_i = float(metered_min_i) / 4095.0;
+    float avg_i = float(metered_avg_i) / 4095.0;
 
-    float delta = 720 * abs(metering - lmi);
-    if (delta < 4.0)
+    float d_max_i = 720 * abs(value - max_i);
+    float d_min_i = 720 * abs(value - min_i);
+    float d_avg_i = 720 * abs(value - avg_i);
+
+    if (d_max_i < 4.0)
         color = vec3(1.0, 0.0, 0.0);
+    if (d_min_i < 4.0)
+        color = vec3(0.0, 0.0, 1.0);
+    // if (d_avg_i < 4.0)
+    //     color = vec3(0.0, 1.0, 0.0);
 
-    if (almost_equal(1.0 - METERING_pos.y, lmi, 1e-3))
+    if (almost_equal(1.0 - METERING_pos.y, max_i, 1e-3))
+        color = vec3(1.0, 0.0, 0.0);
+    if (almost_equal(1.0 - METERING_pos.y, min_i, 1e-3))
+        color = vec3(0.0, 0.0, 1.0);
+    if (almost_equal(1.0 - METERING_pos.y, avg_i, 1e-3))
         color = vec3(0.0, 1.0, 0.0);
 
     return vec4(color, 1.0);
@@ -738,6 +768,9 @@ float get_max_i() {
 }
 
 float get_min_i() {
+    if (enable_metering > 0)
+        return float(metered_min_i) / 4095.0;
+
     if (min_luma > 0.0)
         return pq_eotf_inv(min_luma);
 
@@ -751,10 +784,10 @@ float get_avg_i() {
     if (scene_avg > 0.0)
         return pq_eotf_inv(scene_avg);
 
-    if (max_fall > 0.0)
-        return pq_eotf_inv(max_fall);
+    // if (max_fall > 0.0)
+    //     return pq_eotf_inv(max_fall);
 
-    return pq_eotf_inv(50.0);
+    return 0.0;
 }
 
 float f(float x, float iw, float ib, float ow, float ob) {
@@ -790,11 +823,22 @@ float f(float x, float iw, float ib, float ow, float ob) {
     return clamp(x, ob, ow);
 }
 
+float ev = 0.0;
+
 float curve(float x) {
     float ow = I_to_J(pq_eotf_inv(reference_white));
     float ob = I_to_J(pq_eotf_inv(reference_white / 1000.0));
-    float iw = max(I_to_J(get_max_i()), ow + 1e-3);
-    float ib = min(I_to_J(get_min_i()), ob - 1e-3);
+    float iw = get_max_i();
+    float ib = get_min_i();
+
+    if (ev != 0.0) {
+        iw = pq_eotf_inv(pq_eotf(iw) * exp2(ev));
+        ib = pq_eotf_inv(pq_eotf(ib) * exp2(ev));
+    }
+
+    iw = max(I_to_J(iw), ow + 1e-3);
+    ib = min(I_to_J(ib), ob - 1e-3);
+
     return f(x, iw, ib, ow, ob);
 }
 
@@ -810,9 +854,29 @@ vec3 tone_mapping(vec3 iab) {
     return vec3(i2, ab2);
 }
 
+vec3 auto_exposure(vec3 color) {
+    float avg_i = get_avg_i();
+
+    if (avg_i <= 0.0)
+        return color;
+
+    float avg = pq_eotf(avg_i);
+    float mxx = pq_eotf(get_max_i());
+    float ref = reference_white;
+
+    ev = clamp(
+        log2(max(58.535 / avg, 1e-6)),
+        log2(max(ref / mxx, 1e-6)),
+        0.0
+    );
+
+    return color * exp2(ev);
+}
+
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
+    color.rgb = auto_exposure(color.rgb);
     color.rgb = RGB_to_Jab(color.rgb);
     color.rgb = tone_mapping(color.rgb);
     color.rgb = Jab_to_RGB(color.rgb);
