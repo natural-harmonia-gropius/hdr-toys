@@ -24,22 +24,26 @@ For more detailed information, please visit the [wiki](https://github.com/natura
 
   If you've confirmed these settings and the problem persists, please submit an issue.
 
-- **I feel the video always looks too dark.**
+- **Video always looks too dark/bright.**
 
   This issue arises from the inability to determine the reference white of the video, which is unfortunately not included in the metadata.
 
-  To adjust the reference white, add the following lines to `input.conf`. Press `n` when you feel so, and press `m` to restore to the default.
+  Shaders' default is 203. But for PQ, the default reference white been setting to 100 by following line in `hdr-toys.conf`.
+
+  ```ini
+  glsl-shader-opts=reference_white=100
+  ```
+
+  To adjust the reference white at runtime, add the following lines to `input.conf`.
 
   ```ini
   n   set glsl-shader-opts reference_white=100
   m   set glsl-shader-opts reference_white=203
   ```
 
-  Note that, due to a limitation in mpv, only parameters changed after the shader is applied will take effect. Therefore, setting `glsl-shader-opts=reference_white=100` in `mpv.conf` will not work.
-
 - **UI/OSD looks washed out.**
 
-  To ensure the video input meets the standards, I use a little trick by setting `target-prim` and `target-trc` to match the input values. As a side effect, the OSD inevitably appears washed out.
+  To ensure the video input meets the standards, I use a little trick by setting `target-prim` and `target-trc` to match the input values. As a side effect, the OSD appears washed out, I currently have no solution.
 
 - **I'm not using BT.709 display.**
 
