@@ -35,7 +35,7 @@
 //!TYPE float
 //!MINIMUM 0.0
 //!MAXIMUM 1.0
-0.5
+1.0
 
 //!HOOK OUTPUT
 //!BIND HOOKED
