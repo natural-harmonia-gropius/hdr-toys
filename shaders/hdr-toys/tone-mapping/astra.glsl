@@ -53,6 +53,12 @@
 //!MAXIMUM 1000.0
 203.0
 
+//!PARAM auto_exposure_anchor
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 1.0
+0.8
+
 //!PARAM chroma_correction_scaling
 //!TYPE float
 //!MINIMUM 0.0
@@ -751,10 +757,10 @@ float get_avg_i() {
     if (scene_avg > 0.0)
         return pq_eotf_inv(scene_avg);
 
-    if (max_fall > 0.0)
-        return pq_eotf_inv(max_fall);
+    // if (max_fall > 0.0)
+    //     return pq_eotf_inv(max_fall);
 
-    return pq_eotf_inv(50.0);
+    return 0.0;
 }
 
 float f(float x, float iw, float ib, float ow, float ob) {
@@ -790,11 +796,22 @@ float f(float x, float iw, float ib, float ow, float ob) {
     return clamp(x, ob, ow);
 }
 
+float ev = 0.0;
+
 float curve(float x) {
     float ow = I_to_J(pq_eotf_inv(reference_white));
     float ob = I_to_J(pq_eotf_inv(reference_white / 1000.0));
-    float iw = max(I_to_J(get_max_i()), ow + 1e-3);
-    float ib = min(I_to_J(get_min_i()), ob - 1e-3);
+    float iw = get_max_i();
+    float ib = get_min_i();
+
+    if (ev != 0.0) {
+        iw = pq_eotf_inv(pq_eotf(iw) * exp2(ev));
+        ib = pq_eotf_inv(pq_eotf(ib) * exp2(ev));
+    }
+
+    iw = max(I_to_J(iw), ow + 1e-3);
+    ib = min(I_to_J(ib), ob - 1e-3);
+
     return f(x, iw, ib, ow, ob);
 }
 
@@ -810,9 +827,35 @@ vec3 tone_mapping(vec3 iab) {
     return vec3(i2, ab2);
 }
 
+vec3 auto_exposure(vec3 color) {
+    if (auto_exposure_anchor <= 0.0)
+        return color;
+
+    float avg_i = get_avg_i();
+
+    if (avg_i <= 0.0)
+        return color;
+
+    float avg = pq_eotf(avg_i);
+    float mxx = pq_eotf(get_max_i());
+    float ref = reference_white;
+    float ach = pq_eotf(J_to_I(
+        I_to_J(pq_eotf_inv(reference_white)) * auto_exposure_anchor
+    ));
+
+    ev = clamp(
+        log2(max(ach / avg, 1e-6)),
+        log2(max(ref / mxx, 1e-6)),
+        0.0
+    );
+
+    return color * exp2(ev);
+}
+
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
+    color.rgb = auto_exposure(color.rgb);
     color.rgb = RGB_to_Jab(color.rgb);
     color.rgb = tone_mapping(color.rgb);
     color.rgb = Jab_to_RGB(color.rgb);
