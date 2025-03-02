@@ -53,6 +53,12 @@
 //!MAXIMUM 1000.0
 203.0
 
+//!PARAM auto_exposure_anchor
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 1.0
+0.8
+
 //!PARAM chroma_correction_scaling
 //!TYPE float
 //!MINIMUM 0.0
@@ -822,6 +828,9 @@ vec3 tone_mapping(vec3 iab) {
 }
 
 vec3 auto_exposure(vec3 color) {
+    if (auto_exposure_anchor <= 0.0)
+        return color;
+
     float avg_i = get_avg_i();
 
     if (avg_i <= 0.0)
@@ -830,9 +839,12 @@ vec3 auto_exposure(vec3 color) {
     float avg = pq_eotf(avg_i);
     float mxx = pq_eotf(get_max_i());
     float ref = reference_white;
+    float ach = pq_eotf(J_to_I(
+        I_to_J(pq_eotf_inv(reference_white)) * auto_exposure_anchor
+    ));
 
     ev = clamp(
-        log2(max(58.535 / avg, 1e-6)),
+        log2(max(ach / avg, 1e-6)),
         log2(max(ref / mxx, 1e-6)),
         0.0
     );
