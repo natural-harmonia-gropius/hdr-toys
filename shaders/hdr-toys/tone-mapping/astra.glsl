@@ -836,18 +836,20 @@ vec3 auto_exposure(vec3 color) {
     if (avg_i <= 0.0)
         return color;
 
+    float ach = pq_eotf(J_to_I(
+        auto_exposure_anchor *
+        I_to_J(pq_eotf_inv(reference_white))
+    ));
     float avg = pq_eotf(avg_i);
     float mxx = pq_eotf(get_max_i());
     float ref = reference_white;
-    float ach = pq_eotf(J_to_I(
-        I_to_J(pq_eotf_inv(reference_white)) * auto_exposure_anchor
-    ));
+    float old = 100.0;
 
-    ev = clamp(
-        log2(max(ach / avg, 1e-6)),
-        log2(max(ref / mxx, 1e-6)),
-        0.0
-    );
+    float ev_min = min(log2(max(ref / mxx, 1e-6)), 0.0);
+    float ev_max = max(log2(max(ref / old, 1e-6)), 0.0);
+
+    ev = log2(max(ach / avg, 1e-6));
+    ev = clamp(ev, ev_min, ev_max);
 
     return color * exp2(ev);
 }
