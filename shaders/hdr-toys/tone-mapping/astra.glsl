@@ -494,7 +494,51 @@ void hook() {
 //!COMPUTE 32 32
 //!DESC metering (data, avg)
 
+shared uint local_sum;
+shared uint local_count;
+
 void hook() {
+    if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0) {
+        metered_avg_i = 0;
+    }
+
+    if (gl_LocalInvocationIndex == 0) {
+        local_sum = 0;
+        local_count = 0;
+    }
+
+    memoryBarrierShared();
+    barrier();
+
+    float value = METERING_tex(METERING_pos).x;
+
+    float max_i = float(metered_max_i) / 4095.0;
+    float min_i = float(metered_min_i) / 4095.0;
+
+    float d_max_i = 720 * abs(value - max_i);
+    float d_min_i = 720 * abs(value - min_i);
+
+    if (!(d_max_i < 4.0 || d_min_i < 4.0)) {
+        uint rounded = uint(value * 4095.0 + 0.5);
+        atomicAdd(local_sum, rounded);
+        atomicAdd(local_count, 1);
+    }
+
+    memoryBarrierShared();
+    barrier();
+
+    if (gl_LocalInvocationIndex == 0 && local_count > 0) {
+        uint local_avg = local_sum / local_count;
+        // atomicAdd(metered_avg_i, local_avg);
+    }
+
+    memoryBarrierShared();
+    barrier();
+
+    if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0) {
+        metered_avg_i /= gl_NumWorkGroups.x * gl_NumWorkGroups.y;
+        // metered_avg_i = clamp(metered_avg_i, 0, 4095);
+    }
 }
 
 //!HOOK OUTPUT
