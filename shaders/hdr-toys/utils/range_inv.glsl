@@ -1,4 +1,4 @@
-// from SMPTE "legal" to "full" signal range
+// from "limited" to "full" signal range
 
 //!PARAM black
 //!TYPE float
