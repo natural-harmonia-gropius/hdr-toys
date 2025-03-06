@@ -763,6 +763,35 @@ float get_avg_i() {
     return 0.0;
 }
 
+float ev = 0.0;
+
+vec3 auto_exposure(vec3 color) {
+    if (auto_exposure_anchor <= 0.0)
+        return color;
+
+    float avg_i = get_avg_i();
+
+    if (avg_i <= 0.0)
+        return color;
+
+    float ach = pq_eotf(J_to_I(
+        auto_exposure_anchor *
+        I_to_J(pq_eotf_inv(reference_white))
+    ));
+    float avg = pq_eotf(avg_i);
+    float mxx = pq_eotf(get_max_i());
+    float ref = reference_white;
+    float old = 100.0;
+
+    float ev_min = min(log2(max(ref / mxx, 1e-6)), 0.0);
+    float ev_max = max(log2(max(ref / old, 1e-6)), 0.0);
+
+    ev = log2(max(ach / avg, 1e-6));
+    ev = clamp(ev, ev_min, ev_max);
+
+    return color * exp2(ev);
+}
+
 float f(float x, float iw, float ib, float ow, float ob) {
     float midgray   = 0.5 * ow;
     float shadow    = mix(midgray, ob, 0.66);
@@ -796,8 +825,6 @@ float f(float x, float iw, float ib, float ow, float ob) {
     return clamp(x, ob, ow);
 }
 
-float ev = 0.0;
-
 float curve(float x) {
     float ow = I_to_J(pq_eotf_inv(reference_white));
     float ob = I_to_J(pq_eotf_inv(reference_white / 1000.0));
@@ -825,33 +852,6 @@ vec3 tone_mapping(vec3 iab) {
     float i2 = curve(iab.x);
     vec2 ab2 = chroma_correction(iab.yz, iab.x, i2);
     return vec3(i2, ab2);
-}
-
-vec3 auto_exposure(vec3 color) {
-    if (auto_exposure_anchor <= 0.0)
-        return color;
-
-    float avg_i = get_avg_i();
-
-    if (avg_i <= 0.0)
-        return color;
-
-    float ach = pq_eotf(J_to_I(
-        auto_exposure_anchor *
-        I_to_J(pq_eotf_inv(reference_white))
-    ));
-    float avg = pq_eotf(avg_i);
-    float mxx = pq_eotf(get_max_i());
-    float ref = reference_white;
-    float old = 100.0;
-
-    float ev_min = min(log2(max(ref / mxx, 1e-6)), 0.0);
-    float ev_max = max(log2(max(ref / old, 1e-6)), 0.0);
-
-    ev = log2(max(ach / avg, 1e-6));
-    ev = clamp(ev, ev_min, ev_max);
-
-    return color * exp2(ev);
 }
 
 vec4 hook() {
