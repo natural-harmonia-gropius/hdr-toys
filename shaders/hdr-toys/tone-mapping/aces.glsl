@@ -1,12 +1,6 @@
 // The Academy Color Encoding System (ACES)
 // https://github.com/ampas/aces-core/tree/v1.3.1
 
-//             |-------|           |-------|          |-------|
-//             |       |           |       |          |       |
-//   ACES ---->|  LMT  |---ACES'-->|  RRT  |---OCES-->|  ODT  |--> code values
-//             |       |           |       |          |       |
-//             |-------|           |-------|          |-------|
-
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!DESC tone mapping (aces)
