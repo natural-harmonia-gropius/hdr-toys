@@ -201,7 +201,7 @@ float f(float x, float iw, float ib, float ow, float ob) {
     // E4
     x = x * (iw - ib) + ib;
 
-    return x;
+    return clamp(x, ob, ow);
 }
 
 float curve(float x) {
