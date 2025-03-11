@@ -98,6 +98,8 @@
 
 //!BUFFER METERED
 //!VAR uint metered_max_i
+//!VAR uint metered_min_i
+//!VAR uint metered_avg_i
 //!STORAGE
 
 //!BUFFER METERED_TEMPORAL
@@ -459,17 +461,20 @@ vec4 hook(){
 //!BIND METERED
 //!SAVE EMPTY
 //!COMPUTE 32 32
-//!DESC metering (data, max)
+//!DESC metering (data, max, min)
 
 shared uint local_max;
+shared uint local_min;
 
 void hook() {
     if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0) {
         metered_max_i = 0;
+        metered_min_i = 4095;
     }
 
     if (gl_LocalInvocationIndex == 0) {
         local_max = 0;
+        local_min = 4095;
     }
 
     memoryBarrierShared();
@@ -478,12 +483,68 @@ void hook() {
     float value = METERING_tex(METERING_pos).x;
     uint rounded = uint(value * 4095.0 + 0.5);
     atomicMax(local_max, rounded);
+    atomicMin(local_min, rounded);
 
     memoryBarrierShared();
     barrier();
 
     if (gl_LocalInvocationIndex == 0) {
         atomicMax(metered_max_i, local_max);
+        atomicMin(metered_min_i, local_min);
+    }
+}
+
+//!HOOK OUTPUT
+//!BIND METERING
+//!BIND METERED
+//!SAVE EMPTY
+//!COMPUTE 32 32
+//!DESC metering (data, avg)
+
+shared uint local_sum;
+shared uint local_count;
+
+void hook() {
+    if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0) {
+        metered_avg_i = 0;
+    }
+
+    if (gl_LocalInvocationIndex == 0) {
+        local_sum = 0;
+        local_count = 0;
+    }
+
+    memoryBarrierShared();
+    barrier();
+
+    float value = METERING_tex(METERING_pos).x;
+
+    float max_i = float(metered_max_i) / 4095.0;
+    float min_i = float(metered_min_i) / 4095.0;
+
+    float d_max_i = 720 * abs(value - max_i);
+    float d_min_i = 720 * abs(value - min_i);
+
+    if (!(d_max_i < 4.0 || d_min_i < 4.0)) {
+        uint rounded = uint(value * 4095.0 + 0.5);
+        atomicAdd(local_sum, rounded);
+        atomicAdd(local_count, 1);
+    }
+
+    memoryBarrierShared();
+    barrier();
+
+    if (gl_LocalInvocationIndex == 0 && local_count > 0) {
+        uint local_avg = local_sum / local_count;
+        // atomicAdd(metered_avg_i, local_avg);
+    }
+
+    memoryBarrierShared();
+    barrier();
+
+    if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0) {
+        metered_avg_i /= gl_NumWorkGroups.x * gl_NumWorkGroups.y;
+        // metered_avg_i = clamp(metered_avg_i, 0, 4095);
     }
 }
 
@@ -580,16 +641,29 @@ bool almost_equal(float a, float b, float epsilon) {
 }
 
 vec4 hook() {
-    float metering = METERING_tex(METERING_pos).x;
-    float lmi = float(metered_max_i) / 4095.0;
+    float value = METERING_tex(METERING_pos).x;
+    vec3 color = vec3(value);
 
-    vec3 color = vec3(metering);
+    float max_i = float(metered_max_i) / 4095.0;
+    float min_i = float(metered_min_i) / 4095.0;
+    float avg_i = float(metered_avg_i) / 4095.0;
 
-    float delta = 720 * abs(metering - lmi);
-    if (delta < 4.0)
+    float d_max_i = 720 * abs(value - max_i);
+    float d_min_i = 720 * abs(value - min_i);
+    float d_avg_i = 720 * abs(value - avg_i);
+
+    if (d_max_i < 4.0)
         color = vec3(1.0, 0.0, 0.0);
+    if (d_min_i < 4.0)
+        color = vec3(0.0, 0.0, 1.0);
+    // if (d_avg_i < 4.0)
+    //     color = vec3(0.0, 1.0, 0.0);
 
-    if (almost_equal(1.0 - METERING_pos.y, lmi, 1e-3))
+    if (almost_equal(1.0 - METERING_pos.y, max_i, 1e-3))
+        color = vec3(1.0, 0.0, 0.0);
+    if (almost_equal(1.0 - METERING_pos.y, min_i, 1e-3))
+        color = vec3(0.0, 0.0, 1.0);
+    if (almost_equal(1.0 - METERING_pos.y, avg_i, 1e-3))
         color = vec3(0.0, 1.0, 0.0);
 
     return vec4(color, 1.0);
@@ -801,6 +875,9 @@ float get_max_i() {
 }
 
 float get_min_i() {
+    if (enable_metering > 0)
+        return float(metered_min_i) / 4095.0;
+
     if (min_luma > 0.0)
         return pq_eotf_inv(min_luma);
 
