@@ -27,7 +27,7 @@ vec3 range(vec3 x, float w, float b) {
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
-    float l = pow(2.0, depth);
+    float l = exp2(depth);
     float d = l - 1.0;
     float b = l * black / d;
     float w = l * white / d;
