@@ -3,6 +3,7 @@
 // shoulder segment: http://filmicworlds.com/blog/filmic-tonemapping-with-piecewise-power-curves/
 // toe segment: https://technorgb.blogspot.com/2018/02/hyperbola-tone-mapping.html
 // working space: https://doi.org/10.1364/OE.25.015131
+// hk effect: https://doi.org/10.1364/OE.534073
 // chroma correction: https://www.itu.int/pub/R-REP-BT.2408
 // dynamic metadata: https://github.com/mpv-player/mpv/pull/15239
 // fast gaussian blur: https://www.rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/
@@ -58,6 +59,12 @@
 //!MINIMUM 0.0
 //!MAXIMUM 1.0
 0.8
+
+//!PARAM hk_effect_compensate_scaling
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 1.0
+1.0
 
 //!PARAM chroma_correction_scaling
 //!TYPE float
@@ -700,6 +707,54 @@ float J_to_I(float J) {
     return (J + d0) / (1.0 + d - d * (J + d0));
 }
 
+float hke_fh(float h) {
+    float k3 = 0.3495;
+    float k5 = 0.1567;
+    float k4 = 45.0;
+    h = mod(mod(degrees(h), 360.0) + 360.0, 360.0);
+    float e = k3 * abs(log((1.0 / (90.0 + k4)) * (h + k4))) + k5;
+    return e * hk_effect_compensate_scaling;
+}
+
+float J_to_Jhk(vec3 JCh) {
+    float J = JCh.x;
+    float C = JCh.y;
+    float h = JCh.z;
+    return J + C * hke_fh(h);
+}
+
+float Jhk_to_J(vec3 JCh) {
+    float J = JCh.x;
+    float C = JCh.y;
+    float h = JCh.z;
+    return J - C * hke_fh(h);
+}
+
+const float epsilon = 1e-6;
+
+vec3 Lab_to_LCh(vec3 Lab) {
+    float L = Lab.x;
+    float a = Lab.y;
+    float b = Lab.z;
+
+    float C = length(vec2(a, b));
+    float h = (abs(a) < epsilon && abs(b) < epsilon) ? 0.0 : atan(b, a);
+
+    return vec3(L, C, h);
+}
+
+vec3 LCh_to_Lab(vec3 LCh) {
+    float L = LCh.x;
+    float C = LCh.y;
+    float h = LCh.z;
+
+    C = max(C, 0.0);
+    float a = C * cos(h);
+    float b = C * sin(h);
+
+    return vec3(L, a, b);
+}
+
 vec3 RGB_to_Jab(vec3 color) {
     color *= reference_white;
     color = RGB_to_XYZ(color);
@@ -708,10 +763,12 @@ vec3 RGB_to_Jab(vec3 color) {
     color = pq_eotf_inv(color);
     color = LMS_to_Iab(color);
     color.x = I_to_J(color.x);
+    color.x = J_to_Jhk(Lab_to_LCh(color));
     return color;
 }
 
 vec3 Jab_to_RGB(vec3 color) {
+    color.x = Jhk_to_J(Lab_to_LCh(color));
     color.x = J_to_I(color.x);
     color = Iab_to_LMS(color);
     color = pq_eotf(color);
