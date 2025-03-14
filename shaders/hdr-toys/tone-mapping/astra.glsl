@@ -58,7 +58,7 @@
 //!TYPE float
 //!MINIMUM 0.0
 //!MAXIMUM 1.0
-0.8
+0.75
 
 //!PARAM hk_effect_compensate_scaling
 //!TYPE float
