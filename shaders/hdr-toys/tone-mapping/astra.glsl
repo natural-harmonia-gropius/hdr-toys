@@ -707,13 +707,25 @@ float J_to_I(float J) {
     return (J + d0) / (1.0 + d - d * (J + d0));
 }
 
-float hke_fh(float h) {
-    float k3 = 0.3495;
-    float k5 = 0.1567;
-    float k4 = 45.0;
+float hke_fh_hellwig(float h, float a1, float a2, float a3, float a4, float a5) {
+    return a1 * cos(h) + a2 * cos(2.0 * h) + a3 * sin(h) + a4 * sin(2.0 * h) + a5;
+}
+
+float hke_fh_high(float h, float k1, float k2, float k3, float k4) {
     h = mod(mod(degrees(h), 360.0) + 360.0, 360.0);
-    float e = k3 * abs(log((1.0 / (90.0 + k4)) * (h + k4))) + k5;
-    return e * hk_effect_compensate_scaling;
+    float by = k1 * abs(sin(radians((h - 90.0)/ 2.0))) + k2;
+    float r  = h <= 90.0 || h >= 270.0 ? k3 * abs(cos(radians(h))) + k4 : 0.0;
+    return by + r;
+}
+
+float hke_fh_liao(float h, float k3, float k4, float k5) {
+    h = mod(mod(degrees(h), 360.0) + 360.0, 360.0);
+    return k3 * abs(log(((h + k4) / (90.0 + k4)))) + k5;
+}
+
+float hke_fh(float h) {
+    float result = hke_fh_liao(h, 0.3495, 45.0, 0.1567);
+    return result * hk_effect_compensate_scaling;
 }
 
 float J_to_Jhk(vec3 JCh) {
