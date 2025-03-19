@@ -21,34 +21,26 @@
 
 const vec3 y_coef = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
 
-const float a = y_coef.x;
-const float b = y_coef.y;
-const float c = y_coef.z;
+const float a = y_coef.r;
+const float b = y_coef.g;
+const float c = y_coef.b;
 const float d = 2.0 * (1.0 - c);
 const float e = 2.0 * (1.0 - a);
 
 vec3 RGB_to_YCbCr(vec3 RGB) {
-    float R = RGB.r;
-    float G = RGB.g;
-    float B = RGB.b;
-
-    float Y  = dot(RGB, vec3(a, b, c));
-    float Cb = (B - Y) / d;
-    float Cr = (R - Y) / e;
-
-    return vec3(Y, Cb, Cr);
+    return RGB * mat3(
+         a,      b,      c,
+        -a / d, -b / d,  0.5,
+         0.5,   -b / e, -c / e
+    );
 }
 
 vec3 YCbCr_to_RGB(vec3 YCbCr) {
-    float Y  = YCbCr.x;
-    float Cb = YCbCr.y;
-    float Cr = YCbCr.z;
-
-    float R = Y + e * Cr;
-    float G = Y - (a * e / b) * Cr - (c * d / b) * Cb;
-    float B = Y + d * Cb;
-
-    return vec3(R, G, B);
+    return YCbCr * mat3(
+        1.0,  0.0,        e,
+        1.0, -c / b * d, -a / b * e,
+        1.0,  d,          0.0
+    );
 }
 
 float get_max_l() {
