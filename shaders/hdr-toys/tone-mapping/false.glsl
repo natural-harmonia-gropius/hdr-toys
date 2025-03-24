@@ -99,7 +99,7 @@ vec3 RGB_to_Lab(vec3 color) {
 
 vec3 Lab_to_RGB(vec3 color) {
     color = Lab_to_LMS(color);
-    color = vec3(pow(color.r, 3.0), pow(color.g, 3.0), pow(color.b, 3.0));
+    color = pow(color, vec3(3.0));
     color = LMS_to_XYZ(color);
     color = XYZ_to_RGB(color);
     return color;
@@ -266,7 +266,7 @@ vec3 RGB_to_Lab(vec3 color) {
 
 vec3 Lab_to_RGB(vec3 color) {
     color = Lab_to_LMS(color);
-    color = vec3(pow(color.r, 3.0), pow(color.g, 3.0), pow(color.b, 3.0));
+    color = pow(color, vec3(3.0));
     color = LMS_to_XYZ(color);
     color = XYZ_to_RGB(color);
     return color;
