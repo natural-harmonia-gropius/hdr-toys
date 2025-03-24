@@ -4,13 +4,6 @@
 //!BIND HOOKED
 //!DESC gamut mapping (false color)
 
-// BT.2020 to BT.709
-mat3 M = mat3(
-     1.66049100210843540, -0.58764113878854950,  -0.072849863319884740,
-    -0.12455047452159074,  1.13289989712595960,  -0.008349422604369515,
-    -0.01815076335490526, -0.10057889800800737,   1.118729661362913000
-);
-
 float cbrt(float x) {
     return sign(x) * pow(abs(x), 1.0 / 3.0);
 }
@@ -87,19 +80,25 @@ vec3 Lab_to_RGB(vec3 color) {
     return color;
 }
 
+vec3 BT2020_to_BT709(vec3 color) {
+    return color * mat3(
+         1.66049100210843540, -0.58764113878854950,  -0.072849863319884740,
+        -0.12455047452159074,  1.13289989712595960,  -0.008349422604369515,
+        -0.01815076335490526, -0.10057889800800737,   1.118729661362913000
+    );
+}
+
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
-    vec3 color_dst = color.rgb * M;
+    vec3 color_dst = BT2020_to_BT709(color.rgb);
     vec3 color_dst_cliped = clamp(color_dst, 0.0, 1.0);
+    bool is_in_gamut = color_dst == color_dst_cliped;
 
     color.rgb = RGB_to_Lab(color.rgb);
-    if (color_dst == color_dst_cliped)
-        color.yz = vec2(0.0);
-    else
-        color.x = 0.5;
+    color.rgb = is_in_gamut ? vec3(color.x, vec2(0.0)) : vec3(0.5, color.yz);
     color.rgb = Lab_to_RGB(color.rgb);
-    color.rgb = color.rgb * M;
+    color.rgb = BT2020_to_BT709(color.rgb);
 
     return color;
 }
