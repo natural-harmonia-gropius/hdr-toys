@@ -144,27 +144,27 @@ vec3 Lab_to_RGB(vec3 color) {
 
 const float epsilon = 1e-6;
 
-vec3 Lab_to_LCH(vec3 Lab) {
+vec3 Lab_to_LCh(vec3 Lab) {
+    float L = Lab.x;
     float a = Lab.y;
     float b = Lab.z;
 
     float C = length(vec2(a, b));
-    float H = 0.0;
+    float h = (abs(a) < epsilon && abs(b) < epsilon) ? 0.0 : atan(b, a);
 
-    if (!(abs(a) < epsilon && abs(b) < epsilon))
-        H = atan(b, a);
-
-    return vec3(Lab.x, C, H);
+    return vec3(L, C, h);
 }
 
-vec3 LCH_to_Lab(vec3 LCH) {
-    float C = max(LCH.y, 0.0);
-    float H = LCH.z;
+vec3 LCh_to_Lab(vec3 LCh) {
+    float L = LCh.x;
+    float C = LCh.y;
+    float h = LCh.z;
 
-    float a = C * cos(H);
-    float b = C * sin(H);
+    C = max(C, 0.0);
+    float a = C * cos(h);
+    float b = C * sin(h);
 
-    return vec3(LCH.x, a, b);
+    return vec3(L, a, b);
 }
 
 float chroma_correction(float L, float Lref, float Lmax, float sigma) {
