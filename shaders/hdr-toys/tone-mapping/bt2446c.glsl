@@ -178,9 +178,9 @@ vec4 hook() {
     const float Lmax = RGB_to_Lab(vec3(1000.0 / reference_white)).x;
 
     color.rgb = RGB_to_Lab(color.rgb);
-    color.rgb = Lab_to_LCH(color.rgb);
+    color.rgb = Lab_to_LCh(color.rgb);
     color.y  *= chroma_correction(color.x, Lref, Lmax, sigma);
-    color.rgb = LCH_to_Lab(color.rgb);
+    color.rgb = LCh_to_Lab(color.rgb);
     color.rgb = Lab_to_RGB(color.rgb);
 
     return color;
