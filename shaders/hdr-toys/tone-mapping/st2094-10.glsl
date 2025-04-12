@@ -319,12 +319,12 @@ float get_avg_l() {
         return scene_avg;
 
     if (metered_avg_l > 0.0)
-        return pq_eotf(metered_avg_l);
+        return pq_eotf(clamp(metered_avg_l, 0.1, 0.5));
 
     if (max_fall > 0.0)
         return max_fall;
 
-    return 50.0;
+    return pq_eotf(0.3);
 }
 
 // n: contrast [0.5, 1.5]
