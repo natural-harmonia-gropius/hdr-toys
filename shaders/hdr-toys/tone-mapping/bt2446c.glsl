@@ -242,14 +242,11 @@ float f(float Y, float k1, float k3, float ip) {
     ip /= k1;
     float k2 = (k1 * ip) * (1.0 - k3);
     float k4 = (k1 * ip) - (k2 * log(1.0 - k3));
-    return Y < ip ?
-        Y * k1 :
-        log((Y / ip) - k3) * k2 + k4;
+    return Y < ip ? Y * k1 : log((Y / ip) - k3) * k2 + k4;
 }
 
 float curve(float x) {
-    const float over_white = 1019.0 / 940.0;    // 109% range (super-whites)
-    return f(x, k1, k3, ip) / over_white;
+    return f(x, k1, k3, ip);
 }
 
 vec4 hook() {
@@ -287,6 +284,32 @@ vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
     color.rgb = crosstalk_inv(color.rgb, alpha);
+
+    return color;
+}
+
+//!HOOK OUTPUT
+//!BIND HOOKED
+//!DESC tone mapping (bt.2446c, signal scaling)
+
+// Handling 109% range (super-whites) and black point compensation
+
+float f(float x, float a, float b, float c, float d) {
+    return (x - a) * (d - c) / (b - a) + c;
+}
+
+vec3 f(vec3 x, float a, float b, float c, float d) {
+    return vec3(
+        f(x.x, a, b, c, d),
+        f(x.y, a, b, c, d),
+        f(x.z, a, b, c, d)
+    );
+}
+
+vec4 hook() {
+    vec4 color = HOOKED_tex(HOOKED_pos);
+
+    color.rgb = f(color.rgb, 0.0, 1019.0 / 940.0, 0.001, 1.0);
 
     return color;
 }

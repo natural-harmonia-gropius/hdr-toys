@@ -307,3 +307,40 @@ vec4 hook() {
 
     return color;
 }
+
+//!HOOK OUTPUT
+//!BIND HOOKED
+//!DESC black point compensation
+
+// https://www.color.org/WP40-Black_Point_Compensation_2010-07-27.pdf
+
+vec3 RGB_to_XYZ(vec3 RGB) {
+    return RGB * mat3(
+        0.6369580483012914, 0.14461690358620832,  0.1688809751641721,
+        0.2627002120112671, 0.6779980715188708,   0.05930171646986196,
+        0.000000000000000,  0.028072693049087428, 1.060985057710791
+    );
+}
+
+vec3 XYZ_to_RGB(vec3 XYZ) {
+    return XYZ * mat3(
+         1.716651187971268,  -0.355670783776392, -0.253366281373660,
+        -0.666684351832489,   1.616481236634939,  0.0157685458139111,
+         0.017639857445311,  -0.042770613257809,  0.942103121235474
+    );
+}
+
+vec3 black_point_compensation(vec3 XYZ, float s, float d) {
+    float r = (1.0 - d) / (1.0 - s);
+    return r * XYZ + (1.0 - r) * RGB_to_XYZ(vec3(1.0));
+}
+
+vec4 hook() {
+    vec4 color = HOOKED_tex(HOOKED_pos);
+
+    color.rgb = RGB_to_XYZ(color.rgb);
+    color.rgb = black_point_compensation(color.rgb, 0.0, 0.001);
+    color.rgb = XYZ_to_RGB(color.rgb);
+
+    return color;
+}

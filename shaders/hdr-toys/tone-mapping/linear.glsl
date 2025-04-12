@@ -168,9 +168,8 @@ float get_min_i() {
     return pq_eotf_inv(0.001);
 }
 
-float f(float x, float iw, float ib, float ow, float ob) {
-    float a = (ow - ob) / (iw - ib);
-    return a * (x - ib) + ob;
+float f(float x, float a, float b, float c, float d) {
+    return (x - a) * (d - c) / (b - a) + c;
 }
 
 float curve(float x) {
@@ -178,7 +177,7 @@ float curve(float x) {
     float ob = pq_eotf_inv(reference_white / 1000.0);
     float iw = max(get_max_i(), ow + 1e-3);
     float ib = min(get_min_i(), ob - 1e-3);
-    return f(x, iw, ib, ow, ob);
+    return f(x, ib, iw, ob, ow);
 }
 
 vec2 chroma_correction(vec2 ab, float i1, float i2) {
