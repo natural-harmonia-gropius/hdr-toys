@@ -326,6 +326,14 @@ const Chromaticity SGAMUTCINE = Chromaticity(
     D65
 );
 
+// Canon Cinema Gamut
+const Chromaticity CINEMA_GAMUT = Chromaticity(
+    vec2(0.74,  0.27),
+    vec2(0.17,  1.14),
+    vec2(0.08, -0.10),
+    D65
+);
+
 // Panasonic V-Gamut
 const Chromaticity VGAMUT = Chromaticity(
     vec2(0.730,  0.28),
