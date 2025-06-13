@@ -1,13 +1,13 @@
 // Astra, a tone mapping operator designed to preserve the creator's intent
 
-// shoulder segment: http://filmicworlds.com/blog/filmic-tonemapping-with-piecewise-power-curves/
-// toe segment: https://technorgb.blogspot.com/2018/02/hyperbola-tone-mapping.html
 // working space: https://doi.org/10.1364/OE.25.015131
 // lms matrix: https://doi.org/10.1364/OE.413659
 // hk effect: https://doi.org/10.1364/OE.534073
 // chroma correction: https://www.itu.int/pub/R-REP-BT.2408
 // dynamic metadata: https://github.com/mpv-player/mpv/pull/15239
 // fast gaussian blur: https://www.rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/
+// shoulder segment: http://filmicworlds.com/blog/filmic-tonemapping-with-piecewise-power-curves/
+// toe segment: https://technorgb.blogspot.com/2018/02/hyperbola-tone-mapping.html
 
 //!PARAM min_luma
 //!TYPE float
