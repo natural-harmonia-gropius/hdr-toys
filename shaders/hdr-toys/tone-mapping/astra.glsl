@@ -743,8 +743,7 @@ float Jhk_to_J(vec3 JCh) {
     return J - C * hke_fh(h);
 }
 
-// https://github.com/color-js/color.js/pull/629
-const float epsilon = 0.0002363;
+const float epsilon = 0.000005;
 
 vec3 Lab_to_LCh(vec3 Lab) {
     float L = Lab.x;
