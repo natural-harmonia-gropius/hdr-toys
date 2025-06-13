@@ -3,6 +3,7 @@
 // shoulder segment: http://filmicworlds.com/blog/filmic-tonemapping-with-piecewise-power-curves/
 // toe segment: https://technorgb.blogspot.com/2018/02/hyperbola-tone-mapping.html
 // working space: https://doi.org/10.1364/OE.25.015131
+// lms matrix: https://doi.org/10.1364/OE.413659
 // hk effect: https://doi.org/10.1364/OE.534073
 // chroma correction: https://www.itu.int/pub/R-REP-BT.2408
 // dynamic metadata: https://github.com/mpv-player/mpv/pull/15239
@@ -682,7 +683,7 @@ vec3 LMS_to_XYZ(vec3 LMS) {
 
 vec3 LMS_to_Iab(vec3 LMS) {
     return LMS * mat3(
-        0.5,       0.5,       0.0,
+        0.0,       1.0,       0.0,
         3.524000, -4.066708,  0.542708,
         0.199076,  1.096799, -1.295875
     );
@@ -690,9 +691,9 @@ vec3 LMS_to_Iab(vec3 LMS) {
 
 vec3 Iab_to_LMS(vec3 Iab) {
     return Iab * mat3(
-        1.0,  0.1386050432715393,  0.0580473161561189,
-        1.0, -0.1386050432715393, -0.0580473161561189,
-        1.0, -0.0960192420263190, -0.8118918960560390
+        1.0, 0.2772100865430786,  0.1160946323122377,
+        1.0, 0.0,                 0.0,
+        1.0, 0.0425858012452203, -0.75384457989992
     );
 }
 
