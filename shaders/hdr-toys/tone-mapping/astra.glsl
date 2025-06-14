@@ -725,7 +725,7 @@ float hke_fh_liao(float h, float k3, float k4, float k5) {
 }
 
 float hke_fh(float h) {
-    float result = hke_fh_liao(h, 0.3495, 45.0, 0.1567);
+    float result = hke_fh_liao(h, 0.1351, 45.0, 0.1439);
     return result * hk_effect_compensate_scaling;
 }
 
