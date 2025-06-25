@@ -88,8 +88,8 @@
 //!PARAM enable_metering
 //!TYPE uint
 //!MINIMUM 0
-//!MAXIMUM 1
-1
+//!MAXIMUM 2
+2
 
 //!PARAM preview_metering
 //!TYPE uint
@@ -501,7 +501,7 @@ void hook() {
 //!COMPONENTS 1
 //!WIDTH 1024
 //!HEIGHT 1024
-//!WHEN avg_pq_y 0 = scene_avg 0 = *
+//!WHEN enable_metering 1 > avg_pq_y 0 = * scene_avg 0 = *
 //!DESC metering (avg, 1024)
 
 const vec3 y_coef = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
@@ -530,7 +530,6 @@ vec4 hook() {
 //!SAVE AVG
 //!WIDTH AVG.w 2 /
 //!HEIGHT AVG.h 2 /
-//!WHEN avg_pq_y 0 = scene_avg 0 = *
 //!DESC metering (avg, 512)
 vec4 hook() { return AVG_tex(AVG_pos); }
 
@@ -539,7 +538,6 @@ vec4 hook() { return AVG_tex(AVG_pos); }
 //!SAVE AVG
 //!WIDTH AVG.w 2 /
 //!HEIGHT AVG.h 2 /
-//!WHEN avg_pq_y 0 = scene_avg 0 = *
 //!DESC metering (avg, 256)
 vec4 hook() { return AVG_tex(AVG_pos); }
 
@@ -548,7 +546,6 @@ vec4 hook() { return AVG_tex(AVG_pos); }
 //!SAVE AVG
 //!WIDTH AVG.w 2 /
 //!HEIGHT AVG.h 2 /
-//!WHEN avg_pq_y 0 = scene_avg 0 = *
 //!DESC metering (avg, 128)
 vec4 hook() { return AVG_tex(AVG_pos); }
 
@@ -557,7 +554,6 @@ vec4 hook() { return AVG_tex(AVG_pos); }
 //!SAVE AVG
 //!WIDTH AVG.w 2 /
 //!HEIGHT AVG.h 2 /
-//!WHEN avg_pq_y 0 = scene_avg 0 = *
 //!DESC metering (avg, 64)
 vec4 hook() { return AVG_tex(AVG_pos); }
 
@@ -566,7 +562,6 @@ vec4 hook() { return AVG_tex(AVG_pos); }
 //!SAVE AVG
 //!WIDTH AVG.w 2 /
 //!HEIGHT AVG.h 2 /
-//!WHEN avg_pq_y 0 = scene_avg 0 = *
 //!DESC metering (avg, 32)
 vec4 hook() { return AVG_tex(AVG_pos); }
 
@@ -575,7 +570,6 @@ vec4 hook() { return AVG_tex(AVG_pos); }
 //!SAVE AVG
 //!WIDTH AVG.w 2 /
 //!HEIGHT AVG.h 2 /
-//!WHEN avg_pq_y 0 = scene_avg 0 = *
 //!DESC metering (avg, 16)
 vec4 hook() { return AVG_tex(AVG_pos); }
 
@@ -584,7 +578,6 @@ vec4 hook() { return AVG_tex(AVG_pos); }
 //!SAVE AVG
 //!WIDTH AVG.w 2 /
 //!HEIGHT AVG.h 2 /
-//!WHEN avg_pq_y 0 = scene_avg 0 = *
 //!DESC metering (avg, 8)
 vec4 hook() { return AVG_tex(AVG_pos); }
 
@@ -593,7 +586,6 @@ vec4 hook() { return AVG_tex(AVG_pos); }
 //!SAVE AVG
 //!WIDTH AVG.w 2 /
 //!HEIGHT AVG.h 2 /
-//!WHEN avg_pq_y 0 = scene_avg 0 = *
 //!DESC metering (avg, 4)
 vec4 hook() { return AVG_tex(AVG_pos); }
 
@@ -602,7 +594,6 @@ vec4 hook() { return AVG_tex(AVG_pos); }
 //!SAVE AVG
 //!WIDTH AVG.w 2 /
 //!HEIGHT AVG.h 2 /
-//!WHEN avg_pq_y 0 = scene_avg 0 = *
 //!DESC metering (avg, 2)
 vec4 hook() { return AVG_tex(AVG_pos); }
 
@@ -613,7 +604,6 @@ vec4 hook() { return AVG_tex(AVG_pos); }
 //!WIDTH 1
 //!HEIGHT 1
 //!COMPUTE 1 1
-//!WHEN avg_pq_y 0 = scene_avg 0 = *
 //!DESC metering (avg, 1)
 
 void hook() {
@@ -969,7 +959,7 @@ float get_min_i() {
 }
 
 float get_avg_i() {
-    if (enable_metering > 0)
+    if (enable_metering > 1)
         return float(metered_avg_i) / 4095.0;
 
     if (avg_pq_y > 0.0)
