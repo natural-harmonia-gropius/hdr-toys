@@ -462,7 +462,7 @@ vec4 hook(){
 //!BIND METERED
 //!SAVE EMPTY
 //!COMPUTE 32 32
-//!DESC metering (data, max, min)
+//!DESC metering (max, min)
 
 shared uint local_max;
 shared uint local_min;
@@ -496,13 +496,128 @@ void hook() {
 }
 
 //!HOOK OUTPUT
-//!BIND METERING
+//!BIND HOOKED
+//!SAVE AVG
+//!COMPONENTS 1
+//!WIDTH 1024
+//!HEIGHT 1024
+//!WHEN avg_pq_y 0 = scene_avg 0 = *
+//!DESC metering (avg, 1024)
+
+const vec3 y_coef = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
+
+const float m1 = 2610.0 / 4096.0 / 4.0;
+const float m2 = 2523.0 / 4096.0 * 128.0;
+const float c1 = 3424.0 / 4096.0;
+const float c2 = 2413.0 / 4096.0 * 32.0;
+const float c3 = 2392.0 / 4096.0 * 32.0;
+const float pw = 10000.0;
+
+float pq_eotf_inv(float x) {
+    float t = pow(x / pw, m1);
+    return pow((c1 + c2 * t) / (1.0 + c3 * t), m2);
+}
+
+vec4 hook() {
+    vec4 color = HOOKED_tex(HOOKED_pos);
+    float l = dot(color.rgb * reference_white, y_coef);
+    float i = pq_eotf_inv(l);
+    return vec4(i, vec3(0.0));
+}
+
+//!HOOK OUTPUT
+//!BIND AVG
+//!SAVE AVG
+//!WIDTH AVG.w 2 /
+//!HEIGHT AVG.h 2 /
+//!WHEN avg_pq_y 0 = scene_avg 0 = *
+//!DESC metering (avg, 512)
+vec4 hook() { return AVG_tex(AVG_pos); }
+
+//!HOOK OUTPUT
+//!BIND AVG
+//!SAVE AVG
+//!WIDTH AVG.w 2 /
+//!HEIGHT AVG.h 2 /
+//!WHEN avg_pq_y 0 = scene_avg 0 = *
+//!DESC metering (avg, 256)
+vec4 hook() { return AVG_tex(AVG_pos); }
+
+//!HOOK OUTPUT
+//!BIND AVG
+//!SAVE AVG
+//!WIDTH AVG.w 2 /
+//!HEIGHT AVG.h 2 /
+//!WHEN avg_pq_y 0 = scene_avg 0 = *
+//!DESC metering (avg, 128)
+vec4 hook() { return AVG_tex(AVG_pos); }
+
+//!HOOK OUTPUT
+//!BIND AVG
+//!SAVE AVG
+//!WIDTH AVG.w 2 /
+//!HEIGHT AVG.h 2 /
+//!WHEN avg_pq_y 0 = scene_avg 0 = *
+//!DESC metering (avg, 64)
+vec4 hook() { return AVG_tex(AVG_pos); }
+
+//!HOOK OUTPUT
+//!BIND AVG
+//!SAVE AVG
+//!WIDTH AVG.w 2 /
+//!HEIGHT AVG.h 2 /
+//!WHEN avg_pq_y 0 = scene_avg 0 = *
+//!DESC metering (avg, 32)
+vec4 hook() { return AVG_tex(AVG_pos); }
+
+//!HOOK OUTPUT
+//!BIND AVG
+//!SAVE AVG
+//!WIDTH AVG.w 2 /
+//!HEIGHT AVG.h 2 /
+//!WHEN avg_pq_y 0 = scene_avg 0 = *
+//!DESC metering (avg, 16)
+vec4 hook() { return AVG_tex(AVG_pos); }
+
+//!HOOK OUTPUT
+//!BIND AVG
+//!SAVE AVG
+//!WIDTH AVG.w 2 /
+//!HEIGHT AVG.h 2 /
+//!WHEN avg_pq_y 0 = scene_avg 0 = *
+//!DESC metering (avg, 8)
+vec4 hook() { return AVG_tex(AVG_pos); }
+
+//!HOOK OUTPUT
+//!BIND AVG
+//!SAVE AVG
+//!WIDTH AVG.w 2 /
+//!HEIGHT AVG.h 2 /
+//!WHEN avg_pq_y 0 = scene_avg 0 = *
+//!DESC metering (avg, 4)
+vec4 hook() { return AVG_tex(AVG_pos); }
+
+//!HOOK OUTPUT
+//!BIND AVG
+//!SAVE AVG
+//!WIDTH AVG.w 2 /
+//!HEIGHT AVG.h 2 /
+//!WHEN avg_pq_y 0 = scene_avg 0 = *
+//!DESC metering (avg, 2)
+vec4 hook() { return AVG_tex(AVG_pos); }
+
+//!HOOK OUTPUT
+//!BIND AVG
 //!BIND METERED
-//!SAVE EMPTY
-//!COMPUTE 32 32
-//!DESC metering (data, avg)
+//!SAVE AVG
+//!WIDTH 1
+//!HEIGHT 1
+//!COMPUTE 1 1
+//!WHEN avg_pq_y 0 = scene_avg 0 = *
+//!DESC metering (avg, 1)
 
 void hook() {
+    metered_avg_i = uint(AVG_tex(AVG_pos).x * 4095.0 + 0.5);
 }
 
 //!HOOK OUTPUT
@@ -854,6 +969,9 @@ float get_min_i() {
 }
 
 float get_avg_i() {
+    if (enable_metering > 0)
+        return float(metered_avg_i) / 4095.0;
+
     if (avg_pq_y > 0.0)
         return avg_pq_y;
 
