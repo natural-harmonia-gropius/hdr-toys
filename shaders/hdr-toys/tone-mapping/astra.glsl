@@ -100,6 +100,7 @@
 //!BUFFER METERED
 //!VAR uint metered_max_i
 //!VAR uint metered_min_i
+//!VAR uint metered_avg_i
 //!STORAGE
 
 //!BUFFER METERED_TEMPORAL
@@ -497,6 +498,16 @@ void hook() {
 //!HOOK OUTPUT
 //!BIND METERING
 //!BIND METERED
+//!SAVE EMPTY
+//!COMPUTE 32 32
+//!DESC metering (data, avg)
+
+void hook() {
+}
+
+//!HOOK OUTPUT
+//!BIND METERING
+//!BIND METERED
 //!BIND METERED_TEMPORAL
 //!SAVE EMPTY
 //!WIDTH 1
@@ -592,19 +603,25 @@ vec4 hook() {
 
     float max_i = float(metered_max_i) / 4095.0;
     float min_i = float(metered_min_i) / 4095.0;
+    float avg_i = float(metered_avg_i) / 4095.0;
 
     float d_max_i = 720 * abs(value - max_i);
     float d_min_i = 720 * abs(value - min_i);
+    float d_avg_i = 720 * abs(value - avg_i);
 
     if (d_max_i < 4.0)
         color = vec3(1.0, 0.0, 0.0);
     if (d_min_i < 4.0)
         color = vec3(0.0, 0.0, 1.0);
+    // if (d_avg_i < 4.0)
+    //     color = vec3(0.0, 1.0, 0.0);
 
     if (almost_equal(1.0 - METERING_pos.y, max_i, 1e-3))
         color = vec3(1.0, 0.0, 0.0);
     if (almost_equal(1.0 - METERING_pos.y, min_i, 1e-3))
         color = vec3(0.0, 0.0, 1.0);
+    if (almost_equal(1.0 - METERING_pos.y, avg_i, 1e-3))
+        color = vec3(0.0, 1.0, 0.0);
 
     return vec4(color, 1.0);
 }
