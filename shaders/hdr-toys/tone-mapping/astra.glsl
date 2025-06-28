@@ -949,8 +949,8 @@ float get_max_i() {
 }
 
 float get_min_i() {
-    if (enable_metering > 0)
-        return float(metered_min_i) / 4095.0;
+    // if (enable_metering > 0)
+    //     return float(metered_min_i) / 4095.0;
 
     if (min_luma > 0.0)
         return pq_eotf_inv(min_luma);
@@ -959,14 +959,14 @@ float get_min_i() {
 }
 
 float get_avg_i() {
-    if (enable_metering > 1)
-        return float(metered_avg_i) / 4095.0;
-
     if (avg_pq_y > 0.0)
         return avg_pq_y;
 
     if (scene_avg > 0.0)
         return pq_eotf_inv(scene_avg);
+
+    if (enable_metering > 1)
+        return float(metered_avg_i) / 4095.0;
 
     // if (max_fall > 0.0)
     //     return pq_eotf_inv(max_fall);
