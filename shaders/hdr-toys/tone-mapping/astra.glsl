@@ -818,7 +818,6 @@ void hook() {
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!BIND METADATA
-//!WHEN preview_metering 0 =
 //!DESC tone mapping (astra)
 
 const float m1 = 2610.0 / 4096.0 / 4.0;
