@@ -105,16 +105,22 @@
 
 //!BUFFER METERED_TEMPORAL
 //!VAR uint metered_max_i_t[128]
+//!VAR uint metered_min_i_t[128]
+//!VAR uint metered_avg_i_t[128]
+//!STORAGE
+
+//!BUFFER METADATA
+//!VAR float max_i
+//!VAR float min_i
+//!VAR float avg_i
 //!STORAGE
 
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!SAVE METERING
 //!COMPONENTS 1
-//!WIDTH 512
-//!HEIGHT 288
 //!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = *
-//!DESC metering (feature map)
+//!DESC metering (intensity map)
 
 const vec3 y_coef = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
 
@@ -132,9 +138,18 @@ float pq_eotf_inv(float x) {
 
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
-    float l = dot(color.rgb * reference_white, y_coef);
-    float i = pq_eotf_inv(l);
-    return vec4(i, vec3(0.0));
+    return vec4(pq_eotf_inv(dot(color.rgb * reference_white, y_coef)));
+}
+
+//!HOOK OUTPUT
+//!BIND METERING
+//!SAVE METERING
+//!WIDTH 512
+//!HEIGHT 288
+//!DESC metering (spatial stabilization, downscaling)
+
+vec4 hook() {
+    return METERING_tex(METERING_pos);
 }
 
 //!HOOK OUTPUT
@@ -496,50 +511,45 @@ void hook() {
 }
 
 //!HOOK OUTPUT
-//!BIND HOOKED
+//!BIND METERING
 //!SAVE AVG
 //!COMPONENTS 1
-//!WIDTH 1024
-//!HEIGHT 1024
+//!WIDTH 256
+//!HEIGHT 256
 //!WHEN enable_metering 1 > avg_pq_y 0 = * scene_avg 0 = *
-//!DESC metering (avg, 1024)
+//!DESC metering (avg, 256, center-weighted)
 
-const vec3 y_coef = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
+vec2 map_coords(vec2 uv, float strength) {
+    if (strength < 0.001) {
+        return uv;
+    }
 
-const float m1 = 2610.0 / 4096.0 / 4.0;
-const float m2 = 2523.0 / 4096.0 * 128.0;
-const float c1 = 3424.0 / 4096.0;
-const float c2 = 2413.0 / 4096.0 * 32.0;
-const float c3 = 2392.0 / 4096.0 * 32.0;
-const float pw = 10000.0;
+    vec2 centered_uv = uv - vec2(0.5);
+    float radius = length(centered_uv);
 
-float pq_eotf_inv(float x) {
-    float t = pow(x / pw, m1);
-    return pow((c1 + c2 * t) / (1.0 + c3 * t), m2);
+    if (radius == 0.0) {
+        return vec2(0.5);
+    }
+
+    float distorted_radius  = tan(radius * strength) / strength;
+    vec2 distorted_centered_uv  = normalize(centered_uv ) * distorted_radius;
+
+    distorted_centered_uv = distorted_centered_uv / max(strength, 1.0);
+
+    vec2 distorted_uv = distorted_centered_uv + vec2(0.5);
+
+    vec2 kaleidoscope_uv = 1.0 - abs(fract(distorted_uv * 0.5) * 2.0 - 1.0);
+
+    return kaleidoscope_uv;
+}
+
+vec2 map_coords(vec2 uv) {
+    return map_coords(uv, 2.0);
 }
 
 vec4 hook() {
-    vec4 color = HOOKED_tex(HOOKED_pos);
-    float l = dot(color.rgb * reference_white, y_coef);
-    float i = pq_eotf_inv(l);
-    return vec4(i, vec3(0.0));
+    return METERING_tex(map_coords(METERING_pos));
 }
-
-//!HOOK OUTPUT
-//!BIND AVG
-//!SAVE AVG
-//!WIDTH AVG.w 2 /
-//!HEIGHT AVG.h 2 /
-//!DESC metering (avg, 512)
-vec4 hook() { return AVG_tex(AVG_pos); }
-
-//!HOOK OUTPUT
-//!BIND AVG
-//!SAVE AVG
-//!WIDTH AVG.w 2 /
-//!HEIGHT AVG.h 2 /
-//!DESC metering (avg, 256)
-vec4 hook() { return AVG_tex(AVG_pos); }
 
 //!HOOK OUTPUT
 //!BIND AVG
@@ -604,14 +614,13 @@ vec4 hook() { return AVG_tex(AVG_pos); }
 //!WIDTH 1
 //!HEIGHT 1
 //!COMPUTE 1 1
-//!DESC metering (avg, 1)
+//!DESC metering (avg)
 
 void hook() {
     metered_avg_i = uint(AVG_tex(AVG_pos).x * 4095.0 + 0.5);
 }
 
 //!HOOK OUTPUT
-//!BIND METERING
 //!BIND METERED
 //!BIND METERED_TEMPORAL
 //!SAVE EMPTY
@@ -732,8 +741,84 @@ vec4 hook() {
 }
 
 //!HOOK OUTPUT
-//!BIND HOOKED
 //!BIND METERED
+//!BIND METADATA
+//!SAVE EMPTY
+//!WIDTH 1
+//!HEIGHT 1
+//!COMPUTE 1 1
+//!DESC tone mapping (metadata)
+
+const vec3 y_coef = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
+
+const float m1 = 2610.0 / 4096.0 / 4.0;
+const float m2 = 2523.0 / 4096.0 * 128.0;
+const float c1 = 3424.0 / 4096.0;
+const float c2 = 2413.0 / 4096.0 * 32.0;
+const float c3 = 2392.0 / 4096.0 * 32.0;
+const float pw = 10000.0;
+
+float pq_eotf_inv(float x) {
+    float t = pow(x / pw, m1);
+    return pow((c1 + c2 * t) / (1.0 + c3 * t), m2);
+}
+
+float get_max_i() {
+    if (max_pq_y > 0.0)
+        return max_pq_y;
+
+    if (scene_max_r > 0.0 || scene_max_g > 0.0 || scene_max_b > 0.0)
+        return pq_eotf_inv(dot(vec3(scene_max_r, scene_max_g, scene_max_b), y_coef));
+
+    if (enable_metering > 0)
+        return float(metered_max_i) / 4095.0;
+
+    if (max_cll > 0.0)
+        return pq_eotf_inv(max_cll);
+
+    if (max_luma > 0.0)
+        return pq_eotf_inv(max_luma);
+
+    return pq_eotf_inv(1000.0);
+}
+
+float get_min_i() {
+    // if (enable_metering > 0)
+    //     return float(metered_min_i) / 4095.0;
+
+    if (min_luma > 0.0)
+        return pq_eotf_inv(min_luma);
+
+    return pq_eotf_inv(0.001);
+}
+
+float get_avg_i() {
+    if (avg_pq_y > 0.0)
+        return avg_pq_y;
+
+    if (scene_avg > 0.0)
+        return pq_eotf_inv(scene_avg);
+
+    if (enable_metering > 1)
+        return float(metered_avg_i) / 4095.0;
+
+    // not useful
+    // if (max_fall > 0.0)
+    //     return pq_eotf_inv(max_fall);
+
+    return 0.0;
+}
+
+void hook() {
+    max_i = get_max_i();
+    min_i = get_min_i();
+    avg_i = clamp(get_avg_i(), min_i, max_i);
+}
+
+//!HOOK OUTPUT
+//!BIND HOOKED
+//!BIND METADATA
+//!WHEN preview_metering 0 =
 //!DESC tone mapping (astra)
 
 const float m1 = 2610.0 / 4096.0 / 4.0;
@@ -927,60 +1012,11 @@ vec3 Jab_to_RGB(vec3 color) {
     return color;
 }
 
-float get_max_i() {
-    if (max_pq_y > 0.0)
-        return max_pq_y;
-
-    if (scene_max_r > 0.0 || scene_max_g > 0.0 || scene_max_b > 0.0) {
-        vec3 scene_max_rgb = vec3(scene_max_r, scene_max_g, scene_max_b);
-        return pq_eotf_inv(RGB_to_XYZ(scene_max_rgb).y);
-    }
-
-    if (enable_metering > 0)
-        return float(metered_max_i) / 4095.0;
-
-    if (max_cll > 0.0)
-        return pq_eotf_inv(max_cll);
-
-    if (max_luma > 0.0)
-        return pq_eotf_inv(max_luma);
-
-    return pq_eotf_inv(1000.0);
-}
-
-float get_min_i() {
-    // if (enable_metering > 0)
-    //     return float(metered_min_i) / 4095.0;
-
-    if (min_luma > 0.0)
-        return pq_eotf_inv(min_luma);
-
-    return pq_eotf_inv(0.001);
-}
-
-float get_avg_i() {
-    if (avg_pq_y > 0.0)
-        return avg_pq_y;
-
-    if (scene_avg > 0.0)
-        return pq_eotf_inv(scene_avg);
-
-    if (enable_metering > 1)
-        return float(metered_avg_i) / 4095.0;
-
-    // if (max_fall > 0.0)
-    //     return pq_eotf_inv(max_fall);
-
-    return 0.0;
-}
-
 float ev = 0.0;
 
 vec3 auto_exposure(vec3 color) {
     if (auto_exposure_anchor <= 0.0)
         return color;
-
-    float avg_i = get_avg_i();
 
     if (avg_i <= 0.0)
         return color;
@@ -990,7 +1026,7 @@ vec3 auto_exposure(vec3 color) {
         I_to_J(pq_eotf_inv(reference_white))
     ));
     float avg = pq_eotf(avg_i);
-    float mxx = pq_eotf(get_max_i());
+    float mxx = pq_eotf(max_i);
     float ref = reference_white;
     float old = 100.0;
 
@@ -1039,8 +1075,8 @@ float f(float x, float iw, float ib, float ow, float ob) {
 float curve(float x) {
     float ow = I_to_J(pq_eotf_inv(reference_white));
     float ob = I_to_J(pq_eotf_inv(reference_white / 1000.0));
-    float iw = get_max_i();
-    float ib = get_min_i();
+    float iw = max_i;
+    float ib = min_i;
 
     if (ev != 0.0) {
         iw = pq_eotf_inv(pq_eotf(iw) * exp2(ev));
