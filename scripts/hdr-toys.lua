@@ -9,5 +9,5 @@ mp.observe_property("container-fps", "native", function (property, value)
   if not value then return end
   value = value * o.temporal_stable_time
   value = math.floor(value + 0.5)
-  mp.command("no-osd set glsl-shader-opts temporal_stable_frames=" .. value)
+  mp.command("no-osd change-list glsl-shader-opts append temporal_stable_frames=" .. value)
 end)
