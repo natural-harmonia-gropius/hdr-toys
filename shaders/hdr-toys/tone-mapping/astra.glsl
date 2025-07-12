@@ -61,6 +61,18 @@
 //!MAXIMUM 1.0
 0.75
 
+//!PARAM auto_exposure_limit_negtive
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 5.0
+2.3
+
+//!PARAM auto_exposure_limit_postive
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 5.0
+0.0
+
 //!PARAM hk_effect_compensate_scaling
 //!TYPE float
 //!MINIMUM 0.0
@@ -812,7 +824,7 @@ float get_avg_i() {
 void hook() {
     max_i = get_max_i();
     min_i = get_min_i();
-    avg_i = clamp(get_avg_i(), min_i, max_i);
+    avg_i = get_avg_i();
 }
 
 //!HOOK OUTPUT
@@ -1021,19 +1033,15 @@ vec3 auto_exposure(vec3 color) {
         return color;
 
     float ach = pq_eotf(J_to_I(
-        auto_exposure_anchor *
-        I_to_J(pq_eotf_inv(reference_white))
+        auto_exposure_anchor * I_to_J(pq_eotf_inv(reference_white))
     ));
     float avg = pq_eotf(avg_i);
-    float mxx = pq_eotf(max_i);
-    float ref = reference_white;
-    float old = 100.0;
 
-    float ev_min = min(log2(max(ref / mxx, 1e-6)), 0.0);
-    float ev_max = max(log2(max(ref / old, 1e-6)), 0.0);
-
-    ev = log2(max(ach / avg, 1e-6));
-    ev = clamp(ev, ev_min, ev_max);
+    ev = clamp(
+        log2(ach / avg),
+        -auto_exposure_limit_negtive,
+        auto_exposure_limit_postive
+    );
 
     return color * exp2(ev);
 }
