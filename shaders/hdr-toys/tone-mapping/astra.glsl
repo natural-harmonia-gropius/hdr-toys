@@ -125,6 +125,7 @@
 //!VAR float max_i
 //!VAR float min_i
 //!VAR float avg_i
+//!VAR float ev
 //!STORAGE
 
 //!HOOK OUTPUT
@@ -633,6 +634,7 @@ void hook() {
 }
 
 //!HOOK OUTPUT
+//!BIND METERING
 //!BIND METERED
 //!BIND METERED_TEMPORAL
 //!SAVE EMPTY
@@ -729,25 +731,30 @@ vec4 hook() {
 
     float max_i = float(metered_max_i) / 4095.0;
     float min_i = float(metered_min_i) / 4095.0;
-    float avg_i = float(metered_avg_i) / 4095.0;
 
     float d_max_i = 720 * abs(value - max_i);
     float d_min_i = 720 * abs(value - min_i);
-    float d_avg_i = 720 * abs(value - avg_i);
 
     if (d_max_i < 4.0)
         color = vec3(1.0, 0.0, 0.0);
     if (d_min_i < 4.0)
         color = vec3(0.0, 0.0, 1.0);
-    // if (d_avg_i < 4.0)
-    //     color = vec3(0.0, 1.0, 0.0);
 
     if (almost_equal(1.0 - METERING_pos.y, max_i, 1e-3))
         color = vec3(1.0, 0.0, 0.0);
     if (almost_equal(1.0 - METERING_pos.y, min_i, 1e-3))
         color = vec3(0.0, 0.0, 1.0);
-    if (almost_equal(1.0 - METERING_pos.y, avg_i, 1e-3))
-        color = vec3(0.0, 1.0, 0.0);
+
+    if (enable_metering > 1) {
+        float avg_i = float(metered_avg_i) / 4095.0;
+        float d_avg_i = 720 * abs(value - avg_i);
+
+        if (d_avg_i < 4.0)
+            color = vec3(0.0, 1.0, 0.0);
+
+        if (almost_equal(1.0 - METERING_pos.y, avg_i, 1e-3))
+            color = vec3(0.0, 1.0, 0.0);
+    }
 
     return vec4(color, 1.0);
 }
@@ -759,6 +766,7 @@ vec4 hook() {
 //!WIDTH 1
 //!HEIGHT 1
 //!COMPUTE 1 1
+//!WHEN preview_metering 0 =
 //!DESC tone mapping (metadata)
 
 const vec3 y_coef = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
@@ -773,6 +781,22 @@ const float pw = 10000.0;
 float pq_eotf_inv(float x) {
     float t = pow(x / pw, m1);
     return pow((c1 + c2 * t) / (1.0 + c3 * t), m2);
+}
+
+float pq_eotf(float x) {
+    float t = pow(x, 1.0 / m2);
+    return pow(max(t - c1, 0.0) / (c2 - c3 * t), 1.0 / m1) * pw;
+}
+
+const float d = -0.56;
+const float d0 = 1.6295499532821566e-11;
+
+float I_to_J(float I) {
+    return ((1.0 + d) * I) / (1.0 + (d * I)) - d0;
+}
+
+float J_to_I(float J) {
+    return (J + d0) / (1.0 + d - d * (J + d0));
 }
 
 float get_max_i() {
@@ -795,6 +819,7 @@ float get_max_i() {
 }
 
 float get_min_i() {
+    // TODO：improve temporal stabilization, then enable this
     // if (enable_metering > 0)
     //     return float(metered_min_i) / 4095.0;
 
@@ -821,15 +846,55 @@ float get_avg_i() {
     return 0.0;
 }
 
+float get_ev(float average) {
+    float anchor = pq_eotf(J_to_I(
+        auto_exposure_anchor * I_to_J(pq_eotf_inv(reference_white))
+    ));
+
+    return clamp(
+        log2(anchor / average),
+        -auto_exposure_limit_negtive,
+        auto_exposure_limit_postive
+    );
+}
+
 void hook() {
     max_i = get_max_i();
     min_i = get_min_i();
     avg_i = get_avg_i();
+
+    ev = (avg_i > 0.0 && auto_exposure_anchor > 0.0) ?
+        get_ev(pq_eotf(avg_i)) :
+        0.0;
+
+    if (ev != 0.0) {
+        max_i = pq_eotf_inv(pq_eotf(max_i) * exp2(ev));
+        min_i = pq_eotf_inv(pq_eotf(min_i) * exp2(ev));
+    }
 }
 
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!BIND METADATA
+//!WHEN preview_metering 0 =
+//!DESC tone mapping (auto exposure)
+
+vec3 exposure(vec3 x, float ev) {
+    return x * exp2(ev);
+}
+
+vec4 hook() {
+    vec4 color = HOOKED_tex(HOOKED_pos);
+
+    color.rgb = exposure(color.rgb, ev);
+
+    return color;
+}
+
+//!HOOK OUTPUT
+//!BIND HOOKED
+//!BIND METADATA
+//!WHEN preview_metering 0 =
 //!DESC tone mapping (astra)
 
 const float m1 = 2610.0 / 4096.0 / 4.0;
@@ -1023,29 +1088,6 @@ vec3 Jab_to_RGB(vec3 color) {
     return color;
 }
 
-float ev = 0.0;
-
-vec3 auto_exposure(vec3 color) {
-    if (auto_exposure_anchor <= 0.0)
-        return color;
-
-    if (avg_i <= 0.0)
-        return color;
-
-    float ach = pq_eotf(J_to_I(
-        auto_exposure_anchor * I_to_J(pq_eotf_inv(reference_white))
-    ));
-    float avg = pq_eotf(avg_i);
-
-    ev = clamp(
-        log2(ach / avg),
-        -auto_exposure_limit_negtive,
-        auto_exposure_limit_postive
-    );
-
-    return color * exp2(ev);
-}
-
 float f(float x, float iw, float ib, float ow, float ob) {
     float midgray   = 0.5 * ow;
     float shadow    = mix(midgray, ob, 0.66);
@@ -1076,24 +1118,19 @@ float f(float x, float iw, float ib, float ow, float ob) {
         x = -exp(as + bs * log(max(-(x - x3), 1e-6))) + y3;
     }
 
-    return clamp(x, ob, ow);
+    return x;
 }
 
 float curve(float x) {
     float ow = I_to_J(pq_eotf_inv(reference_white));
     float ob = I_to_J(pq_eotf_inv(reference_white / 1000.0));
-    float iw = max_i;
-    float ib = min_i;
+    float iw = I_to_J(max_i);
+    float ib = I_to_J(min_i);
 
-    if (ev != 0.0) {
-        iw = pq_eotf_inv(pq_eotf(iw) * exp2(ev));
-        ib = pq_eotf_inv(pq_eotf(ib) * exp2(ev));
-    }
+    iw = max(iw, ow);
+    ib = min(ib, ob);
 
-    iw = max(I_to_J(iw), ow + 1e-3);
-    ib = min(I_to_J(ib), ob - 1e-3);
-
-    return f(x, iw, ib, ow, ob);
+    return clamp(f(x, iw, ib, ow, ob), ob, ow);
 }
 
 vec2 chroma_correction(vec2 ab, float i1, float i2) {
@@ -1111,7 +1148,6 @@ vec3 tone_mapping(vec3 iab) {
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
-    color.rgb = auto_exposure(color.rgb);
     color.rgb = RGB_to_Jab(color.rgb);
     color.rgb = tone_mapping(color.rgb);
     color.rgb = Jab_to_RGB(color.rgb);
