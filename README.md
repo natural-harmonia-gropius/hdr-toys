@@ -24,7 +24,14 @@ For more detailed information, please visit the [wiki](https://github.com/natura
 
   If you've confirmed these settings and the problem persists, please submit an issue.
 
+- **UI/OSD looks washed out.**
+
+  To ensure the video input meets the standards, I use a little trick by setting `target-prim` and `target-trc` to match the input values. As a side effect, the OSD appears washed out, I currently have no solution.
+
 - **Video always appears too dark or too bright.**
+
+  > [!TIP]
+  > This problem should no longer exist after adding central average metering.
 
   This issue arises from the inability to determine the reference white of the video, which is unfortunately not included in the metadata.
 
@@ -43,11 +50,10 @@ For more detailed information, please visit the [wiki](https://github.com/natura
   m   set glsl-shader-opts reference_white=203
   ```
 
-- **UI/OSD looks washed out.**
-
-  To ensure the video input meets the standards, I use a little trick by setting `target-prim` and `target-trc` to match the input values. As a side effect, the OSD appears washed out, I currently have no solution.
-
 - **I'm not using BT.709 display.**
+
+  > [!NOTE]
+  > The reliability of this action cannot be guaranteed.
 
   Replace all `gamut-mapping/*` lines in `hdr-toys.conf` with `gamut-mapping/clip.glsl`. Then modify the `#define to *` in `clip.glsl` to match your display.
 
@@ -59,4 +65,4 @@ For more detailed information, please visit the [wiki](https://github.com/natura
 
 - **I don't use mpv, can I use these shaders?**
 
-  These shaders use [mpv .hook syntax](https://libplacebo.org/custom-shaders/), which requires `libplacebo` for execution. ffmpeg and VLC should be able to use. In theory, porting to other shader languages is very feasible.
+  These shaders use [mpv .hook syntax](https://libplacebo.org/custom-shaders/), which requires `libplacebo` for execution. ffmpeg and VLC should be able to use. In theory, porting to other shader like languages is very feasible.
