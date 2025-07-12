@@ -28,32 +28,7 @@ For more detailed information, please visit the [wiki](https://github.com/natura
 
   To ensure the video input meets the standards, I use a little trick by setting `target-prim` and `target-trc` to match the input values. As a side effect, the OSD appears washed out, I currently have no solution.
 
-- **Video always appears too dark or too bright.**
-
-  > [!TIP]
-  > This problem should no longer exist after adding central average metering.
-
-  This issue arises from the inability to determine the reference white of the video, which is unfortunately not included in the metadata.
-
-  Shaders' default reference white is 203.
-
-  However, for PQ, it mostly 100. It can be set to 100 by uncomment (remove #) the following line in `hdr-toys.conf`.
-
-  ```ini
-  glsl-shader-opts=reference_white=100
-  ```
-
-  To adjust it at runtime, add the following lines to `input.conf`.
-
-  ```ini
-  n   set glsl-shader-opts reference_white=100
-  m   set glsl-shader-opts reference_white=203
-  ```
-
 - **I'm not using BT.709 display.**
-
-  > [!NOTE]
-  > The reliability of this action cannot be guaranteed.
 
   Replace all `gamut-mapping/*` lines in `hdr-toys.conf` with `gamut-mapping/clip.glsl`. Then modify the `#define to *` in `clip.glsl` to match your display.
 
