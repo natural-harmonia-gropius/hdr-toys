@@ -1127,8 +1127,8 @@ float curve(float x) {
     float iw = I_to_J(max_i);
     float ib = I_to_J(min_i);
 
-    iw = max(iw, ow);
-    ib = min(ib, ob);
+    iw = max(iw, ow + 1e-3);
+    ib = min(ib, ob - 1e-3);
 
     return clamp(f(x, iw, ib, ow, ob), ob, ow);
 }
