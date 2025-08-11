@@ -32,7 +32,7 @@ For more detailed information, please visit the [wiki](https://github.com/natura
 
   Replace all `gamut-mapping/*` lines in `hdr-toys.conf` with `gamut-mapping/clip.glsl`. Then modify the `#define to *` in `clip.glsl` to match your display.
 
-- **What does hdr-toys.js do?**
+- **What does hdr-toys.lua do?**
 
   this provides a way to indirectly pass the necessary information using the [glsl-shader-opts](https://mpv.io/manual/master/#options-glsl-shader-opts).
 
