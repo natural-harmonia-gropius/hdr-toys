@@ -1039,7 +1039,8 @@ float Jhk_to_J(vec3 JCh) {
     return J - C * hke_fh(h);
 }
 
-const float epsilon = 0.000005;
+// 1/720 of PQ to Jz
+const float epsilon = 0.0005938;
 
 vec3 Lab_to_LCh(vec3 Lab) {
     float L = Lab.x;
@@ -1047,7 +1048,7 @@ vec3 Lab_to_LCh(vec3 Lab) {
     float b = Lab.z;
 
     float C = length(vec2(a, b));
-    float h = (abs(a) < epsilon && abs(b) < epsilon) ? 0.0 : atan(b, a);
+    float h = C < epsilon ? 0.0 : atan(b, a);
 
     return vec3(L, C, h);
 }
