@@ -175,8 +175,8 @@ float f(float x, float a, float b, float c, float d) {
 float curve(float x) {
     float ow = pq_eotf_inv(reference_white);
     float ob = pq_eotf_inv(reference_white / 1000.0);
-    float iw = max(get_max_i(), ow + 1e-3);
-    float ib = min(get_min_i(), ob - 1e-3);
+    float iw = max(get_max_i(), ow);
+    float ib = min(get_min_i(), ob);
     return f(x, ib, iw, ob, ow);
 }
 
