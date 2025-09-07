@@ -2,11 +2,11 @@
 
 A set of color conversion shaders for mpv-player (gpu-next).
 
-| R                                                                                                              | G                                                                                                              | B                                                                                                              |
-| -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| ![屏幕截图 2024-10-21 220701](https://github.com/user-attachments/assets/8fce1636-1a8f-49d5-88b5-6dfd2b8c3e9e) | ![屏幕截图 2024-10-21 220729](https://github.com/user-attachments/assets/e9d68096-aeb6-4dd0-8d2c-3c20aa201b94) | ![屏幕截图 2024-10-21 220749](https://github.com/user-attachments/assets/9078074b-be86-408d-9dcb-9dd171fdcac6) |
-
 For more detailed information, please visit the [wiki](https://github.com/natural-harmonia-gropius/hdr-toys/wiki).
+
+|                                                                                                                                      |                                                                                                                                      |                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/2ee1f4af-9ef3-4cae-a8f2-3ac4412a8a6f" /> | <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/93997a25-1adc-43f9-ae3d-548477075b0f" /> | <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/b7d81ffe-ff03-4e4c-98bd-daaf142ca83b" /> |
 
 ## Getting Started
 
