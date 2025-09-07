@@ -34,7 +34,7 @@ For more detailed information, please visit the [wiki](https://github.com/natura
 
 - **What does hdr-toys.lua do?**
 
-  this provides a way to indirectly pass the necessary information using the [glsl-shader-opts](https://mpv.io/manual/master/#options-glsl-shader-opts).
+  This provides a way to indirectly pass the necessary information using the [glsl-shader-opts](https://mpv.io/manual/master/#options-glsl-shader-opts).
 
   - the number of frames for 1/3 second, for reduce flickering.
 
