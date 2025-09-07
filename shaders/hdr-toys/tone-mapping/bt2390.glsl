@@ -52,7 +52,7 @@ maxrgb
 
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!WHEN representation 0 =
+//!WHEN representation ictcp =
 //!DESC tone mapping (bt.2390, ICtCp)
 
 const float m1 = 2610.0 / 4096.0 / 4.0;
@@ -245,7 +245,7 @@ vec4 hook() {
 
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!WHEN representation 1 =
+//!WHEN representation ycbcr =
 //!DESC tone mapping (bt.2390, Y'Cb'Cr')
 
 const float m1 = 2610.0 / 4096.0 / 4.0;
@@ -398,7 +398,7 @@ vec4 hook() {
 
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!WHEN representation 2 =
+//!WHEN representation yrgb =
 //!DESC tone mapping (bt.2390, YRGB)
 
 const float m1 = 2610.0 / 4096.0 / 4.0;
@@ -519,7 +519,7 @@ vec4 hook() {
 
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!WHEN representation 3 =
+//!WHEN representation prergb =
 //!DESC tone mapping (bt.2390, R'G'B')
 
 const float m1 = 2610.0 / 4096.0 / 4.0;
@@ -644,7 +644,7 @@ vec4 hook() {
 
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!WHEN representation 4 =
+//!WHEN representation maxrgb =
 //!DESC tone mapping (bt.2390, maxRGB)
 
 const float m1 = 2610.0 / 4096.0 / 4.0;
