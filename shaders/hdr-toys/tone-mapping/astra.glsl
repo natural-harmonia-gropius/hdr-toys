@@ -1089,6 +1089,20 @@ vec3 Jab_to_RGB(vec3 color) {
     return color;
 }
 
+float f_slope(float x0, float y0, float x1, float y1) {
+    float num = (y1 - y0);
+    float den = (x1 - x0);
+    return abs(den) < 1e-6 ? 0.0 : num / den;
+}
+
+float f_intercept(float slope, float x0, float y0) {
+    return y0 - slope * x0;
+}
+
+float f_linear(float x, float slope, float intercept) {
+    return slope * x + intercept;
+}
+
 float f(float x, float iw, float ib, float ow, float ob) {
     float midgray   = 0.5 * ow;
     float shadow    = mix(midgray, ob, 0.66);
@@ -1103,20 +1117,39 @@ float f(float x, float iw, float ib, float ow, float ob) {
     float x3 = iw;
     float y3 = ow;
 
-    float al = (y2 - y1) / (x2 - x1);
+    float slope = f_slope(x1, y1, x2, y2);
+    float intercept = f_intercept(slope, x1, y1);
+
+    if (x >= x1 && x <= x2) {
+        return f_linear(x, slope, intercept);
+    }
 
     if (x < x1) {
-        float at = al * (x1 - x0) * (x1 - x0) * (y1 - y0) * (y1 - y0) / ((y1 - y0 - al * (x1 - x0)) * (y1 - y0 - al * (x1 - x0)));
-        float bt = al * (x1 - x0) * (x1 - x0) / (y1 - y0 - al * (x1 - x0));
-        float ct = (y1 - y0) * (y1 - y0) / (y1 - y0 - al * (x1 - x0));
-        x = -at / (x - x0 + bt) + ct + y0;
-    } else if (x < x2) {
-        float bl = y1 - al * x1;
-        x = al * x + bl;
-    } else {
-        float bs = al * (x3 - x2) / (y3 - y2);
+        float slope_toe = f_slope(x0, y0, x1, y1);
+        if (slope_toe == slope) {
+            return f_linear(x, slope, intercept);
+        }
+
+        float dx = x1 - x0;
+        float dy = y1 - y0;
+        float dx2 = dx * dx;
+        float dy2 = dy * dy;
+        float den = dy - slope * dx;
+        float at = slope * dx2 * dy2 / (den * den);
+        float bt = slope * dx2 / den;
+        float ct = dy2 / den;
+        return -at / (x - x0 + bt) + ct + y0;
+    }
+
+    if (x > x2) {
+        float slope_shoulder = f_slope(x2, y2, x3, y3);
+        if (slope_shoulder == slope) {
+            return f_linear(x, slope, intercept);
+        }
+
+        float bs = slope * (x3 - x2) / (y3 - y2);
         float as = log(y3 - y2) - bs * log(x3 - x2);
-        x = -exp(as + bs * log(max(-(x - x3), 1e-6))) + y3;
+        return -exp(as + bs * log(max(x3 - x, 1e-6))) + y3;
     }
 
     return x;
@@ -1128,8 +1161,8 @@ float curve(float x) {
     float iw = I_to_J(max_i);
     float ib = I_to_J(min_i);
 
-    iw = max(iw, ow + 1e-3);
-    ib = min(ib, ob - 1e-3);
+    iw = max(iw, ow);
+    ib = min(ib, ob);
 
     return clamp(f(x, iw, ib, ow, ob), ob, ow);
 }
