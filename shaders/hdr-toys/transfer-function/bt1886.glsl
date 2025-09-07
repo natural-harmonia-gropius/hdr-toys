@@ -1,5 +1,11 @@
 // https://www.itu.int/rec/R-REC-BT.1886
 
+//!PARAM contrast_ratio
+//!TYPE float
+//!MINIMUM 10.0
+//!MAXIMUM 100000000.0
+1000.0
+
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!DESC transfer function (bt.1886)
@@ -22,7 +28,7 @@ vec3 bt1886_eotf_inv(vec3 color, float gamma, float Lw, float Lb) {
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
-    color.rgb = bt1886_eotf_inv(color.rgb, 2.4, 1.0, 0.001);
+    color.rgb = bt1886_eotf_inv(color.rgb, 2.4, 1.0, 1.0 / contrast_ratio);
 
     return color;
 }

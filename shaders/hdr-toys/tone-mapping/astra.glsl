@@ -55,6 +55,12 @@
 //!MAXIMUM 1000.0
 203.0
 
+//!PARAM contrast_ratio
+//!TYPE float
+//!MINIMUM 10.0
+//!MAXIMUM 100000000.0
+1000.0
+
 //!PARAM auto_exposure_anchor
 //!TYPE float
 //!MINIMUM 0.0
@@ -826,7 +832,7 @@ float get_min_i() {
     if (min_luma > 0.0)
         return pq_eotf_inv(min_luma);
 
-    return pq_eotf_inv(0.001);
+    return pq_eotf_inv(0.0);
 }
 
 float get_avg_i() {
@@ -1157,7 +1163,7 @@ float f(float x, float iw, float ib, float ow, float ob) {
 
 float curve(float x) {
     float ow = I_to_J(pq_eotf_inv(reference_white));
-    float ob = I_to_J(pq_eotf_inv(reference_white / 1000.0));
+    float ob = I_to_J(pq_eotf_inv(reference_white / contrast_ratio));
     float iw = I_to_J(max_i);
     float ib = I_to_J(min_i);
 
