@@ -16,7 +16,7 @@ exposure
 
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!WHEN mode 0 =
+//!WHEN mode luminance =
 //!DESC tone mapping (false color, luminance)
 
 // oklch(0.99500 0.00 000.0)    >10000 nits
@@ -170,7 +170,7 @@ vec4 hook() {
 
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!WHEN mode 1 =
+//!WHEN mode exposure =
 //!DESC tone mapping (false color, exposure)
 
 // Inspired by the Ansel Adams' Zone System
