@@ -38,7 +38,6 @@ mirror
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!DESC transform
-//!WHEN scale_x 1.0 = ! scale_y 1.0 = ! + translate_x 0.0 = ! + translate_y 0.0 = ! + skew_x 0.0 = ! + skew_y 0.0 = ! + rotate 0.0 = ! +
 
 mat3 make_rotate(float deg) {
     float rad = radians(deg);
