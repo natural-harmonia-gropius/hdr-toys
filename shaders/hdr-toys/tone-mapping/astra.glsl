@@ -93,8 +93,8 @@
 
 //!PARAM contrast_bias
 //!TYPE float
-//!MINIMUM -1.0
-//!MAXIMUM 1.0
+//!MINIMUM -10.0
+//!MAXIMUM 0.99
 0.0
 
 //!PARAM hk_effect_compensate_scaling
@@ -1153,7 +1153,7 @@ float f(
 
     if (x < x1) {
         float slope_toe = f_slope(x0, y0, x1, y1);
-        if (slope_toe == slope) {
+        if (slope_toe >= slope) {
             return f_linear(x, slope, intercept);
         }
 
@@ -1170,7 +1170,7 @@ float f(
 
     if (x > x2) {
         float slope_shoulder = f_slope(x2, y2, x3, y3);
-        if (slope_shoulder == slope) {
+        if (slope_shoulder >= slope) {
             return f_linear(x, slope, intercept);
         }
 
