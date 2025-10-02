@@ -91,6 +91,12 @@
 //!MAXIMUM 1.0
 0.04
 
+//!PARAM contrast_bias
+//!TYPE float
+//!MINIMUM -1.0
+//!MAXIMUM 1.0
+0.0
+
 //!PARAM hk_effect_compensate_scaling
 //!TYPE float
 //!MINIMUM 0.0
@@ -1123,7 +1129,7 @@ float f_linear(float x, float slope, float intercept) {
 
 float f(
     float x, float iw, float ib, float ow, float ob,
-    float sw, float hw
+    float sw, float hw, float c
 ) {
     float midgray   = 0.5 * ow;
     float shadow    = mix(midgray, ob, sw);
@@ -1131,9 +1137,9 @@ float f(
 
     float x0 = ib;
     float y0 = ob;
-    float x1 = shadow;
+    float x1 = mix(shadow, midgray, c);
     float y1 = shadow;
-    float x2 = highlight;
+    float x2 = mix(highlight, midgray, c);
     float y2 = highlight;
     float x3 = iw;
     float y3 = ow;
@@ -1187,7 +1193,7 @@ float curve(float x) {
 
     return clamp(f(
         x, iw, ib, ow, ob,
-        shadow_weight, highlight_weight
+        shadow_weight, highlight_weight, contrast_bias
     ), ob, ow);
 }
 
