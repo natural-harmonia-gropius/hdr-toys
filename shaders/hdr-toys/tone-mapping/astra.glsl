@@ -79,6 +79,18 @@
 //!MAXIMUM 5.0
 0.0
 
+//!PARAM shadow_weight
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 1.0
+0.66
+
+//!PARAM highlight_weight
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 1.0
+0.04
+
 //!PARAM hk_effect_compensate_scaling
 //!TYPE float
 //!MINIMUM 0.0
@@ -1109,10 +1121,13 @@ float f_linear(float x, float slope, float intercept) {
     return slope * x + intercept;
 }
 
-float f(float x, float iw, float ib, float ow, float ob) {
+float f(
+    float x, float iw, float ib, float ow, float ob,
+    float sw, float hw
+) {
     float midgray   = 0.5 * ow;
-    float shadow    = mix(midgray, ob, 0.66);
-    float highlight = mix(midgray, ow, 0.04);
+    float shadow    = mix(midgray, ob, sw);
+    float highlight = mix(midgray, ow, hw);
 
     float x0 = ib;
     float y0 = ob;
@@ -1170,7 +1185,10 @@ float curve(float x) {
     iw = max(iw, ow);
     ib = min(ib, ob);
 
-    return clamp(f(x, iw, ib, ow, ob), ob, ow);
+    return clamp(f(
+        x, iw, ib, ow, ob,
+        shadow_weight, highlight_weight
+    ), ob, ow);
 }
 
 vec2 chroma_correction(vec2 ab, float i1, float i2) {
