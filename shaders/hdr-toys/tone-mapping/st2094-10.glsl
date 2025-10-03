@@ -345,8 +345,8 @@ float f(
     float x2 = adapt;
     float y2 = sqrt(x2 * sqrt(y3 * y1));
 
-    x2 = clamp(x2, x1 + 0.001, 0.9 * x3);
-    y2 = clamp(y2, y1 + 0.001, 0.9 * y3);
+    x2 = clamp(x2, mix(log2(x1), log2(x3), 0.2), mix(log2(x1), log2(x3), 0.8));
+    y2 = clamp(y2, mix(log2(y1), log2(y3), 0.2), mix(log2(y1), log2(y3), 0.8));
 
     float a = x3 * y3 * (x1 - x2) + x2 * y2 * (x3 - x1) + x1 * y1 * (x2 - x3);
 
