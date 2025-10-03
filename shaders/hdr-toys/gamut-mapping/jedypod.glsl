@@ -5,25 +5,25 @@
 //!TYPE float
 //!MINIMUM 1.01
 //!MAXIMUM 2.0
-1.216
+1.595
 
 //!PARAM magenta_limit
 //!TYPE float
 //!MINIMUM 1.01
 //!MAXIMUM 2.0
-1.035
+1.089
 
 //!PARAM yellow_limit
 //!TYPE float
 //!MINIMUM 1.01
 //!MAXIMUM 2.0
-1.076
+1.117
 
 //!PARAM cyan_threshold
 //!TYPE float
 //!MINIMUM 0.0
 //!MAXIMUM 1.0
-0.998
+0.990
 
 //!PARAM magenta_threshold
 //!TYPE float
