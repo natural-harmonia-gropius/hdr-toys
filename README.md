@@ -36,7 +36,7 @@ For more detailed information, please visit the [wiki](https://github.com/natura
   target-colorspace-hint=yes
   ...
   glsl-shader=~~/shaders/hdr-toys/transfer-function/pq.glsl
-  glsl-shader-opts=reference_white=1000,output_contrast=1000000
+  glsl-shader-opts-append=reference_white=1000,output_contrast=1000000
   ```
 
   Replace all `gamut-mapping/*` lines in `hdr-toys.conf` with `gamut-mapping/clip.glsl`. Then modify the `#define to *` in `clip.glsl` to match your display's gamut.
