@@ -106,7 +106,7 @@
 //!PARAM chroma_correction_scaling
 //!TYPE float
 //!MINIMUM 0.0
-//!MAXIMUM 1.0
+//!MAXIMUM 5.0
 1.0
 
 //!PARAM spatial_stable_iterations
@@ -1197,16 +1197,19 @@ float curve(float x) {
     ), ob, ow);
 }
 
-vec2 chroma_correction(vec2 ab, float i1, float i2) {
-    float r1 = i1 / max(i2, 1e-6);
-    float r2 = i2 / max(i1, 1e-6);
-    return ab * mix(1.0, min(r1, r2), chroma_correction_scaling);
+vec2 chroma_correction(vec2 ab, float l1, float l2) {
+    float r1 = l1 / max(l2, 1e-6);
+    float r2 = l2 / max(l1, 1e-6);
+    float r_min = min(r1, r2);
+    float r_scaled = mix(1.0, r_min, chroma_correction_scaling);
+    float r_safe = max(r_scaled, 0.0);
+    return ab * r_safe;
 }
 
-vec3 tone_mapping(vec3 iab) {
-    float i2 = curve(iab.x);
-    vec2 ab2 = chroma_correction(iab.yz, iab.x, i2);
-    return vec3(i2, ab2);
+vec3 tone_mapping(vec3 lab) {
+    float l2 = curve(lab.x);
+    vec2 ab2 = chroma_correction(lab.yz, lab.x, l2);
+    return vec3(l2, ab2);
 }
 
 vec4 hook() {
