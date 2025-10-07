@@ -1028,10 +1028,26 @@ float J_to_I(float J) {
     return (J + d0) / (1.0 + d - d * (J + d0));
 }
 
+// CIELUV: -0.01585, -0.03017, -0.04556, -0.02667, -0.00295, 0.14592, 0.05084, -0.01900, -0.00764
+float hke_fh_nayatani(
+    float h, float k1,
+    float k2, float k3, float k4, float k5,
+    float k6, float k7, float k8, float k9
+) {
+    float q = k1 +
+        k2 * cos(h) + k3 * cos(2.0 * h) + k4 * cos(3.0 * h) + k5 * cos(4.0 * h) +
+        k6 * sin(h) + k7 * sin(2.0 * h) + k8 * sin(3.0 * h) + k9 * sin(4.0 * h);
+    // flipped
+    return -q;
+}
+
+// CIECAM02: -0.218, 0.167, -0.500, 0.032, 0.887
+// CAM16: -0.160, 0.132, -0.405, 0.080, 0.792
 float hke_fh_hellwig(float h, float a1, float a2, float a3, float a4, float a5) {
     return a1 * cos(h) + a2 * cos(2.0 * h) + a3 * sin(h) + a4 * sin(2.0 * h) + a5;
 }
 
+// CIELAB: 0.1644, 0.0603, 0.1307, 0.0060
 float hke_fh_high(float h, float k1, float k2, float k3, float k4) {
     h = mod(mod(degrees(h), 360.0) + 360.0, 360.0);
     float by = k1 * abs(sin(radians((h - 90.0)/ 2.0))) + k2;
@@ -1039,6 +1055,8 @@ float hke_fh_high(float h, float k1, float k2, float k3, float k4) {
     return by + r;
 }
 
+// CIECAM16: 1.5940, 45.0, 2.6518
+// CIELAB: 0.1644, 45.0, 0.1024
 float hke_fh_liao(float h, float k3, float k4, float k5) {
     h = mod(mod(degrees(h), 360.0) + 360.0, 360.0);
     return k3 * abs(log(((h + k4) / (90.0 + k4)))) + k5;
@@ -1197,6 +1215,9 @@ float curve(float x) {
     ), ob, ow);
 }
 
+// this preserves the direction of the Vividness vector
+// V = sqrt(J^2 + C^2)
+// K = Norm - V
 vec2 chroma_correction(vec2 ab, float l1, float l2) {
     float r1 = l1 / max(l2, 1e-6);
     float r2 = l2 / max(l1, 1e-6);
