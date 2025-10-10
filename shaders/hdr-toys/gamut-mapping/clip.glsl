@@ -350,6 +350,14 @@ const Chromaticity DGAMUT = Chromaticity(
     D65
 );
 
+// Apple Wide Gamut
+const Chromaticity AppleWideGamut = Chromaticity(
+    vec2(0.725,  0.301),
+    vec2(0.221,  0.814),
+    vec2(0.068, -0.076),
+    D65
+);
+
 // Chromatic adaptation transform
 // https://en.wikipedia.org/wiki/LMS_color_space
 
