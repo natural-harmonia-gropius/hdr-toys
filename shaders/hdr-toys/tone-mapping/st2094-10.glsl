@@ -54,7 +54,7 @@
 0.5
 
 //!BUFFER METERED
-//!VAR float metered_avg_l
+//!VAR float metered_avg_i
 //!STORAGE
 
 //!HOOK OUTPUT
@@ -82,7 +82,8 @@ float pq_eotf_inv(float x) {
 
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
-    float l = dot(color.rgb * reference_white, y_coef);
+    float l = dot(color.rgb, y_coef);
+    float l_abs = l * reference_white;
     float i = pq_eotf_inv(l);
     return vec4(i, vec3(0.0));
 }
@@ -179,7 +180,7 @@ vec4 hook() { return AVG_tex(AVG_pos); }
 //!DESC tone mapping (st2094-10, average, 1)
 
 void hook() {
-    metered_avg_l = AVG_tex(AVG_pos).x;
+    metered_avg_i = AVG_tex(AVG_pos).x;
 }
 
 //!HOOK OUTPUT
@@ -318,8 +319,8 @@ float get_avg_l() {
     if (scene_avg > 0.0)
         return scene_avg;
 
-    if (metered_avg_l > 0.0)
-        return pq_eotf(clamp(metered_avg_l, 0.1, 0.5));
+    if (metered_avg_i > 0.0)
+        return pq_eotf(clamp(metered_avg_i, 0.1, 0.5));
 
     if (max_fall > 0.0)
         return max_fall;
@@ -345,8 +346,14 @@ float f(
     float x2 = adapt;
     float y2 = sqrt(x2 * sqrt(y3 * y1));
 
-    x2 = clamp(x2, mix(log2(x1), log2(x3), 0.2), mix(log2(x1), log2(x3), 0.8));
-    y2 = clamp(y2, mix(log2(y1), log2(y3), 0.2), mix(log2(y1), log2(y3), 0.8));
+    // the specification imposes no restrictions on x2 and y2,
+    // but the default values consistently produce underexposed results,
+    // and extreme values may cause abnormal display artifacts.
+    float geo_mean = sqrt(y1 * y3);
+    float dynamic_range = log2(x3 / x1);
+    float lift_factor = mix(3.0, 6.0, clamp((dynamic_range - 8.0) / 8.0, 0.0, 1.0));
+    x2 = clamp(x2, x1 + 1e-6, x3 - 1e-6);
+    y2 = clamp(y2, geo_mean * lift_factor * 0.85, geo_mean * lift_factor * 1.3);
 
     float a = x3 * y3 * (x1 - x2) + x2 * y2 * (x3 - x1) + x1 * y1 * (x2 - x3);
 
