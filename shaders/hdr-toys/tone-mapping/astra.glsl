@@ -1,13 +1,12 @@
 // Astra, a tone mapping operator designed to preserve the creator's intent
 
-// working space: https://doi.org/10.1364/OE.25.015131
-// lms matrix: https://doi.org/10.1364/OE.413659
+// working space: https://doi.org/10.2352/ISSN.2169-2629.2017.25.264
 // hk effect: https://doi.org/10.1364/OE.534073
 // chroma correction: https://www.itu.int/pub/R-REP-BT.2408
 // dynamic metadata: https://github.com/mpv-player/mpv/pull/15239
 // fast gaussian blur: https://www.rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/
-// shoulder segment: http://filmicworlds.com/blog/filmic-tonemapping-with-piecewise-power-curves/
-// toe segment: https://technorgb.blogspot.com/2018/02/hyperbola-tone-mapping.html
+// toe segment of curve: https://technorgb.blogspot.com/2018/02/hyperbola-tone-mapping.html
+// shoulder segment of curve: http://filmicworlds.com/blog/filmic-tonemapping-with-piecewise-power-curves/
 
 //!PARAM min_luma
 //!TYPE float
@@ -954,20 +953,51 @@ vec3 pq_eotf(vec3 color) {
     );
 }
 
+// Jzazbz added a factor to m2, which differs from the original PQ equation.
+const float m2_z = 1.7 * m2;
+
+float iz_eotf_inv(float x) {
+    float t = pow(x / pw, m1);
+    return pow((c1 + c2 * t) / (1.0 + c3 * t), m2_z);
+}
+
+vec3 iz_eotf_inv(vec3 color) {
+    return vec3(
+        iz_eotf_inv(color.r),
+        iz_eotf_inv(color.g),
+        iz_eotf_inv(color.b)
+    );
+}
+
+float iz_eotf(float x) {
+    float t = pow(x, 1.0 / m2_z);
+    return pow(max(t - c1, 0.0) / (c2 - c3 * t), 1.0 / m1) * pw;
+}
+
+vec3 iz_eotf(vec3 color) {
+    return vec3(
+        iz_eotf(color.r),
+        iz_eotf(color.g),
+        iz_eotf(color.b)
+    );
+}
+
 vec3 RGB_to_XYZ(vec3 RGB) {
-    return RGB * mat3(
+    const mat3 M = mat3(
         0.6369580483012914, 0.14461690358620832,  0.1688809751641721,
         0.2627002120112671, 0.6779980715188708,   0.05930171646986196,
         0.0               , 0.028072693049087428, 1.060985057710791
     );
+    return RGB * M;
 }
 
 vec3 XYZ_to_RGB(vec3 XYZ) {
-    return XYZ * mat3(
+    const mat3 M = mat3(
          1.716651187971268, -0.355670783776392, -0.25336628137366,
         -0.666684351832489,  1.616481236634939,  0.0157685458139111,
          0.017639857445311, -0.042770613257809,  0.942103121235474
     );
+    return XYZ * M;
 }
 
 const float b = 1.15;
@@ -986,35 +1016,59 @@ vec3 XYZm_to_XYZ(vec3 XYZm) {
 }
 
 vec3 XYZ_to_LMS(vec3 XYZ) {
-    return XYZ * mat3(
+    const mat3 M =mat3(
          0.41478972, 0.579999, 0.0146480,
         -0.2015100,  1.120649, 0.0531008,
         -0.0166008,  0.264800, 0.6684799
     );
+    return XYZ * M;
 }
 
 vec3 LMS_to_XYZ(vec3 LMS) {
-    return LMS * mat3(
+    const mat3 M = mat3(
          1.9242264357876067,  -1.0047923125953657,  0.037651404030618,
          0.35031676209499907,  0.7264811939316552, -0.06538442294808501,
         -0.09098281098284752, -0.3127282905230739,  1.5227665613052603
     );
+    return LMS * M;
 }
 
 vec3 LMS_to_Iab(vec3 LMS) {
-    return LMS * mat3(
+    const mat3 M = mat3(
+        0.0,       0.5,       0.5,
+        3.524000, -4.066708,  0.542708,
+        0.199076,  1.096799, -1.295875
+    );
+    return LMS * M;
+}
+
+vec3 Iab_to_LMS(vec3 Iab) {
+    const mat3 M = mat3(
+        1.0,  0.13860504327153927,  0.05804731615611883,
+        1.0, -0.1386050432715393,  -0.058047316156118904,
+        1.0, -0.09601924202631895, -0.81189189605603900
+    );
+    return Iab * M;
+}
+
+// ZCAM defines Iz = G' - ε, where ε = 3.7035226210190005e-11.
+// However, it appears we do not need it.
+vec3 LMS_to_Iab_optimized(vec3 LMS) {
+    const mat3 M = mat3(
         0.0,       1.0,       0.0,
         3.524000, -4.066708,  0.542708,
         0.199076,  1.096799, -1.295875
     );
+    return LMS * M;
 }
 
-vec3 Iab_to_LMS(vec3 Iab) {
-    return Iab * mat3(
+vec3 Iab_to_LMS_optimized(vec3 Iab) {
+    const mat3 M = mat3(
         1.0, 0.2772100865430786,  0.1160946323122377,
         1.0, 0.0,                 0.0,
         1.0, 0.0425858012452203, -0.75384457989992
     );
+    return Iab * M;
 }
 
 const float d = -0.56;
@@ -1081,8 +1135,10 @@ float Jhk_to_J(vec3 JCh) {
     return J - C * hke_fh(h);
 }
 
-// 1/720 of PQ to Jz
-const float epsilon = 0.0005938;
+// https://www.itu.int/rec/R-REC-BT.2124
+// ΔE_ITP_JND = 1 / 720
+// 0.0001 of Cz is much smaller than it
+const float epsilon = 0.0001;
 
 vec3 Lab_to_LCh(vec3 Lab) {
     float L = Lab.x;
@@ -1112,8 +1168,8 @@ vec3 RGB_to_Jab(vec3 color) {
     color = RGB_to_XYZ(color);
     color = XYZ_to_XYZm(color);
     color = XYZ_to_LMS(color);
-    color = pq_eotf_inv(color);
-    color = LMS_to_Iab(color);
+    color = iz_eotf_inv(color);
+    color = LMS_to_Iab_optimized(color);
     color.x = I_to_J(color.x);
     color.x = J_to_Jhk(Lab_to_LCh(color));
     return color;
@@ -1122,8 +1178,8 @@ vec3 RGB_to_Jab(vec3 color) {
 vec3 Jab_to_RGB(vec3 color) {
     color.x = Jhk_to_J(Lab_to_LCh(color));
     color.x = J_to_I(color.x);
-    color = Iab_to_LMS(color);
-    color = pq_eotf(color);
+    color = Iab_to_LMS_optimized(color);
+    color = iz_eotf(color);
     color = LMS_to_XYZ(color);
     color = XYZm_to_XYZ(color);
     color = XYZ_to_RGB(color);
@@ -1201,10 +1257,10 @@ float f(
 }
 
 float curve(float x) {
-    float ow = I_to_J(pq_eotf_inv(reference_white));
-    float ob = I_to_J(pq_eotf_inv(reference_white / contrast_ratio));
-    float iw = I_to_J(max_i);
-    float ib = I_to_J(min_i);
+    float ow = I_to_J(iz_eotf_inv(reference_white));
+    float ob = I_to_J(iz_eotf_inv(reference_white / contrast_ratio));
+    float iw = I_to_J(iz_eotf_inv(pq_eotf(max_i)));
+    float ib = I_to_J(iz_eotf_inv(pq_eotf(min_i)));
 
     iw = max(iw, ow);
     ib = min(ib, ob);
@@ -1215,9 +1271,12 @@ float curve(float x) {
     ), ob, ow);
 }
 
-// this preserves the direction of the Vividness vector
+// this is a correction in generic vividness and depth.
 // V = sqrt(J^2 + C^2)
-// K = Norm - V
+// D = sqrt((J_max - J)^2 + C^2)
+// more specific definitions of V and D at the link below:
+// https://doi.org/10.2352/ISSN.2169-2629.2018.26.96
+// https://doi.org/10.2352/issn.2169-2629.2019.27.43
 vec2 chroma_correction(vec2 ab, float l1, float l2) {
     float r1 = l1 / max(l2, 1e-6);
     float r2 = l2 / max(l1, 1e-6);
