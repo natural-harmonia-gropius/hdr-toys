@@ -670,74 +670,289 @@ void hook() {
 //!WHEN temporal_stable_frames
 //!DESC metering (temporal stabilization)
 
+// ============================================================================
+// TEMPORAL STABILIZATION - Configuration Parameters
+// ============================================================================
+// These parameters control the temporal smoothing behavior to reduce flicker
+// while maintaining responsiveness to actual scene changes.
+
+// Exponential decay factor for weighted moving average
+// Range: 0.7-0.95. Lower = more smoothing but slower response
+// Default: 0.85 balances smoothness and responsiveness
+const float TEMPORAL_DECAY = 0.85;
+
+// EMA (Exponential Moving Average) smoothing factor
+// Range: 0.1-0.3. Lower = smoother but less responsive
+// Default: 0.2 provides good stability without excessive lag
+const float TEMPORAL_EMA_ALPHA = 0.2;
+
+// Blend factor for gradual scene transition
+// Range: 0.3-0.7. Lower = smoother transitions during scene cuts
+// Default: 0.5 provides balanced transition speed
+const float TEMPORAL_SCENE_BLEND = 0.5;
+
+// Scene change blend factor (applied when cut is detected)
+// Range: 0.2-0.5. Lower = smoother but may blur real scene changes
+// Default: 0.3 maintains some smoothness during cuts
+const float TEMPORAL_CUT_BLEND = 0.3;
+
+// Base tolerance for scene change detection (in ΔE units)
+// Range: 20.0-50.0. Higher = fewer false detections but may miss real cuts
+// Default: 36.0 provides good balance for most content
+const float TEMPORAL_BASE_TOLERANCE = 36.0;
+
+// Adaptive tolerance scaling based on brightness
+// Range: 0.3-0.7. Higher = more tolerance for bright scenes
+// Default: 0.5 adapts well to various brightness levels
+const float TEMPORAL_ADAPTIVE_SCALE = 0.5;
+
+// Black scene threshold (below this is considered pure black)
+// Range: 8.0-32.0 (in 12-bit range). Higher = more aggressive black detection
+// Default: 16.0 catches most black frames without false positives
+const float TEMPORAL_BLACK_THRESHOLD = 16.0;
+
+// Metric weights for scene change detection
+// These weights determine the relative importance of each metric
+// Total should sum to 1.0 for balanced detection
+const float TEMPORAL_WEIGHT_AVG = 0.50; // Average is most reliable
+const float TEMPORAL_WEIGHT_MAX = 0.35; // Maximum is important for highlights
+const float TEMPORAL_WEIGHT_MIN = 0.15; // Minimum is least reliable (noise)
+
+// Delta scale for converting normalized differences to perceptual units
+// This converts [0,1] differences to ΔE-like perceptual differences
+const float TEMPORAL_DELTA_SCALE = 720.0;
+
+// Metric type identifiers for array access
+const int METRIC_MAX = 0;
+const int METRIC_MIN = 1;
+const int METRIC_AVG = 2;
+
+// ============================================================================
+// TEMPORAL STABILIZATION - Core Functions
+// ============================================================================
+
+/**
+ * Prepends current frame values to temporal history arrays
+ * Maintains a sliding window of the last N frames for all three metrics
+ */
 void temporal_prepend() {
+    // Shift all historical values one position forward
     for (uint i = temporal_stable_frames - 1; i > 0; i--) {
         metered_max_i_t[i] = metered_max_i_t[i - 1];
+        metered_min_i_t[i] = metered_min_i_t[i - 1];
+        metered_avg_i_t[i] = metered_avg_i_t[i - 1];
     }
+
+    // Insert current frame values at position 0
     metered_max_i_t[0] = metered_max_i;
+    metered_min_i_t[0] = metered_min_i;
+    metered_avg_i_t[0] = metered_avg_i;
 }
 
-float temporal_harmonic_mean() {
-    float sum = 0.0;
+/**
+ * Calculates weighted moving average with exponential decay
+ * Recent frames have higher weight than older frames
+ *
+ * @param type Metric type: METRIC_MAX, METRIC_MIN, or METRIC_AVG
+ * @return Weighted average value
+ */
+float temporal_weighted_mean(int type) {
+    float sum_weighted = 0.0;
+    float sum_weights = 0.0;
+
     for (uint i = 0; i < temporal_stable_frames; i++) {
-        float current = float(metered_max_i_t[i]);
-        sum += 1.0 / max(current, 1e-6);
+        // Select appropriate buffer based on metric type
+        float current;
+        if (type == METRIC_MAX) {
+            current = float(metered_max_i_t[i]);
+        } else if (type == METRIC_MIN) {
+            current = float(metered_min_i_t[i]);
+        } else { // METRIC_AVG
+            current = float(metered_avg_i_t[i]);
+        }
+
+        // Calculate exponential decay weight: w(i) = decay^i
+        // Recent frames (i=0) have weight=1.0, older frames decay exponentially
+        float weight = pow(TEMPORAL_DECAY, float(i));
+        sum_weighted += current * weight;
+        sum_weights += weight;
     }
-    return temporal_stable_frames / sum;
+
+    // Return normalized weighted average
+    return sum_weighted / max(sum_weights, 1e-6);
 }
 
-void temporal_fill() {
+/**
+ * Applies Exponential Moving Average (EMA) smoothing
+ * Provides additional stability on top of weighted average
+ *
+ * @param new_value New computed value
+ * @param prev_value Previous frame's value
+ * @return Smoothed value: prev + alpha * (new - prev)
+ */
+float apply_ema_smoothing(float new_value, float prev_value) {
+    return prev_value + TEMPORAL_EMA_ALPHA * (new_value - prev_value);
+}
+
+/**
+ * Gradually transitions temporal buffers during scene changes
+ * Blends old values towards new values to avoid sudden jumps
+ */
+void temporal_fill_gradual() {
     for (uint i = 0; i < temporal_stable_frames; i++) {
-        metered_max_i_t[i] = metered_max_i;
+        // Blend each buffer entry towards current value
+        float old_max = float(metered_max_i_t[i]);
+        float new_max = float(metered_max_i);
+        metered_max_i_t[i] = uint(mix(old_max, new_max, TEMPORAL_SCENE_BLEND) + 0.5);
+
+        float old_min = float(metered_min_i_t[i]);
+        float new_min = float(metered_min_i);
+        metered_min_i_t[i] = uint(mix(old_min, new_min, TEMPORAL_SCENE_BLEND) + 0.5);
+
+        float old_avg = float(metered_avg_i_t[i]);
+        float new_avg = float(metered_avg_i);
+        metered_avg_i_t[i] = uint(mix(old_avg, new_avg, TEMPORAL_SCENE_BLEND) + 0.5);
     }
 }
 
-float temporal_predict() {
+/**
+ * Performs linear regression prediction for scene change detection
+ * Uses least squares method to predict next frame value
+ *
+ * @param type Metric type: METRIC_MAX, METRIC_MIN, or METRIC_AVG
+ * @return Predicted value for next frame
+ */
+float temporal_predict(int type) {
     float sum_x = 0.0;
     float sum_y = 0.0;
     float sum_x2 = 0.0;
     float sum_xy = 0.0;
 
-    float n = temporal_stable_frames;
-    float xp = float(n + 1);
+    float n = float(temporal_stable_frames);
+    float xp = n + 1.0; // Predict position n+1
 
-    for (int i = 0; i < n; i++) {
+    // Accumulate sums for least squares regression
+    for (int i = 0; i < int(temporal_stable_frames); i++) {
         float x = float(i + 1);
+        float y;
+
+        // Select appropriate buffer based on metric type
+        if (type == METRIC_MAX) {
+            y = float(metered_max_i_t[i]);
+        } else if (type == METRIC_MIN) {
+            y = float(metered_min_i_t[i]);
+        } else { // METRIC_AVG
+            y = float(metered_avg_i_t[i]);
+        }
+
         sum_x += x;
-        sum_y += metered_max_i_t[i];
+        sum_y += y;
         sum_x2 += x * x;
-        sum_xy += x * metered_max_i_t[i];
+        sum_xy += x * y;
     }
 
-    float a = (n * sum_xy - sum_x * sum_y) / (n * sum_x2 - sum_x * sum_x);
-    float b = (sum_y - a * sum_x) / float(n);
+    // Calculate linear regression coefficients
+    // y = a*x + b
+    float denominator = n * sum_x2 - sum_x * sum_x;
+    float a = (n * sum_xy - sum_x * sum_y) / denominator;
+    float b = (sum_y - a * sum_x) / n;
 
+    // Return prediction for next frame
     return a * xp + b;
 }
 
-bool is_sence_changed(float m, float p) {
-    float black = 16.0;
-    if (black > metered_max_i)
+/**
+ * Detects scene changes using multi-metric prediction error analysis
+ * Combines max, min, and avg metrics with adaptive thresholding
+ *
+ * @param max_smoothed Smoothed maximum value
+ * @param min_smoothed Smoothed minimum value
+ * @param avg_smoothed Smoothed average value
+ * @param max_pred Predicted maximum value
+ * @param min_pred Predicted minimum value
+ * @param avg_pred Predicted average value
+ * @return true if scene change is detected
+ */
+bool is_scene_changed(float max_smoothed, float min_smoothed, float avg_smoothed,
+                      float max_pred, float min_pred, float avg_pred) {
+    // Detect pure black scenes (always considered a scene change)
+    if (metered_max_i < TEMPORAL_BLACK_THRESHOLD) {
         return true;
-
-    float tolerance = 36.0;
-    float im = float(m) / 4095.0;
-    float ip = float(p) / 4095.0;
-    float delta = 720 * abs(im - ip);
-    return delta > tolerance;
-}
-
-void hook() {
-    float p = temporal_predict();
-    temporal_prepend();
-    float m = temporal_harmonic_mean();
-
-    if (is_sence_changed(m, p)) {
-        temporal_fill();
-        return;
     }
 
-    metered_max_i = uint(m + 0.5);
+    // Calculate adaptive tolerance based on current brightness
+    // Brighter scenes get higher tolerance to reduce false positives
+    float brightness_factor = float(metered_max_i) / 4095.0;
+    float adaptive_tolerance = TEMPORAL_BASE_TOLERANCE *
+                               (1.0 + brightness_factor * TEMPORAL_ADAPTIVE_SCALE);
+
+    // Calculate prediction errors in perceptual units (ΔE-like)
+    // Normalize to [0,1] then scale to perceptual differences
+    float max_delta = TEMPORAL_DELTA_SCALE *
+                      abs(max_smoothed / 4095.0 - max_pred / 4095.0);
+    float min_delta = TEMPORAL_DELTA_SCALE *
+                      abs(min_smoothed / 4095.0 - min_pred / 4095.0);
+    float avg_delta = TEMPORAL_DELTA_SCALE *
+                      abs(avg_smoothed / 4095.0 - avg_pred / 4095.0);
+
+    // Combine errors using weighted average
+    // Average is most reliable, max is important, min is least reliable
+    float weighted_delta = avg_delta * TEMPORAL_WEIGHT_AVG +
+                           max_delta * TEMPORAL_WEIGHT_MAX +
+                           min_delta * TEMPORAL_WEIGHT_MIN;
+
+    // Scene change detected if weighted error exceeds adaptive threshold
+    return weighted_delta > adaptive_tolerance;
+}
+
+/**
+ * Main temporal stabilization hook
+ * Processes max, min, and avg metrics with multi-stage smoothing
+ * and intelligent scene change detection
+ */
+void hook() {
+    // Cache previous frame values for EMA smoothing
+    float prev_max = float(metered_max_i);
+    float prev_min = float(metered_min_i);
+    float prev_avg = float(metered_avg_i);
+
+    // Update temporal history with current frame
+    temporal_prepend();
+
+    // Stage 1: Weighted moving average (exponential decay)
+    // Gives more weight to recent frames
+    float max_weighted = temporal_weighted_mean(METRIC_MAX);
+    float min_weighted = temporal_weighted_mean(METRIC_MIN);
+    float avg_weighted = temporal_weighted_mean(METRIC_AVG);
+
+    // Stage 2: Exponential moving average smoothing
+    // Provides additional stability and reduces noise
+    float max_smoothed = apply_ema_smoothing(max_weighted, prev_max);
+    float min_smoothed = apply_ema_smoothing(min_weighted, prev_min);
+    float avg_smoothed = apply_ema_smoothing(avg_weighted, prev_avg);
+
+    // Generate predictions for scene change detection
+    float max_pred = temporal_predict(METRIC_MAX);
+    float min_pred = temporal_predict(METRIC_MIN);
+    float avg_pred = temporal_predict(METRIC_AVG);
+
+    // Detect and handle scene changes
+    if (is_scene_changed(max_smoothed, min_smoothed, avg_smoothed,
+                         max_pred, min_pred, avg_pred)) {
+        // Gradually transition buffer values to new scene
+        temporal_fill_gradual();
+
+        // Apply reduced smoothing for scene cuts to maintain some stability
+        // while still responding to the new scene quickly
+        max_smoothed = mix(prev_max, float(metered_max_i), TEMPORAL_CUT_BLEND);
+        min_smoothed = mix(prev_min, float(metered_min_i), TEMPORAL_CUT_BLEND);
+        avg_smoothed = mix(prev_avg, float(metered_avg_i), TEMPORAL_CUT_BLEND);
+    }
+
+    // Write back smoothed values with clamping to valid range [0, 4095]
+    metered_max_i = uint(clamp(max_smoothed, 0.0, 4095.0) + 0.5);
+    metered_min_i = uint(clamp(min_smoothed, 0.0, 4095.0) + 0.5);
+    metered_avg_i = uint(clamp(avg_smoothed, 0.0, 4095.0) + 0.5);
 }
 
 //!HOOK OUTPUT
@@ -860,9 +1075,8 @@ float get_max_i() {
 }
 
 float get_min_i() {
-    // TODO：improve temporal stabilization, then enable this
-    // if (enable_metering > 0)
-    //     return float(metered_min_i) / 4095.0;
+    if (enable_metering > 0)
+        return float(metered_min_i) / 4095.0;
 
     if (min_luma > 0.0)
         return pq_eotf_inv(min_luma);
