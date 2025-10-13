@@ -82,7 +82,7 @@
 //!TYPE float
 //!MINIMUM 0.0
 //!MAXIMUM 1.0
-0.66
+0.46
 
 //!PARAM highlight_weight
 //!TYPE float
@@ -92,8 +92,8 @@
 
 //!PARAM contrast_bias
 //!TYPE float
-//!MINIMUM -10.0
-//!MAXIMUM 0.99
+//!MINIMUM -1.0
+//!MAXIMUM  1.0
 0.0
 
 //!PARAM hk_effect_compensate_scaling
@@ -1432,12 +1432,13 @@ float f(
     float midgray   = 0.5 * ow;
     float shadow    = mix(midgray, ob, sw);
     float highlight = mix(midgray, ow, hw);
+    float contrast  = 1.0 - pow(10, -2.0 * c);
 
     float x0 = ib;
     float y0 = ob;
-    float x1 = mix(shadow, midgray, c);
+    float x1 = mix(shadow, midgray, contrast);
     float y1 = shadow;
-    float x2 = mix(highlight, midgray, c);
+    float x2 = mix(highlight, midgray, contrast);
     float y2 = highlight;
     float x3 = iw;
     float y3 = ow;
