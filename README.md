@@ -60,6 +60,7 @@ For more detailed information, please visit the [wiki](https://github.com/natura
   Add the following parameters to the conf file.
 
   ```ini
+  glsl-shader-opts-append=auto_exposure_anchor=0.5
   glsl-shader-opts-append=contrast_bias=0.07
   glsl-shader-opts-append=chroma_correction_scaling=1.33
   ```
