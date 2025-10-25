@@ -1,6 +1,6 @@
 // Astra, a tone mapping operator designed to preserve the creator's intent
 
-// working space: https://doi.org/10.2352/ISSN.2169-2629.2017.25.264
+// working space: https://doi.org/10.1364/OE.25.015131
 // hk effect: https://doi.org/10.1364/OE.534073
 // chroma correction: https://www.itu.int/pub/R-REP-BT.2408
 // dynamic metadata: https://github.com/mpv-player/mpv/pull/15239
@@ -1275,6 +1275,9 @@ vec3 Iab_to_LMS(vec3 Iab) {
     return Iab * M;
 }
 
+// https://doi.org/10.2352/ISSN.2169-2629.2017.25.264
+// Optimized matrices for Jzazbz about LMS to I conversion.
+// https://doi.org/10.1364/OE.413659
 // ZCAM defines Iz = G' - ε, where ε = 3.7035226210190005e-11.
 // However, it appears we do not need it.
 vec3 LMS_to_Iab_optimized(vec3 LMS) {
@@ -1499,7 +1502,8 @@ float curve(float x) {
 // this is a correction in generic vividness and depth.
 // V = sqrt(J^2 + C^2)
 // D = sqrt((J_max - J)^2 + C^2)
-// more specific definitions of V and D at the link below:
+// more specific definitions of V and D for Jzazbz,
+// see the following links:
 // https://doi.org/10.2352/ISSN.2169-2629.2018.26.96
 // https://doi.org/10.2352/issn.2169-2629.2019.27.43
 vec2 chroma_correction(vec2 ab, float l1, float l2) {
