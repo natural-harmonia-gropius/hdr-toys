@@ -1417,7 +1417,7 @@ vec3 Jab_to_RGB(vec3 color) {
 float f_slope(float x0, float y0, float x1, float y1) {
     float num = (y1 - y0);
     float den = (x1 - x0);
-    return abs(den) < 1e-6 ? 0.0 : num / den;
+    return abs(den) < 1e-6 ? 1.0 : num / den;
 }
 
 float f_intercept(float slope, float x0, float y0) {
