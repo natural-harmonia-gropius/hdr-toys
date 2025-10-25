@@ -1428,6 +1428,52 @@ float f_linear(float x, float slope, float intercept) {
     return slope * x + intercept;
 }
 
+// Modified to make x0 and y0 controllable.
+float f_toe_suzuki(float x, float slope, float x0, float y0, float x1, float y1) {
+    float dx = x1 - x0;
+    float dy = y1 - y0;
+    float dx2 = dx * dx;
+    float dy2 = dy * dy;
+    float den = dy - slope * dx;
+
+    float a = slope * dx2 * dy2 / (den * den);
+    float b = slope * dx2 / den;
+    float c = dy2 / den;
+
+    return -(a / (x - x0 + b)) + c + y0;
+}
+
+float f_shoulder_suzuki(float x, float slope, float x0, float y0, float x1, float y1) {
+    float d = slope * (x0 - x1) - y0 + y1;
+    float a = (slope * (x0 - x1) * (x0 - x1) * (y0 - y1) * (y0 - y1)) / (d * d);
+    float b = (slope * x0 * (x1 - x0) + x1 * (y0 - y1)) / d;
+    float c = (y1 * (slope * (x0 - x1) + y0) - y0 * y0) / d;
+    return -(a / (x + b)) + c;
+}
+
+float f_toe_hable(float x, float slope, float x0, float y0, float x1, float y1) {
+    float dx = x1 - x0;
+    float dy = y1 - y0;
+
+    float b = slope * dx / dy;
+    float a = log(dy) - b * log(dx);
+    float s = 1.0;
+
+    return exp(a + b * log(max((x - x0) * s, 1e-6))) * s + y0;
+}
+
+// Simplified, no overshoot.
+float f_shoulder_hable(float x, float slope, float x0, float y0, float x1, float y1) {
+    float dx = x1 - x0;
+    float dy = y1 - y0;
+
+    float b = slope * dx / dy;
+    float a = log(dy) - b * log(dx);
+    float s = -1.0;
+
+    return exp(a + b * log(max((x - x1) * s, 1e-6))) * s + y1;
+}
+
 float f(
     float x, float iw, float ib, float ow, float ob,
     float sw, float hw, float c
@@ -1459,15 +1505,7 @@ float f(
             return f_linear(x, slope, intercept);
         }
 
-        float dx = x1 - x0;
-        float dy = y1 - y0;
-        float dx2 = dx * dx;
-        float dy2 = dy * dy;
-        float den = dy - slope * dx;
-        float at = slope * dx2 * dy2 / (den * den);
-        float bt = slope * dx2 / den;
-        float ct = dy2 / den;
-        return -at / (x - x0 + bt) + ct + y0;
+        return f_toe_suzuki(x, slope, x0, y0, x1, y1);
     }
 
     if (x > x2) {
@@ -1476,12 +1514,17 @@ float f(
             return f_linear(x, slope, intercept);
         }
 
-        float bs = slope * (x3 - x2) / (y3 - y2);
-        float as = log(y3 - y2) - bs * log(x3 - x2);
-        return -exp(as + bs * log(max(x3 - x, 1e-6))) + y3;
+        return f_shoulder_hable(x, slope, x2, y2, x3, y3);
     }
 
     return x;
+}
+
+float f(float x, float iw, float ib, float ow, float ob) {
+    return f(
+        x, iw, ib, ow, ob,
+        shadow_weight, highlight_weight, contrast_bias
+    );
 }
 
 float curve(float x) {
@@ -1493,10 +1536,9 @@ float curve(float x) {
     iw = max(iw, ow);
     ib = min(ib, ob);
 
-    return clamp(f(
-        x, iw, ib, ow, ob,
-        shadow_weight, highlight_weight, contrast_bias
-    ), ob, ow);
+    float y = f(x, iw, ib, ow, ob);
+
+    return clamp(y, ob, ow);
 }
 
 // this is a correction in generic vividness and depth.
