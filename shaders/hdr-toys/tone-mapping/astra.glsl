@@ -108,6 +108,12 @@
 //!MAXIMUM 5.0
 1.0
 
+//!PARAM chroma_correction_power
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 5.0
+1.0
+
 //!PARAM spatial_stable_iterations
 //!TYPE uint
 //!MINIMUM 0
@@ -1551,7 +1557,8 @@ float curve(float x) {
 vec2 chroma_correction(vec2 ab, float l1, float l2) {
     float r_min = min(l1, l2) / max(max(l1, l2), 1e-6);
     float r_scaled = mix(1.0, r_min, chroma_correction_scaling);
-    float r_safe = max(r_scaled, 0.0);
+    float r_powered = pow(r_scaled, chroma_correction_power);
+    float r_safe = max(r_powered, 0.0);
     return ab * r_safe;
 }
 
