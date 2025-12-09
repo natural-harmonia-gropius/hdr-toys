@@ -1563,9 +1563,9 @@ float curve(float x) {
 vec2 chroma_correction(vec2 ab, float l1, float l2) {
     float r_min = min(l1, l2) / max(max(l1, l2), 1e-6);
     float r_scaled = mix(1.0, r_min, chroma_correction_scaling);
-    float r_powered = pow(r_scaled, chroma_correction_power);
-    float r_safe = max(r_powered, 0.0);
-    return ab * r_safe;
+    float r_safe = max(r_scaled, 0.0);
+    float r_powered = pow(r_safe, chroma_correction_power);
+    return ab * r_powered;
 }
 
 vec3 tone_mapping(vec3 lab) {
