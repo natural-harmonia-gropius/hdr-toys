@@ -64,7 +64,7 @@
 //!TYPE float
 //!MINIMUM 0.0
 //!MAXIMUM 1.0
-0.75
+0.6
 
 //!PARAM auto_exposure_limit_negtive
 //!TYPE float
