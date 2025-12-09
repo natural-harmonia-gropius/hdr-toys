@@ -63,6 +63,7 @@ For more detailed information, please visit the [wiki](https://github.com/natura
   glsl-shader-opts-append=auto_exposure_anchor=0.5
   glsl-shader-opts-append=contrast_bias=0.07
   glsl-shader-opts-append=chroma_correction_scaling=1.33
+  glsl-shader-opts-append=chroma_correction_power=2.4
   ```
 
 - **What does hdr-toys.lua do?**
