@@ -1434,6 +1434,12 @@ float f_linear(float x, float slope, float intercept) {
     return slope * x + intercept;
 }
 
+float f_contrast(float c) {
+    float k = 0.5;
+    float a = 3.0;
+    return k * (1.0 - exp(-a * c));
+}
+
 // Modified to make x0 and y0 controllable.
 float f_toe_suzuki(float x, float slope, float x0, float y0, float x1, float y1) {
     float dx = x1 - x0;
@@ -1482,12 +1488,12 @@ float f_shoulder_hable(float x, float slope, float x0, float y0, float x1, float
 
 float f(
     float x, float iw, float ib, float ow, float ob,
-    float sw, float hw, float c
+    float sw, float hw, float cb
 ) {
     float midgray   = 0.5 * ow;
     float shadow    = mix(midgray, ob, sw);
     float highlight = mix(midgray, ow, hw);
-    float contrast  = 1.0 - pow(10, -2.0 * c);
+    float contrast  = f_contrast(cb);
 
     float x0 = ib;
     float y0 = ob;
