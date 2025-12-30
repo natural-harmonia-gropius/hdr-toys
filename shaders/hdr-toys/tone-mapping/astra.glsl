@@ -1107,17 +1107,23 @@ float get_avg_i() {
     return 0.0;
 }
 
-float get_ev(float avg_i) {
+float get_ev(float avg_i, float max_i, float min_i) {
     float reference_iz = iz_eotf_inv(reference_white);
     float reference_j = I_to_J(reference_iz);
     float anchor_j = auto_exposure_anchor * reference_j;
     float anchor_iz = J_to_I(anchor_j);
     float anchor = iz_eotf(anchor_iz);
 
-    float average = pq_eotf(avg_i);
+    float average = max(pq_eotf(avg_i), 1e-6);
+    float maximum = max(pq_eotf(max_i), 1e-6);
+    float minimum = max(pq_eotf(min_i), 1e-6);
 
     float ev = log2(anchor / average);
-    return clamp(ev, -auto_exposure_limit_negtive, auto_exposure_limit_postive);
+
+    float ev_limit_neg = min(auto_exposure_limit_negtive, log2(maximum / average));
+    float ev_limit_pos = min(auto_exposure_limit_postive, log2(average / minimum));
+
+    return clamp(ev, -ev_limit_neg, ev_limit_pos);
 }
 
 void hook() {
@@ -1126,7 +1132,7 @@ void hook() {
     avg_i = get_avg_i();
 
     if (avg_i > 0.0 && auto_exposure_anchor > 0.0) {
-        ev = get_ev(avg_i);
+        ev = get_ev(avg_i, max_i, min_i);
     } else {
         ev = 0.0;
     }
