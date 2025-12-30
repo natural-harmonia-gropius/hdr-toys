@@ -1555,7 +1555,7 @@ float f(
             return f_linear(x, slope, intercept);
         }
 
-        return f_shoulder_hable(x, slope, x2, y2, x3, y3);
+        return f_shoulder_suzuki(x, slope, x2, y2, x3, y3);
     }
 
     return x;
