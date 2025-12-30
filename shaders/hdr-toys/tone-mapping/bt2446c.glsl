@@ -249,6 +249,34 @@ float curve(float x) {
     return f(x, k1, k3, ip);
 }
 
+float f_slope(float x0, float y0, float x1, float y1) {
+    float num = (y1 - y0);
+    float den = (x1 - x0);
+    return abs(den) < 1e-6 ? 1.0 : num / den;
+}
+
+float f_intercept(float slope, float x0, float y0) {
+    return y0 - slope * x0;
+}
+
+float f_linear(float x, float slope, float intercept) {
+    return slope * x + intercept;
+}
+
+float f_bpc(float x, float x0, float y0, float x1, float y1) {
+    float slope = f_slope(x0, y0, x1, y1);
+    float intercept = f_intercept(slope, x0, y0);
+    return f_linear(x, slope, intercept);
+}
+
+vec3 f_bpc(vec3 x, float x0, float y0, float x1, float y1) {
+    return vec3(
+        f_bpc(x.x, x0, y0, x1, y1),
+        f_bpc(x.y, x0, y0, x1, y1),
+        f_bpc(x.z, x0, y0, x1, y1)
+    );
+}
+
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
@@ -257,59 +285,7 @@ vec4 hook() {
     color.z   = curve(color.z);
     color.rgb = xyY_to_XYZ(color.rgb);
     color.rgb = XYZ_to_RGB(color.rgb);
-
-    return color;
-}
-
-//!HOOK OUTPUT
-//!BIND HOOKED
-//!WHEN alpha
-//!DESC tone mapping (bt.2446c, inverse crosstalk)
-
-// The inverse crosstalk matrix is applied to ensure that the original hues of input HDR images are
-// recovered.
-
-vec3 crosstalk_inv(vec3 x, float a) {
-    float b = 1.0 - a;
-    float c = 1.0 / (1.0 - 3.0 * a);
-    mat3 transform = mat3(
-        b, -a, -a,
-        -a, b, -a,
-        -a, -a, b
-    );
-    return x * transform * c;
-}
-
-vec4 hook() {
-    vec4 color = HOOKED_tex(HOOKED_pos);
-
-    color.rgb = crosstalk_inv(color.rgb, alpha);
-
-    return color;
-}
-
-//!HOOK OUTPUT
-//!BIND HOOKED
-//!DESC tone mapping (bt.2446c, signal scaling)
-
-// Handling 109% range (super-whites) and black point compensation
-
-float f(float x, float a, float b, float c, float d) {
-    return (x - a) * (d - c) / (b - a) + c;
-}
-
-vec3 f(vec3 x, float a, float b, float c, float d) {
-    return vec3(
-        f(x.x, a, b, c, d),
-        f(x.y, a, b, c, d),
-        f(x.z, a, b, c, d)
-    );
-}
-
-vec4 hook() {
-    vec4 color = HOOKED_tex(HOOKED_pos);
-
-    color.rgb = f(color.rgb, 0.0, 1019.0 / 940.0, 0.001, 1.0);
+    color.rgb = f_bpc(color.rgb, 0.0, 0.001, 1019.0 / 940.0, 1.0);
 
     return color;
 }
