@@ -763,7 +763,7 @@ void temporal_prepend() {
  * @return Weighted average value
  */
 float temporal_weighted_mean(int type) {
-    float sum_weighted = 0.0;
+    float sum_inv_weighted = 0.0;
     float sum_weights = 0.0;
 
     for (uint i = 0; i < temporal_stable_frames; i++) {
@@ -780,12 +780,14 @@ float temporal_weighted_mean(int type) {
         // Calculate exponential decay weight: w(i) = decay^i
         // Recent frames (i=0) have weight=1.0, older frames decay exponentially
         float weight = pow(TEMPORAL_DECAY, float(i));
-        sum_weighted += current * weight;
+
+        // Harmonic mean: H = sum(w) / sum(w/x)
+        sum_inv_weighted += weight / max(current, 1e-6);
         sum_weights += weight;
     }
 
-    // Return normalized weighted average
-    return sum_weighted / max(sum_weights, 1e-6);
+    // Return weighted harmonic mean
+    return sum_weights / max(sum_inv_weighted, 1e-6);
 }
 
 /**
