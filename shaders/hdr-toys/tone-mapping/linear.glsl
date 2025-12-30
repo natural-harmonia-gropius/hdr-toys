@@ -168,8 +168,24 @@ float get_min_i() {
     return pq_eotf_inv(0.001);
 }
 
-float f(float x, float a, float b, float c, float d) {
-    return (x - a) * (d - c) / (b - a) + c;
+float f_slope(float x0, float y0, float x1, float y1) {
+    float num = (y1 - y0);
+    float den = (x1 - x0);
+    return abs(den) < 1e-6 ? 1.0 : num / den;
+}
+
+float f_intercept(float slope, float x0, float y0) {
+    return y0 - slope * x0;
+}
+
+float f_linear(float x, float slope, float intercept) {
+    return slope * x + intercept;
+}
+
+float f(float x, float x0, float y0, float x1, float y1) {
+    float slope = f_slope(x0, y0, x1, y1);
+    float intercept = f_intercept(slope, x0, y0);
+    return f_linear(x, slope, intercept);
 }
 
 float curve(float x) {
@@ -177,7 +193,7 @@ float curve(float x) {
     float ob = pq_eotf_inv(reference_white / 1000.0);
     float iw = max(get_max_i(), ow);
     float ib = min(get_min_i(), ob);
-    return f(x, ib, iw, ob, ow);
+    return f(x, ib, ob, iw, ow);
 }
 
 vec2 chroma_correction(vec2 ab, float i1, float i2) {
