@@ -51,7 +51,25 @@
 //!TYPE float
 //!MINIMUM 0.0
 //!MAXIMUM 1.0
-0.5
+1.0
+
+//!PARAM chroma_compensation_weight
+//!TYPE float
+//!MINIMUM -0.5
+//!MAXIMUM  0.5
+0.0
+
+//!PARAM saturation_gain
+//!TYPE float
+//!MINIMUM -0.5
+//!MAXIMUM  0.5
+0.0
+
+//!PARAM tone_detail_factor
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 1.0
+0.0
 
 //!BUFFER METERED
 //!VAR float metered_avg_i
@@ -346,15 +364,6 @@ float f(
     float x2 = adapt;
     float y2 = sqrt(x2 * sqrt(y3 * y1));
 
-    // the specification imposes no restrictions on x2 and y2,
-    // but the default values consistently produce underexposed results,
-    // and extreme values may cause abnormal display artifacts.
-    float geo_mean = sqrt(y1 * y3);
-    float dynamic_range = log2(x3 / x1);
-    float lift_factor = mix(3.0, 6.0, clamp((dynamic_range - 8.0) / 8.0, 0.0, 1.0));
-    x2 = clamp(x2, x1 + 1e-6, x3 - 1e-6);
-    y2 = clamp(y2, geo_mean * lift_factor * 0.85, geo_mean * lift_factor * 1.3);
-
     float a = x3 * y3 * (x1 - x2) + x2 * y2 * (x3 - x1) + x1 * y1 * (x2 - x3);
 
     mat3 cmat = mat3(
@@ -403,18 +412,15 @@ vec3 tone_mapping(vec3 iab) {
     return vec3(i2, ab2);
 }
 
-// c: chroma compensation weight   [-0.5, 0.5]
-// s: saturation gain              [-0.5, 0.5]
 vec3 gamut_adjustment(vec3 f, float c, float s) {
-    float y = RGB_to_XYZ(f).y;
-    return f * pow((1.0 + c) * f / y, vec3(s));
+    float y = max(RGB_to_XYZ(f).y, 1e-6);
+    return f * pow(max((1.0 + c) * f / y, 1e-6), vec3(s));
 }
 
 vec3 gamut_adjustment(vec3 f) {
-    return gamut_adjustment(f, 0.0, 0.0);
+    return gamut_adjustment(f, chroma_compensation_weight, saturation_gain);
 }
 
-// t: tone detail factor [0, 1];
 vec3 detail_managenment(vec3 p, float t) {
     // TODO: do what?
     vec3 q =  p;
@@ -422,7 +428,7 @@ vec3 detail_managenment(vec3 p, float t) {
 }
 
 vec3 detail_managenment(vec3 p) {
-    return detail_managenment(p, 0.0);
+    return detail_managenment(p, tone_detail_factor);
 }
 
 vec4 hook() {
