@@ -1,13 +1,5 @@
 // Astra, a tone mapping operator designed to preserve the creator's intent
 
-// working space: https://doi.org/10.1364/OE.25.015131
-// hk effect: https://doi.org/10.1364/OE.534073
-// chroma correction: https://www.itu.int/pub/R-REP-BT.2408
-// dynamic metadata: https://github.com/mpv-player/mpv/pull/15239
-// fast gaussian blur: https://www.rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/
-// toe segment of curve: https://technorgb.blogspot.com/2018/02/hyperbola-tone-mapping.html
-// shoulder segment of curve: http://filmicworlds.com/blog/filmic-tonemapping-with-piecewise-power-curves/
-
 //!PARAM min_luma
 //!TYPE float
 0.0
@@ -208,6 +200,10 @@ vec4 hook() {
 //!SAVE METERING
 //!WHEN spatial_stable_iterations 0 >
 //!DESC metering (spatial stabilization, blur, horizonal)
+
+// Efficient Gaussian blur with linear sampling
+// by Daniel Rákos
+// https://www.rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/
 
 const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
 const vec4 weight = vec4(0.1964825501511404, 0.2969069646728344, 0.09447039785044732, 0.010381362401148057);
@@ -1039,6 +1035,9 @@ vec4 hook() {
 //!WHEN preview_metering 0 =
 //!DESC tone mapping (metadata)
 
+// For content with dynamic metadata, it will be provided by mpv
+// https://github.com/mpv-player/mpv/pull/15239
+
 const float m1 = 2610.0 / 4096.0 / 4.0;
 const float m2 = 2523.0 / 4096.0 * 128.0;
 const float c1 = 3424.0 / 4096.0;
@@ -1383,6 +1382,10 @@ float hke_fh(float h) {
     return result * hk_effect_compensate_scaling;
 }
 
+// Lightness modifications of the CIECAM16 and CIELAB based
+// on the Helmholtz-Kohlrausch effect
+// by Liao et al.
+// https://doi.org/10.1364/OE.534073
 float J_to_Jhk(vec3 JCh) {
     float J = JCh.x;
     float C = JCh.y;
@@ -1425,6 +1428,13 @@ vec3 LCh_to_Lab(vec3 LCh) {
     return vec3(L, a, b);
 }
 
+// Perceptually uniform color space for image signals including
+// high dynamic range and wide gamut
+// by Safdar et al.
+// https://doi.org/10.1364/OE.25.015131
+//
+// an optimized version of the LMS to Iab matrix was used,
+// and H-K effect compensation was added.
 vec3 RGB_to_Jab(vec3 color) {
     color *= reference_white;
     color = RGB_to_XYZ(color);
@@ -1469,7 +1479,11 @@ float f_contrast(float c) {
     return k * (1.0 - exp(-a * c));
 }
 
-// Modified to make x0 and y0 controllable.
+// Hyperbola tone mapping
+// by suzuki et al.
+// https://technorgb.blogspot.com/2018/02/hyperbola-tone-mapping.html
+//
+// modified to make x0 and y0 controllable.
 float f_toe_suzuki(float x, float slope, float x0, float y0, float x1, float y1) {
     float dx = x1 - x0;
     float dy = y1 - y0;
@@ -1492,6 +1506,11 @@ float f_shoulder_suzuki(float x, float slope, float x0, float y0, float x1, floa
     return -(a / (x + b)) + c;
 }
 
+// Filmic Tonemapping with Piecewise Power Curves
+// by John Hable
+// http://filmicworlds.com/blog/filmic-tonemapping-with-piecewise-power-curves/
+//
+// shoulder part was simplified without overshoot.
 float f_toe_hable(float x, float slope, float x0, float y0, float x1, float y1) {
     float dx = x1 - x0;
     float dy = y1 - y0;
@@ -1503,7 +1522,6 @@ float f_toe_hable(float x, float slope, float x0, float y0, float x1, float y1) 
     return exp(a + b * log(max((x - x0) * s, 1e-6))) * s + y0;
 }
 
-// Simplified, no overshoot.
 float f_shoulder_hable(float x, float slope, float x0, float y0, float x1, float y1) {
     float dx = x1 - x0;
     float dy = y1 - y0;
@@ -1582,9 +1600,15 @@ float curve(float x) {
     return clamp(y, ob, ow);
 }
 
+// based on the chroma correction method for ICtCp in BT.2390/BT.2408
+// https://www.itu.int/pub/R-REP-BT.2408
+//
+// a power factor is added to increase correction rate.
+//
 // this is a correction in generic vividness and depth.
 // V = sqrt(J^2 + C^2)
 // D = sqrt((J_max - J)^2 + C^2)
+//
 // more specific definitions of V and D for Jzazbz,
 // see the following links:
 // https://doi.org/10.2352/ISSN.2169-2629.2018.26.96
