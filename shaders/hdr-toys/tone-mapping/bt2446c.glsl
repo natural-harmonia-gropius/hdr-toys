@@ -263,17 +263,17 @@ float f_linear(float x, float slope, float intercept) {
     return slope * x + intercept;
 }
 
-float f_bpc(float x, float x0, float y0, float x1, float y1) {
+float f_scale(float x, float x0, float y0, float x1, float y1) {
     float slope = f_slope(x0, y0, x1, y1);
     float intercept = f_intercept(slope, x0, y0);
     return f_linear(x, slope, intercept);
 }
 
-vec3 f_bpc(vec3 x, float x0, float y0, float x1, float y1) {
+vec3 f_scale(vec3 x, float x0, float y0, float x1, float y1) {
     return vec3(
-        f_bpc(x.x, x0, y0, x1, y1),
-        f_bpc(x.y, x0, y0, x1, y1),
-        f_bpc(x.z, x0, y0, x1, y1)
+        f_scale(x.x, x0, y0, x1, y1),
+        f_scale(x.y, x0, y0, x1, y1),
+        f_scale(x.z, x0, y0, x1, y1)
     );
 }
 
@@ -285,7 +285,7 @@ vec4 hook() {
     color.z   = curve(color.z);
     color.rgb = xyY_to_XYZ(color.rgb);
     color.rgb = XYZ_to_RGB(color.rgb);
-    color.rgb = f_bpc(color.rgb, 0.0, 0.001, 1019.0 / 940.0, 1.0);
+    color.rgb = f_scale(color.rgb, 0.0, 0.001, 1019.0 / 940.0, 1.0);
 
     return color;
 }

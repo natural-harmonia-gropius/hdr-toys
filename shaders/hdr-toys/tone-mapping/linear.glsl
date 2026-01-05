@@ -182,7 +182,7 @@ float f_linear(float x, float slope, float intercept) {
     return slope * x + intercept;
 }
 
-float f(float x, float x0, float y0, float x1, float y1) {
+float f_scale(float x, float x0, float y0, float x1, float y1) {
     float slope = f_slope(x0, y0, x1, y1);
     float intercept = f_intercept(slope, x0, y0);
     return f_linear(x, slope, intercept);
@@ -193,7 +193,7 @@ float curve(float x) {
     float ob = pq_eotf_inv(reference_white / 1000.0);
     float iw = max(get_max_i(), ow);
     float ib = min(get_min_i(), ob);
-    return f(x, ib, ob, iw, ow);
+    return f_scale(x, ib, ob, iw, ow);
 }
 
 vec2 chroma_correction(vec2 ab, float i1, float i2) {
