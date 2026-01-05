@@ -1473,10 +1473,14 @@ float f_linear(float x, float slope, float intercept) {
     return slope * x + intercept;
 }
 
+// Linear relationship between angle and parameter c
+// c = 0: angle = 45° (slope = 1)
+// c = ±N: angle = 45° ± k*N
 float f_contrast(float c) {
-    float k = 0.5;
-    float a = 3.0;
-    return k * (1.0 - exp(-a * c));
+    float range = 40.0; // 40° per unit of c
+    float angle = radians(45.0 + range * c);
+    float slope = tan(angle);
+    return 1.0 - 1.0 / slope;
 }
 
 // Hyperbola tone mapping
