@@ -1,5 +1,13 @@
 // https://developer.mozilla.org/en-US/docs/Web/CSS/transform
 
+//!PARAM origin_x
+//!TYPE float
+0.5
+
+//!PARAM origin_y
+//!TYPE float
+0.5
+
 //!PARAM rotate
 //!TYPE float
 0.0
@@ -84,18 +92,17 @@ vec2 apply_transform(vec2 coord, mat3 matrix) {
 vec4 hook() {
     vec2 pos = HOOKED_pos;
     vec2 size = HOOKED_size;
-    vec2 center = vec2(0.5, 0.5);
 
     pos = apply_transform(
         pos,
-        make_translate(-center) *
+        make_translate(-vec2(origin_x, origin_y)) *
         make_scale(size) *
         make_rotate(rotate) *
         make_scale(1.0 / size) *
         make_translate(vec2(translate_x, translate_y)) *
         make_scale(vec2(scale_x, scale_y)) *
         make_skew(vec2(skew_x, skew_y)) *
-        make_translate(center)
+        make_translate(vec2(origin_x, origin_y))
     );
 
     bool out_of_bounds = pos.x < 0.0 || pos.x > 1.0 || pos.y < 0.0 || pos.y > 1.0;
