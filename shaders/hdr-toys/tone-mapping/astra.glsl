@@ -1493,21 +1493,31 @@ float f_toe_suzuki(float x, float slope, float x0, float y0, float x1, float y1)
     float dy = y1 - y0;
     float dx2 = dx * dx;
     float dy2 = dy * dy;
-    float den = dy - slope * dx;
+    float den = -slope * dx + dy;
+    float inv = 1.0 / den;
+    float inv2 = inv * inv;
 
-    float a = slope * dx2 * dy2 / (den * den);
-    float b = slope * dx2 / den;
-    float c = dy2 / den;
+    float a = slope * dx2 * dy2 * inv2;
+    float b = x0 - slope * dx2 * inv;
+    float c = y0 + dy2 * inv;
 
-    return -(a / (x - x0 + b)) + c + y0;
+    return -(a / (x - b)) + c;
 }
 
 float f_shoulder_suzuki(float x, float slope, float x0, float y0, float x1, float y1) {
-    float d = slope * (x0 - x1) - y0 + y1;
-    float a = (slope * (x0 - x1) * (x0 - x1) * (y0 - y1) * (y0 - y1)) / (d * d);
-    float b = (slope * x0 * (x1 - x0) + x1 * (y0 - y1)) / d;
-    float c = (y1 * (slope * (x0 - x1) + y0) - y0 * y0) / d;
-    return -(a / (x + b)) + c;
+    float dx = x1 - x0;
+    float dy = y1 - y0;
+    float dx2 = dx * dx;
+    float dy2 = dy * dy;
+    float den = slope * dx - dy;
+    float inv = 1.0 / den;
+    float inv2 = inv * inv;
+
+    float a = slope * dx2 * dy2 * inv2;
+    float b = (slope * x0 * dx - x1 * dy) * inv;
+    float c = y0 + slope * dx * dy * inv;
+
+    return -(a / (x - b)) + c;
 }
 
 // Filmic Tonemapping with Piecewise Power Curves
@@ -1523,7 +1533,10 @@ float f_toe_hable(float x, float slope, float x0, float y0, float x1, float y1) 
     float a = log(dy) - b * log(dx);
     float s = 1.0;
 
-    return exp(a + b * log(max((x - x0) * s, 1e-6))) * s + y0;
+    float v = max((x - x0) * s, 1e-6);
+    float o = y0;
+
+    return exp(a + b * log(v)) * s + o;
 }
 
 float f_shoulder_hable(float x, float slope, float x0, float y0, float x1, float y1) {
@@ -1534,7 +1547,10 @@ float f_shoulder_hable(float x, float slope, float x0, float y0, float x1, float
     float a = log(dy) - b * log(dx);
     float s = -1.0;
 
-    return exp(a + b * log(max((x - x1) * s, 1e-6))) * s + y1;
+    float v = max((x - x1) * s, 1e-6);
+    float o = y1;
+
+    return exp(a + b * log(v)) * s + o;
 }
 
 float f(
@@ -1564,7 +1580,7 @@ float f(
 
     if (x < x1) {
         float slope_toe = f_slope(x0, y0, x1, y1);
-        if (slope_toe >= slope * 0.99) {
+        if (slope_toe >= slope) {
             return f_linear(x, slope, intercept);
         }
 
@@ -1573,7 +1589,7 @@ float f(
 
     if (x > x2) {
         float slope_shoulder = f_slope(x2, y2, x3, y3);
-        if (slope_shoulder >= slope * 0.99) {
+        if (slope_shoulder >= slope) {
             return f_linear(x, slope, intercept);
         }
 
