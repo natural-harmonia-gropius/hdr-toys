@@ -63,13 +63,13 @@ For more detailed information, please visit the [wiki](https://github.com/natura
   glsl-shader-opts-append=auto_exposure_anchor=0.5
   glsl-shader-opts-append=contrast_bias=0.15
   glsl-shader-opts-append=chroma_correction_scaling=1.33
-  glsl-shader-opts-append=chroma_correction_power=2.4
+  glsl-shader-opts-append=chroma_correction_rate=3.0
+  glsl-shader-opts-append=chroma_correction_threshold=0.1
   ```
 
 - **What does hdr-toys.lua do?**
 
   This provides a way to indirectly pass the necessary information using the [glsl-shader-opts](https://mpv.io/manual/master/#options-glsl-shader-opts).
-
   - the number of frames for 1/3 second, for reduce flickering.
 
 - **I don't use mpv, can I use these shaders?**

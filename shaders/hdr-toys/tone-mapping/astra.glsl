@@ -100,11 +100,17 @@
 //!MAXIMUM 5.0
 1.0
 
-//!PARAM chroma_correction_power
+//!PARAM chroma_correction_rate
 //!TYPE float
 //!MINIMUM 0.0
 //!MAXIMUM 5.0
 1.0
+
+//!PARAM chroma_correction_threshold
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 1.0
+0.0
 
 //!PARAM spatial_stable_iterations
 //!TYPE uint
@@ -1620,6 +1626,11 @@ float curve(float x) {
     return clamp(y, ob, ow);
 }
 
+float chroma_correction_attenuation(float x, float rate, float threshold) {
+    float norm = max((x - threshold) / (1.0 - threshold), 0.0);
+    return pow(norm, 1.0 + rate * (1.0 - norm));
+}
+
 // based on the chroma correction method for ICtCp in BT.2390/BT.2408
 // https://www.itu.int/pub/R-REP-BT.2408
 //
@@ -1634,11 +1645,14 @@ float curve(float x) {
 // https://doi.org/10.2352/ISSN.2169-2629.2018.26.96
 // https://doi.org/10.2352/issn.2169-2629.2019.27.43
 vec2 chroma_correction(vec2 ab, float l1, float l2) {
-    float r_min = min(l1, l2) / max(max(l1, l2), 1e-6);
-    float r_scaled = mix(1.0, r_min, chroma_correction_scaling);
-    float r_safe = max(r_scaled, 0.0);
-    float r_powered = pow(r_safe, chroma_correction_power);
-    return ab * r_powered;
+    float ratio_min = min(l1, l2) / max(max(l1, l2), 1e-6);
+    float ratio_scaled = mix(1.0, ratio_min, chroma_correction_scaling);
+    float ratio_safe = max(ratio_scaled, 0.0);
+    return ab * chroma_correction_attenuation(
+        ratio_safe,
+        chroma_correction_rate,
+        chroma_correction_threshold
+    );
 }
 
 vec3 tone_mapping(vec3 lab) {
