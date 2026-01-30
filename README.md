@@ -4,9 +4,8 @@ A set of color conversion shaders for mpv-player (gpu-next).
 
 For more detailed information, please visit the [wiki](https://github.com/natural-harmonia-gropius/hdr-toys/wiki).
 
-|                                                                                                                        |                                                                                                                        |                                                                                                                        |
-| ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| <img width="1920" alt="image" src="https://github.com/user-attachments/assets/2ee1f4af-9ef3-4cae-a8f2-3ac4412a8a6f" /> | <img width="1920" alt="image" src="https://github.com/user-attachments/assets/93997a25-1adc-43f9-ae3d-548477075b0f" /> | <img width="1920" alt="image" src="https://github.com/user-attachments/assets/b7d81ffe-ff03-4e4c-98bd-daaf142ca83b" /> |
+| <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/1e5d252d-118e-4b0e-99e9-ca8ae35999f8" /> | <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/69f95048-3561-45dc-8b33-484fc57d93df" /> | <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/f901572d-b689-468c-a888-174797f5795c" /> |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
 
 ## Getting Started
 
@@ -23,8 +22,6 @@ For more detailed information, please visit the [wiki](https://github.com/natura
   For a complete configuration example, check out [natural-harmonia-gropius/mpv-config](https://github.com/natural-harmonia-gropius/mpv-config).
 
   If you've confirmed these settings and the problem persists, please submit an issue.
-
-  You may notice black areas in files with linear light input (such as OpenEXR), which is due to the limitations of 16-bit floating-point values.
 
 - **UI/OSD looks washed out.**
 
