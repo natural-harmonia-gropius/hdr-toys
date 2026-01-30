@@ -1497,33 +1497,23 @@ float f_contrast(float c) {
 float f_toe_suzuki(float x, float slope, float x0, float y0, float x1, float y1) {
     float dx = x1 - x0;
     float dy = y1 - y0;
-    float dx2 = dx * dx;
-    float dy2 = dy * dy;
-    float den = -slope * dx + dy;
-    float inv = 1.0 / den;
-    float inv2 = inv * inv;
+    float dt = x - x0;
+    float k = dy - slope * dx;
+    float scale = dy * dy;
+    float base = slope * dx * dx;
 
-    float a = slope * dx2 * dy2 * inv2;
-    float b = x0 - slope * dx2 * inv;
-    float c = y0 + dy2 * inv;
-
-    return -(a / (x - b)) + c;
+    return y0 + scale * dt / (dt * k + base);
 }
 
 float f_shoulder_suzuki(float x, float slope, float x0, float y0, float x1, float y1) {
     float dx = x1 - x0;
     float dy = y1 - y0;
-    float dx2 = dx * dx;
-    float dy2 = dy * dy;
-    float den = slope * dx - dy;
-    float inv = 1.0 / den;
-    float inv2 = inv * inv;
+    float dt = x - x0;
+    float k = slope * dx - dy;
+    float scale = slope * dx * dy;
+    float base = dx * dy;
 
-    float a = slope * dx2 * dy2 * inv2;
-    float b = (slope * x0 * dx - x1 * dy) * inv;
-    float c = y0 + slope * dx * dy * inv;
-
-    return -(a / (x - b)) + c;
+    return y0 + scale * dt / (dt * k + base);
 }
 
 // Filmic Tonemapping with Piecewise Power Curves
