@@ -181,13 +181,16 @@ float pq_eotf_inv(float x) {
 }
 
 float RGB_to_Y(vec3 rgb) {
-    const vec3 luma_coef = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
-    return dot(rgb, luma_coef);
+    const vec3 coefficients = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
+    return dot(rgb, coefficients);
 }
 
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
-    return vec4(pq_eotf_inv(RGB_to_Y(color.rgb) * reference_white));
+    float y = RGB_to_Y(color.rgb);
+    float y_abs = y * reference_white;
+    float intensity = pq_eotf_inv(y_abs);
+    return vec4(vec3(intensity), 1.0);
 }
 
 //!HOOK OUTPUT
@@ -211,14 +214,13 @@ vec4 hook() {
 // by Daniel Rákos
 // https://www.rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/
 
-const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
-const vec4 weight = vec4(0.1964825501511404, 0.2969069646728344, 0.09447039785044732, 0.010381362401148057);
+const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
+const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
 const vec2 direction = vec2(1.0, 0.0);
 
-vec4 hook(){
-    uint i = 0;
-    vec4 c = METERING_texOff(offset[i]) * weight[i];
-    for (i = 1; i < 4; i++) {
+vec4 hook() {
+    vec4 c = METERING_tex(METERING_pos) * weight[0];
+    for (uint i = 1; i < 3; i++) {
         c += METERING_texOff( direction * offset[i]) * weight[i];
         c += METERING_texOff(-direction * offset[i]) * weight[i];
     }
@@ -231,14 +233,13 @@ vec4 hook(){
 //!WHEN spatial_stable_iterations 0 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
-const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
-const vec4 weight = vec4(0.1964825501511404, 0.2969069646728344, 0.09447039785044732, 0.010381362401148057);
+const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
+const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
 const vec2 direction = vec2(0.0, 1.0);
 
-vec4 hook(){
-    uint i = 0;
-    vec4 c = METERING_texOff(offset[i]) * weight[i];
-    for (i = 1; i < 4; i++) {
+vec4 hook() {
+    vec4 c = METERING_tex(METERING_pos) * weight[0];
+    for (uint i = 1; i < 3; i++) {
         c += METERING_texOff( direction * offset[i]) * weight[i];
         c += METERING_texOff(-direction * offset[i]) * weight[i];
     }
@@ -251,14 +252,13 @@ vec4 hook(){
 //!WHEN spatial_stable_iterations 1 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
-const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
-const vec4 weight = vec4(0.1964825501511404, 0.2969069646728344, 0.09447039785044732, 0.010381362401148057);
+const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
+const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
 const vec2 direction = vec2(1.0, 0.0);
 
-vec4 hook(){
-    uint i = 0;
-    vec4 c = METERING_texOff(offset[i]) * weight[i];
-    for (i = 1; i < 4; i++) {
+vec4 hook() {
+    vec4 c = METERING_tex(METERING_pos) * weight[0];
+    for (uint i = 1; i < 3; i++) {
         c += METERING_texOff( direction * offset[i]) * weight[i];
         c += METERING_texOff(-direction * offset[i]) * weight[i];
     }
@@ -271,14 +271,13 @@ vec4 hook(){
 //!WHEN spatial_stable_iterations 1 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
-const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
-const vec4 weight = vec4(0.1964825501511404, 0.2969069646728344, 0.09447039785044732, 0.010381362401148057);
+const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
+const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
 const vec2 direction = vec2(0.0, 1.0);
 
-vec4 hook(){
-    uint i = 0;
-    vec4 c = METERING_texOff(offset[i]) * weight[i];
-    for (i = 1; i < 4; i++) {
+vec4 hook() {
+    vec4 c = METERING_tex(METERING_pos) * weight[0];
+    for (uint i = 1; i < 3; i++) {
         c += METERING_texOff( direction * offset[i]) * weight[i];
         c += METERING_texOff(-direction * offset[i]) * weight[i];
     }
@@ -291,14 +290,13 @@ vec4 hook(){
 //!WHEN spatial_stable_iterations 2 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
-const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
-const vec4 weight = vec4(0.1964825501511404, 0.2969069646728344, 0.09447039785044732, 0.010381362401148057);
+const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
+const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
 const vec2 direction = vec2(1.0, 0.0);
 
-vec4 hook(){
-    uint i = 0;
-    vec4 c = METERING_texOff(offset[i]) * weight[i];
-    for (i = 1; i < 4; i++) {
+vec4 hook() {
+    vec4 c = METERING_tex(METERING_pos) * weight[0];
+    for (uint i = 1; i < 3; i++) {
         c += METERING_texOff( direction * offset[i]) * weight[i];
         c += METERING_texOff(-direction * offset[i]) * weight[i];
     }
@@ -311,14 +309,13 @@ vec4 hook(){
 //!WHEN spatial_stable_iterations 2 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
-const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
-const vec4 weight = vec4(0.1964825501511404, 0.2969069646728344, 0.09447039785044732, 0.010381362401148057);
+const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
+const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
 const vec2 direction = vec2(0.0, 1.0);
 
-vec4 hook(){
-    uint i = 0;
-    vec4 c = METERING_texOff(offset[i]) * weight[i];
-    for (i = 1; i < 4; i++) {
+vec4 hook() {
+    vec4 c = METERING_tex(METERING_pos) * weight[0];
+    for (uint i = 1; i < 3; i++) {
         c += METERING_texOff( direction * offset[i]) * weight[i];
         c += METERING_texOff(-direction * offset[i]) * weight[i];
     }
@@ -331,14 +328,13 @@ vec4 hook(){
 //!WHEN spatial_stable_iterations 3 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
-const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
-const vec4 weight = vec4(0.1964825501511404, 0.2969069646728344, 0.09447039785044732, 0.010381362401148057);
+const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
+const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
 const vec2 direction = vec2(1.0, 0.0);
 
-vec4 hook(){
-    uint i = 0;
-    vec4 c = METERING_texOff(offset[i]) * weight[i];
-    for (i = 1; i < 4; i++) {
+vec4 hook() {
+    vec4 c = METERING_tex(METERING_pos) * weight[0];
+    for (uint i = 1; i < 3; i++) {
         c += METERING_texOff( direction * offset[i]) * weight[i];
         c += METERING_texOff(-direction * offset[i]) * weight[i];
     }
@@ -351,14 +347,13 @@ vec4 hook(){
 //!WHEN spatial_stable_iterations 3 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
-const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
-const vec4 weight = vec4(0.1964825501511404, 0.2969069646728344, 0.09447039785044732, 0.010381362401148057);
+const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
+const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
 const vec2 direction = vec2(0.0, 1.0);
 
-vec4 hook(){
-    uint i = 0;
-    vec4 c = METERING_texOff(offset[i]) * weight[i];
-    for (i = 1; i < 4; i++) {
+vec4 hook() {
+    vec4 c = METERING_tex(METERING_pos) * weight[0];
+    for (uint i = 1; i < 3; i++) {
         c += METERING_texOff( direction * offset[i]) * weight[i];
         c += METERING_texOff(-direction * offset[i]) * weight[i];
     }
@@ -371,14 +366,13 @@ vec4 hook(){
 //!WHEN spatial_stable_iterations 4 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
-const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
-const vec4 weight = vec4(0.1964825501511404, 0.2969069646728344, 0.09447039785044732, 0.010381362401148057);
+const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
+const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
 const vec2 direction = vec2(1.0, 0.0);
 
-vec4 hook(){
-    uint i = 0;
-    vec4 c = METERING_texOff(offset[i]) * weight[i];
-    for (i = 1; i < 4; i++) {
+vec4 hook() {
+    vec4 c = METERING_tex(METERING_pos) * weight[0];
+    for (uint i = 1; i < 3; i++) {
         c += METERING_texOff( direction * offset[i]) * weight[i];
         c += METERING_texOff(-direction * offset[i]) * weight[i];
     }
@@ -391,14 +385,13 @@ vec4 hook(){
 //!WHEN spatial_stable_iterations 4 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
-const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
-const vec4 weight = vec4(0.1964825501511404, 0.2969069646728344, 0.09447039785044732, 0.010381362401148057);
+const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
+const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
 const vec2 direction = vec2(0.0, 1.0);
 
-vec4 hook(){
-    uint i = 0;
-    vec4 c = METERING_texOff(offset[i]) * weight[i];
-    for (i = 1; i < 4; i++) {
+vec4 hook() {
+    vec4 c = METERING_tex(METERING_pos) * weight[0];
+    for (uint i = 1; i < 3; i++) {
         c += METERING_texOff( direction * offset[i]) * weight[i];
         c += METERING_texOff(-direction * offset[i]) * weight[i];
     }
@@ -411,14 +404,13 @@ vec4 hook(){
 //!WHEN spatial_stable_iterations 5 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
-const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
-const vec4 weight = vec4(0.1964825501511404, 0.2969069646728344, 0.09447039785044732, 0.010381362401148057);
+const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
+const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
 const vec2 direction = vec2(1.0, 0.0);
 
-vec4 hook(){
-    uint i = 0;
-    vec4 c = METERING_texOff(offset[i]) * weight[i];
-    for (i = 1; i < 4; i++) {
+vec4 hook() {
+    vec4 c = METERING_tex(METERING_pos) * weight[0];
+    for (uint i = 1; i < 3; i++) {
         c += METERING_texOff( direction * offset[i]) * weight[i];
         c += METERING_texOff(-direction * offset[i]) * weight[i];
     }
@@ -431,14 +423,13 @@ vec4 hook(){
 //!WHEN spatial_stable_iterations 5 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
-const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
-const vec4 weight = vec4(0.1964825501511404, 0.2969069646728344, 0.09447039785044732, 0.010381362401148057);
+const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
+const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
 const vec2 direction = vec2(0.0, 1.0);
 
-vec4 hook(){
-    uint i = 0;
-    vec4 c = METERING_texOff(offset[i]) * weight[i];
-    for (i = 1; i < 4; i++) {
+vec4 hook() {
+    vec4 c = METERING_tex(METERING_pos) * weight[0];
+    for (uint i = 1; i < 3; i++) {
         c += METERING_texOff( direction * offset[i]) * weight[i];
         c += METERING_texOff(-direction * offset[i]) * weight[i];
     }
@@ -451,14 +442,13 @@ vec4 hook(){
 //!WHEN spatial_stable_iterations 6 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
-const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
-const vec4 weight = vec4(0.1964825501511404, 0.2969069646728344, 0.09447039785044732, 0.010381362401148057);
+const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
+const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
 const vec2 direction = vec2(1.0, 0.0);
 
-vec4 hook(){
-    uint i = 0;
-    vec4 c = METERING_texOff(offset[i]) * weight[i];
-    for (i = 1; i < 4; i++) {
+vec4 hook() {
+    vec4 c = METERING_tex(METERING_pos) * weight[0];
+    for (uint i = 1; i < 3; i++) {
         c += METERING_texOff( direction * offset[i]) * weight[i];
         c += METERING_texOff(-direction * offset[i]) * weight[i];
     }
@@ -471,14 +461,13 @@ vec4 hook(){
 //!WHEN spatial_stable_iterations 6 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
-const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
-const vec4 weight = vec4(0.1964825501511404, 0.2969069646728344, 0.09447039785044732, 0.010381362401148057);
+const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
+const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
 const vec2 direction = vec2(0.0, 1.0);
 
-vec4 hook(){
-    uint i = 0;
-    vec4 c = METERING_texOff(offset[i]) * weight[i];
-    for (i = 1; i < 4; i++) {
+vec4 hook() {
+    vec4 c = METERING_tex(METERING_pos) * weight[0];
+    for (uint i = 1; i < 3; i++) {
         c += METERING_texOff( direction * offset[i]) * weight[i];
         c += METERING_texOff(-direction * offset[i]) * weight[i];
     }
@@ -491,14 +480,13 @@ vec4 hook(){
 //!WHEN spatial_stable_iterations 7 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
-const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
-const vec4 weight = vec4(0.1964825501511404, 0.2969069646728344, 0.09447039785044732, 0.010381362401148057);
+const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
+const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
 const vec2 direction = vec2(1.0, 0.0);
 
-vec4 hook(){
-    uint i = 0;
-    vec4 c = METERING_texOff(offset[i]) * weight[i];
-    for (i = 1; i < 4; i++) {
+vec4 hook() {
+    vec4 c = METERING_tex(METERING_pos) * weight[0];
+    for (uint i = 1; i < 3; i++) {
         c += METERING_texOff( direction * offset[i]) * weight[i];
         c += METERING_texOff(-direction * offset[i]) * weight[i];
     }
@@ -511,14 +499,13 @@ vec4 hook(){
 //!WHEN spatial_stable_iterations 7 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
-const vec4 offset = vec4(0.0, 1.411764705882353, 3.2941176470588234, 5.176470588235294);
-const vec4 weight = vec4(0.1964825501511404, 0.2969069646728344, 0.09447039785044732, 0.010381362401148057);
+const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
+const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
 const vec2 direction = vec2(0.0, 1.0);
 
-vec4 hook(){
-    uint i = 0;
-    vec4 c = METERING_texOff(offset[i]) * weight[i];
-    for (i = 1; i < 4; i++) {
+vec4 hook() {
+    vec4 c = METERING_tex(METERING_pos) * weight[0];
+    for (uint i = 1; i < 3; i++) {
         c += METERING_texOff( direction * offset[i]) * weight[i];
         c += METERING_texOff(-direction * offset[i]) * weight[i];
     }
@@ -529,37 +516,51 @@ vec4 hook(){
 //!BIND METERING
 //!BIND METERED
 //!SAVE EMPTY
+//!WIDTH 1
+//!HEIGHT 1
+//!COMPUTE 1 1
+//!DESC metering (max, min, init)
+
+void hook() {
+    metered_max_i = 0;
+    metered_min_i = 4095;
+}
+
+//!HOOK OUTPUT
+//!BIND METERING
+//!BIND METERED
+//!SAVE EMPTY
 //!COMPUTE 32 32
 //!DESC metering (max, min)
 
-shared uint local_max;
-shared uint local_min;
+shared uint smax[1024];
+shared uint smin[1024];
+
+uint to_uint(float x) {
+    return uint(x * 4095.0 + 0.5);
+}
 
 void hook() {
-    if (gl_GlobalInvocationID.x == 0 && gl_GlobalInvocationID.y == 0) {
-        metered_max_i = 0;
-        metered_min_i = 4095;
-    }
-
-    if (gl_LocalInvocationIndex == 0) {
-        local_max = 0;
-        local_min = 4095;
-    }
-
-    memoryBarrierShared();
-    barrier();
-
     float value = METERING_tex(METERING_pos).x;
-    uint rounded = uint(value * 4095.0 + 0.5);
-    atomicMax(local_max, rounded);
-    atomicMin(local_min, rounded);
+    uint rounded = to_uint(value);
 
-    memoryBarrierShared();
+    uint tid = gl_LocalInvocationIndex;
+    smax[tid] = rounded;
+    smin[tid] = rounded;
+
     barrier();
 
-    if (gl_LocalInvocationIndex == 0) {
-        atomicMax(metered_max_i, local_max);
-        atomicMin(metered_min_i, local_min);
+    for (uint s = 512; s > 0; s >>= 1) {
+        if (tid < s) {
+            smax[tid] = max(smax[tid], smax[tid + s]);
+            smin[tid] = min(smin[tid], smin[tid + s]);
+        }
+        barrier();
+    }
+
+    if (tid == 0) {
+        atomicMax(metered_max_i, smax[0]);
+        atomicMin(metered_min_i, smin[0]);
     }
 }
 
@@ -669,8 +670,12 @@ vec4 hook() { return AVG_tex(AVG_pos); }
 //!COMPUTE 1 1
 //!DESC metering (avg)
 
+uint to_uint(float x) {
+    return uint(x * 4095.0 + 0.5);
+}
+
 void hook() {
-    metered_avg_i = uint(AVG_tex(AVG_pos).x * 4095.0 + 0.5);
+    metered_avg_i = to_uint(AVG_tex(AVG_pos).x);
 }
 
 //!HOOK OUTPUT
@@ -722,9 +727,9 @@ const float TEMPORAL_BASE_TOLERANCE = 36.0;
 const float TEMPORAL_ADAPTIVE_SCALE = 0.5;
 
 // Black scene threshold (below this is considered pure black)
-// Range: 8.0-32.0 (in 12-bit range). Higher = more aggressive black detection
-// Default: 16.0 catches most black frames without false positives
-const float TEMPORAL_BLACK_THRESHOLD = 16.0;
+// Range: ~0.002-0.008 (normalized). Higher = more aggressive black detection
+// Default: 16/4095 catches most black frames without false positives
+const float TEMPORAL_BLACK_THRESHOLD = 16.0 / 4095.0;
 
 // Metric weights for scene change detection
 // These weights determine the relative importance of each metric
@@ -741,6 +746,14 @@ const float TEMPORAL_DELTA_SCALE = 720.0;
 const int METRIC_MAX = 0;
 const int METRIC_MIN = 1;
 const int METRIC_AVG = 2;
+
+float to_float(uint x) {
+    return float(x) / 4095.0;
+}
+
+uint to_uint(float x) {
+    return uint(x * 4095.0 + 0.5);
+}
 
 // ============================================================================
 // TEMPORAL STABILIZATION - Core Functions
@@ -779,11 +792,11 @@ float temporal_weighted_mean(int type) {
         // Select appropriate buffer based on metric type
         float current;
         if (type == METRIC_MAX) {
-            current = float(metered_max_i_t[i]);
+            current = to_float(metered_max_i_t[i]);
         } else if (type == METRIC_MIN) {
-            current = float(metered_min_i_t[i]);
+            current = to_float(metered_min_i_t[i]);
         } else { // METRIC_AVG
-            current = float(metered_avg_i_t[i]);
+            current = to_float(metered_avg_i_t[i]);
         }
 
         // Calculate exponential decay weight: w(i) = decay^i
@@ -818,17 +831,17 @@ float apply_ema_smoothing(float new_value, float prev_value) {
 void temporal_fill_gradual() {
     for (uint i = 0; i < temporal_stable_frames; i++) {
         // Blend each buffer entry towards current value
-        float old_max = float(metered_max_i_t[i]);
-        float new_max = float(metered_max_i);
-        metered_max_i_t[i] = uint(mix(old_max, new_max, TEMPORAL_SCENE_BLEND) + 0.5);
+        float old_max = to_float(metered_max_i_t[i]);
+        float new_max = to_float(metered_max_i);
+        metered_max_i_t[i] = to_uint(mix(old_max, new_max, TEMPORAL_SCENE_BLEND));
 
-        float old_min = float(metered_min_i_t[i]);
-        float new_min = float(metered_min_i);
-        metered_min_i_t[i] = uint(mix(old_min, new_min, TEMPORAL_SCENE_BLEND) + 0.5);
+        float old_min = to_float(metered_min_i_t[i]);
+        float new_min = to_float(metered_min_i);
+        metered_min_i_t[i] = to_uint(mix(old_min, new_min, TEMPORAL_SCENE_BLEND));
 
-        float old_avg = float(metered_avg_i_t[i]);
-        float new_avg = float(metered_avg_i);
-        metered_avg_i_t[i] = uint(mix(old_avg, new_avg, TEMPORAL_SCENE_BLEND) + 0.5);
+        float old_avg = to_float(metered_avg_i_t[i]);
+        float new_avg = to_float(metered_avg_i);
+        metered_avg_i_t[i] = to_uint(mix(old_avg, new_avg, TEMPORAL_SCENE_BLEND));
     }
 }
 
@@ -855,11 +868,11 @@ float temporal_predict(int type) {
 
         // Select appropriate buffer based on metric type
         if (type == METRIC_MAX) {
-            y = float(metered_max_i_t[i]);
+            y = to_float(metered_max_i_t[i]);
         } else if (type == METRIC_MIN) {
-            y = float(metered_min_i_t[i]);
+            y = to_float(metered_min_i_t[i]);
         } else { // METRIC_AVG
-            y = float(metered_avg_i_t[i]);
+            y = to_float(metered_avg_i_t[i]);
         }
 
         sum_x += x;
@@ -899,18 +912,14 @@ bool is_scene_changed(float max_current, float min_current, float avg_current,
 
     // Calculate adaptive tolerance based on current brightness
     // Brighter scenes get higher tolerance to reduce false positives
-    float brightness_factor = max_current / 4095.0;
     float adaptive_tolerance = TEMPORAL_BASE_TOLERANCE *
-                               (1.0 + brightness_factor * TEMPORAL_ADAPTIVE_SCALE);
+                               (1.0 + max_current * TEMPORAL_ADAPTIVE_SCALE);
 
     // Calculate prediction errors in perceptual units (ΔE-like)
-    // Compare current raw values against predictions
-    float max_delta = TEMPORAL_DELTA_SCALE *
-                      abs(max_current / 4095.0 - max_pred / 4095.0);
-    float min_delta = TEMPORAL_DELTA_SCALE *
-                      abs(min_current / 4095.0 - min_pred / 4095.0);
-    float avg_delta = TEMPORAL_DELTA_SCALE *
-                      abs(avg_current / 4095.0 - avg_pred / 4095.0);
+    // Compare current values against predictions
+    float max_delta = TEMPORAL_DELTA_SCALE * abs(max_current - max_pred);
+    float min_delta = TEMPORAL_DELTA_SCALE * abs(min_current - min_pred);
+    float avg_delta = TEMPORAL_DELTA_SCALE * abs(avg_current - avg_pred);
 
     // Combine errors using weighted average
     // Average is most reliable, max is important, min is least reliable
@@ -929,14 +938,14 @@ bool is_scene_changed(float max_current, float min_current, float avg_current,
  */
 void hook() {
     // Cache current frame raw values before any processing
-    float max_current = float(metered_max_i);
-    float min_current = float(metered_min_i);
-    float avg_current = float(metered_avg_i);
+    float max_current = to_float(metered_max_i);
+    float min_current = to_float(metered_min_i);
+    float avg_current = to_float(metered_avg_i);
 
     // Get previous frame's smoothed values from persistent buffer
-    float prev_max = float(smoothed_max_i);
-    float prev_min = float(smoothed_min_i);
-    float prev_avg = float(smoothed_avg_i);
+    float prev_max = to_float(smoothed_max_i);
+    float prev_min = to_float(smoothed_min_i);
+    float prev_avg = to_float(smoothed_avg_i);
 
     // Generate predictions BEFORE prepending current frame to history
     // This ensures predictions are based on historical data only
@@ -975,10 +984,10 @@ void hook() {
         avg_smoothed = mix(prev_avg, avg_current, TEMPORAL_CUT_BLEND);
     }
 
-    // Write back smoothed values with clamping to valid range [0, 4095]
-    metered_max_i = uint(clamp(max_smoothed, 0.0, 4095.0) + 0.5);
-    metered_min_i = uint(clamp(min_smoothed, 0.0, 4095.0) + 0.5);
-    metered_avg_i = uint(clamp(avg_smoothed, 0.0, 4095.0) + 0.5);
+    // Write back smoothed values
+    metered_max_i = to_uint(max_smoothed);
+    metered_min_i = to_uint(min_smoothed);
+    metered_avg_i = to_uint(avg_smoothed);
 
     // Store smoothed values for next frame's EMA calculation
     smoothed_max_i = metered_max_i;
@@ -993,40 +1002,49 @@ void hook() {
 //!WHEN preview_metering
 //!DESC metering (preview)
 
-bool almost_equal(float a, float b, float epsilon) {
-    return abs(a - b) < epsilon;
+const vec3 red   = vec3(1.0, 0.0, 0.0);
+const vec3 green = vec3(0.0, 1.0, 0.0);
+const vec3 blue  = vec3(0.0, 0.0, 1.0);
+const float gray = 0.18;
+const float JND = 1.0 / 720.0;
+
+float to_float(uint x) {
+    return float(x) / 4095.0;
+}
+
+float delta(float a, float b) {
+    return abs(a - b);
+}
+
+bool approx(float a, float b, float epsilon) {
+    return delta(a, b) < epsilon;
+}
+
+void draw_highlight(float metric, vec3 tint, float value, inout vec3 color) {
+    if (approx(value, metric, 5.0 * JND))
+        color = tint * gray;
+}
+
+void draw_line(float metric, vec3 tint, inout vec3 color) {
+    if (approx(1.0 - METERING_pos.y, metric, fwidth(METERING_pos.y)))
+        color = tint;
 }
 
 vec4 hook() {
     float value = METERING_tex(METERING_pos).x;
     vec3 color = vec3(value);
 
-    float max_i = float(metered_max_i) / 4095.0;
-    float min_i = float(metered_min_i) / 4095.0;
+    // highlight pixels with similar intensity
+    draw_highlight(to_float(metered_max_i), red, value, color);
+    draw_highlight(to_float(metered_min_i), blue, value, color);
+    if (enable_metering > 1)
+        draw_highlight(to_float(metered_avg_i), green, value, color);
 
-    float d_max_i = 720 * abs(value - max_i);
-    float d_min_i = 720 * abs(value - min_i);
-
-    if (d_max_i < 4.0)
-        color = vec3(1.0, 0.0, 0.0);
-    if (d_min_i < 4.0)
-        color = vec3(0.0, 0.0, 1.0);
-
-    if (almost_equal(1.0 - METERING_pos.y, max_i, 1e-3))
-        color = vec3(1.0, 0.0, 0.0);
-    if (almost_equal(1.0 - METERING_pos.y, min_i, 1e-3))
-        color = vec3(0.0, 0.0, 1.0);
-
-    if (enable_metering > 1) {
-        float avg_i = float(metered_avg_i) / 4095.0;
-        float d_avg_i = 720 * abs(value - avg_i);
-
-        if (d_avg_i < 4.0)
-            color = vec3(0.0, 1.0, 0.0);
-
-        if (almost_equal(1.0 - METERING_pos.y, avg_i, 1e-3))
-            color = vec3(0.0, 1.0, 0.0);
-    }
+    // draw horizontal lines on top
+    draw_line(to_float(metered_max_i), red, color);
+    draw_line(to_float(metered_min_i), blue, color);
+    if (enable_metering > 1)
+        draw_line(to_float(metered_avg_i), green, color);
 
     return vec4(color, 1.0);
 }
@@ -1085,19 +1103,24 @@ float J_to_I(float J) {
 }
 
 float RGB_to_Y(vec3 rgb) {
-    const vec3 luma_coef = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
-    return dot(rgb, luma_coef);
+    const vec3 coefficients = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
+    return dot(rgb, coefficients);
+}
+
+float to_float(uint x) {
+    return float(x) / 4095.0;
 }
 
 float get_max_i() {
     if (max_pq_y > 0.0)
         return max_pq_y;
 
-    if (scene_max_r > 0.0 || scene_max_g > 0.0 || scene_max_b > 0.0)
-        return pq_eotf_inv(RGB_to_Y(vec3(scene_max_r, scene_max_g, scene_max_b)));
+    vec3 scene_max_rgb = vec3(scene_max_r, scene_max_g, scene_max_b);
+    if (max(max(scene_max_rgb.r, scene_max_rgb.g), scene_max_rgb.b) > 0.0)
+        return pq_eotf_inv(RGB_to_Y(scene_max_rgb));
 
     if (enable_metering > 0)
-        return float(metered_max_i) / 4095.0;
+        return to_float(metered_max_i);
 
     if (max_cll > 0.0)
         return pq_eotf_inv(max_cll);
@@ -1110,7 +1133,7 @@ float get_max_i() {
 
 float get_min_i() {
     if (enable_metering > 0)
-        return float(metered_min_i) / 4095.0;
+        return to_float(metered_min_i);
 
     if (min_luma > 0.0)
         return pq_eotf_inv(min_luma);
@@ -1126,7 +1149,7 @@ float get_avg_i() {
         return pq_eotf_inv(scene_avg);
 
     if (enable_metering > 1)
-        return float(metered_avg_i) / 4095.0;
+        return to_float(metered_avg_i);
 
     // not useful
     // if (max_fall > 0.0)
