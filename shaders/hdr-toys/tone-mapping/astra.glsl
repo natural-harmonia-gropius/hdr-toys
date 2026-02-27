@@ -74,13 +74,19 @@
 //!TYPE float
 //!MINIMUM 0.0
 //!MAXIMUM 1.0
-0.46
+0.4
 
 //!PARAM highlight_weight
 //!TYPE float
 //!MINIMUM 0.0
 //!MAXIMUM 1.0
-0.04
+0.1
+
+//!PARAM highlight_overshoot
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 2.0
+1.0
 
 //!PARAM contrast_bias
 //!TYPE float
@@ -1515,8 +1521,6 @@ float f_contrast(float c) {
 // Hyperbola tone mapping
 // by suzuki et al.
 // https://technorgb.blogspot.com/2018/02/hyperbola-tone-mapping.html
-//
-// modified to make x0 and y0 controllable.
 float f_toe_suzuki(float x, float slope, float x0, float y0, float x1, float y1) {
     float dx = x1 - x0;
     float dy = y1 - y0;
@@ -1542,8 +1546,6 @@ float f_shoulder_suzuki(float x, float slope, float x0, float y0, float x1, floa
 // Filmic Tonemapping with Piecewise Power Curves
 // by John Hable
 // http://filmicworlds.com/blog/filmic-tonemapping-with-piecewise-power-curves/
-//
-// shoulder part was simplified without overshoot.
 float f_toe_hable(float x, float slope, float x0, float y0, float x1, float y1) {
     float dx = x1 - x0;
     float dy = y1 - y0;
@@ -1570,6 +1572,24 @@ float f_shoulder_hable(float x, float slope, float x0, float y0, float x1, float
     float o = y1;
 
     return exp(a + b * log(v)) * s + o;
+}
+
+// Hable shoulder with overshoot: extends the virtual white point to
+// (x1 + overshoot * dx, y1 + overshoot * dy), so the curve still has
+// non-zero slope at x1.  Accepts a slight slope discontinuity at x0.
+// overshoot = 0 recovers f_shoulder_hable.
+float f_shoulder_hable_overshoot(float x, float slope, float x0, float y0, float x1, float y1, float overshoot) {
+    float dx = x1 - x0;
+    float dy = y1 - y0;
+    float vx = x1 + overshoot * dx;
+    float vy = y1 + overshoot * dy;
+
+    float y  = f_shoulder_hable(x,  slope, x0, y0, vx, vy);
+    float yw = f_shoulder_hable(x1, slope, x0, y0, vx, vy);
+
+    float t = (y - y0) / (yw - y0);
+
+    return mix(y0, y1, t);
 }
 
 float f(
@@ -1612,7 +1632,7 @@ float f(
             return f_linear(x, slope, intercept);
         }
 
-        return f_shoulder_suzuki(x, slope, x2, y2, x3, y3);
+        return f_shoulder_hable_overshoot(x, slope, x2, y2, x3, y3, highlight_overshoot);
     }
 
     return x;
