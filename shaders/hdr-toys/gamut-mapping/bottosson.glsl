@@ -1,15 +1,26 @@
-// https://bottosson.github.io/posts/gamutclipping/
-// https://www.shadertoy.com/view/7sXcWn
-
 //!PARAM softness_scale
 //!TYPE float
 //!MINIMUM 0.0
 //!MAXIMUM 1.0
-0.3
+0.5
+
+//!PARAM highlight_extend
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 1.0
+0.09
 
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!DESC gamut mapping (bottosson, soft)
+//!DESC gamut mapping (bottosson)
+
+float max3(vec3 v) {
+  return max(max(v.x, v.y), v.z);
+}
+
+float min3(vec3 v) {
+  return min(min(v.x, v.y), v.z);
+}
 
 float cbrt(float x) {
     return sign(x) * pow(abs(x), 1.0 / 3.0);
@@ -130,9 +141,9 @@ vec3 LCh_to_Lab(vec3 LCh) {
     return vec3(L, a, b);
 }
 
-
-
-
+// Gamut compression
+// by Björn Ottosson
+// https://www.shadertoy.com/view/7sXcWn
 
 vec2 findCenterAndPurity(vec3 x) {
     // Matrix derived for (c_smooth+s_smooth) to be an approximation of the macadam limit
@@ -204,38 +215,63 @@ vec2 approximateShape() {
     return ST / scale;
 }
 
-vec3 compute(float L, float hue, float sat) {
-    vec3 Lab = LCh_to_Lab(vec3(L, 1.0, hue));
-
-    vec3 lms = Lab_to_LMS(vec3(0.0, Lab.y, Lab.z));
-
-    vec2 MC = findCenterAndPurity(lms);
-
-    lms -= MC.x;
-
-    lms *= sat;
-
-    lms += Lab.x;
-
-    return lms;
+// Soft hyperbolic compression: identity for x << k, asymptotically approaches k.
+float soft_compress(float x, float k) {
+    return x / sqrt(x * x / (k * k) + 1.0);
 }
 
-vec3 softSaturate(vec3 x, vec3 a) {
-    a = clamp(a, 0.0, softness_scale);
-    a = 1.0 + a;
+// Gamut mapping in OKLCh space: L and h are kept strictly unchanged,
+// only C is compressed via a smooth hyperbolic function.
+// This is a simplification of the original compute() + fix_L approach:
+//   - C_out/C_in is equivalent to the saturation scale factor
+//   - scaling C directly avoids any lightness drift
+vec3 gmaut_mapping(vec3 lch) {
+    float L = lch.x;
+    float C = lch.y;
+    float h = lch.z;
+
+    vec2 ST = approximateShape();
+    float Sx = ST.x;
+    float Sy = ST.y;
+
+    // L_peak is where C_smooth is maximum; derivative is 0 there.
+    float L_peak = Sx / (Sx + Sy);
+    float C_peak  = 1.0 / (Sx / max(L_peak, 1e-6) + Sy / max(1.0 - L_peak, 1e-6));
+
+    float C_smooth;
+    if (L <= L_peak) {
+        // Left side: original formula, unchanged.
+        C_smooth = 1.0 / (Sx / max(L, 1e-6) + Sy / max(1.0 - L, 1e-6));
+    } else {
+        // Right side: cubic Hermite from (L_peak, C_peak, slope=0) to (1+highlight_extend, 0, slope=0).
+        // With both endpoint slopes = 0, Hermite reduces to smoothstep shape:
+        //   C_smooth = C_peak * (1 - 3t² + 2t³)  where t = (L - L_peak) / (1 + highlight_extend - L_peak)
+        float width = 1.0 + highlight_extend - L_peak;
+        float t = clamp((L - L_peak) / max(width, 1e-6), 0.0, 1.0);
+        C_smooth = C_peak * (1.0 - t * t * (3.0 - 2.0 * t));
+    }
+
+    return vec3(L, soft_compress(C, max(C_smooth, 1e-6)), h);
+}
+
+vec3 soft_saturate(vec3 x, vec3 a) {
+    a = 1.0 + clamp(a, 0.0, softness_scale);
     x = min(x, a);
     vec3 b = (a - 1.0) * sqrt(a / (2.0 - a));
-    return 1.0 - (sqrt((x - a) * (x - a) + b * b) - b) / (sqrt(a * a + b * b) - b);
+
+    vec3 dxa = x - a;
+    vec3 dxa2 = dxa * dxa;
+    vec3 a2 = a * a;
+    vec3 b2 = b * b;
+
+    return 1.0 - (sqrt(dxa2 + b2) - b) / (sqrt(a2 + b2) - b);
 }
 
-vec3 softClipColor(vec3 color) {
-    // soft clip of rgb values to avoid artifacts of hard clipping
-    // causes hues distortions, but is a smooth mapping
+vec3 soft_clip(vec3 color) {
+    const float grey = 0.18;
 
-    float maxRGB = max(max(color.r, color.g), color.b);
-    float minRGB = min(min(color.r, color.g), color.b);
-
-    float grey = 0.2;
+    float max_rgb = max3(color);
+    float min_rgb = min3(color);
 
     vec3 x = color - grey;
 
@@ -243,33 +279,13 @@ vec3 softClipColor(vec3 color) {
     vec3 xscale = 0.5 + xsgn * (0.5 - grey);
     x /= xscale;
 
-    float softness_0 = maxRGB / (1.0 + softness_scale) * softness_scale;
-    float softness_1 = (1.0 - minRGB) / (1.0 + softness_scale) * softness_scale;
+    float softness0 = max_rgb / (1.0 + softness_scale) * softness_scale;
+    float softness1 = (1.0 - min_rgb) / (1.0 + softness_scale) * softness_scale;
 
-    vec3 softness = vec3(0.5) * (softness_0 + softness_1 + xsgn * (softness_1 - softness_0));
+    vec3 softness = vec3(0.5) * (softness0 + softness1 + xsgn * (softness1 - softness0));
 
-    return grey + xscale * xsgn * softSaturate(abs(x), softness);
+    return grey + xscale * xsgn * soft_saturate(abs(x), softness);
 }
-
-vec3 gmaut_mapping(vec3 lch) {
-    float L = lch.x;
-    float C = lch.y;
-    float h = lch.z;
-
-    if (C <= 1e-6) {
-        return lch;
-    }
-
-    vec2 ST = approximateShape();
-    float C_smooth = (1.0 / ((ST.x / L) + (ST.y / max(1.0 - L, 1e-6))));
-    vec3 lms = compute(L, h, C / sqrt(C * C / C_smooth / C_smooth + 1.0));
-
-    return Lab_to_LCh(LMS_to_Lab(lms));
-}
-
-
-
-
 
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
@@ -281,7 +297,8 @@ vec4 hook() {
     color.rgb = Lab_to_RGB(color.rgb);
     color.rgb = RGB_to_XYZ(color.rgb);
     color.rgb = XYZ_to_RGB_output(color.rgb);
-    color.rgb = softClipColor(color.rgb);
+    color.rgb = max(color.rgb, 0.0);
+    color.rgb = soft_clip(color.rgb);
 
     return color;
 }
