@@ -40,7 +40,7 @@
 //!MAXIMUM 5.0
 2.5
 
-//!PARAM softness
+//!PARAM softness_scale
 //!TYPE float
 //!MINIMUM 0.0
 //!MAXIMUM 1.0
@@ -170,7 +170,7 @@ vec3 gamut_compress_bleach(vec3 rgb) {
 // Taken from Björn Ottosson's gamut compression
 // https://www.shadertoy.com/view/7sXcWn
 vec3 soft_saturate(vec3 x, vec3 a) {
-    a = 1.0 + clamp(a, 0.0, softness);
+    a = 1.0 + clamp(a, 0.0, softness_scale);
     x = min(x, a);
     vec3 b = (a - 1.0) * sqrt(a / (2.0 - a));
 
@@ -194,8 +194,8 @@ vec3 soft_clip(vec3 color) {
     vec3 xscale = 0.5 + xsgn * (0.5 - grey);
     x /= xscale;
 
-    float softness0 = max_rgb / (1.0 + softness) * softness;
-    float softness1 = (1.0 - min_rgb) / (1.0 + softness) * softness;
+    float softness0 = max_rgb / (1.0 + softness_scale) * softness_scale;
+    float softness1 = (1.0 - min_rgb) / (1.0 + softness_scale) * softness_scale;
 
     vec3 softness = vec3(0.5) * (softness0 + softness1 + xsgn * (softness1 - softness0));
 
