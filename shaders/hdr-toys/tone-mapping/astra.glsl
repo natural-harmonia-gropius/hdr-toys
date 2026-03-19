@@ -1,5 +1,9 @@
 // Astra, a tone mapping operator designed to preserve the creator's intent
 
+//!PARAM PTS
+//!TYPE float
+0.0
+
 //!PARAM min_luma
 //!TYPE float
 0.0
@@ -124,11 +128,11 @@
 //!MAXIMUM 8
 2
 
-//!PARAM temporal_stable_frames
-//!TYPE uint
-//!MINIMUM 0
-//!MAXIMUM 120
-8
+//!PARAM temporal_stable_window
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 2.0
+0.33
 
 //!PARAM enable_metering
 //!TYPE uint
@@ -149,9 +153,10 @@
 //!STORAGE
 
 //!BUFFER METERED_TEMPORAL
-//!VAR uint metered_max_i_t[128]
-//!VAR uint metered_min_i_t[128]
-//!VAR uint metered_avg_i_t[128]
+//!VAR uint metered_max_i_t[256]
+//!VAR uint metered_min_i_t[256]
+//!VAR uint metered_avg_i_t[256]
+//!VAR uint metered_pts_t[256]
 //!STORAGE
 
 //!BUFFER METERED_SMOOTHED
@@ -693,7 +698,7 @@ void hook() {
 //!WIDTH 1
 //!HEIGHT 1
 //!COMPUTE 1 1
-//!WHEN temporal_stable_frames
+//!WHEN temporal_stable_window 0.0 >
 //!DESC metering (temporal stabilization)
 
 // ============================================================================
@@ -761,26 +766,56 @@ uint to_uint(float x) {
     return uint(x * 4095.0 + 0.5);
 }
 
+float pts_to_float(uint x) {
+    return uintBitsToFloat(x);
+}
+
+uint pts_to_uint(float x) {
+    return floatBitsToUint(x);
+}
+
 // ============================================================================
 // TEMPORAL STABILIZATION - Core Functions
 // ============================================================================
 
+const uint TEMPORAL_BUFFER_SIZE = 256u;
+
+/**
+ * Count how many frames in the history buffer fall within the time window
+ * Uses PTS to determine temporal distance instead of fixed frame count
+ */
+uint temporal_frame_count() {
+    float current_pts = PTS;
+    uint count = 0u;
+    for (uint i = 0u; i < TEMPORAL_BUFFER_SIZE; i++) {
+        float dt = current_pts - pts_to_float(metered_pts_t[i]);
+        if (dt >= 0.0 && dt <= temporal_stable_window)
+            count = i + 1u;
+        else
+            break;
+    }
+    return max(count, 1u);
+}
+
 /**
  * Prepends current frame values to temporal history arrays
  * Maintains a sliding window of the last N frames for all three metrics
+ * Also stores the PTS for time-based window calculation
  */
 void temporal_prepend() {
     // Shift all historical values one position forward
-    for (uint i = temporal_stable_frames - 1; i > 0; i--) {
-        metered_max_i_t[i] = metered_max_i_t[i - 1];
-        metered_min_i_t[i] = metered_min_i_t[i - 1];
-        metered_avg_i_t[i] = metered_avg_i_t[i - 1];
+    for (uint i = TEMPORAL_BUFFER_SIZE - 1u; i > 0u; i--) {
+        metered_max_i_t[i] = metered_max_i_t[i - 1u];
+        metered_min_i_t[i] = metered_min_i_t[i - 1u];
+        metered_avg_i_t[i] = metered_avg_i_t[i - 1u];
+        metered_pts_t[i]   = metered_pts_t[i - 1u];
     }
 
     // Insert current frame values at position 0
     metered_max_i_t[0] = metered_max_i;
     metered_min_i_t[0] = metered_min_i;
     metered_avg_i_t[0] = metered_avg_i;
+    metered_pts_t[0]   = pts_to_uint(PTS);
 }
 
 /**
@@ -788,13 +823,14 @@ void temporal_prepend() {
  * Recent frames have higher weight than older frames
  *
  * @param type Metric type: METRIC_MAX, METRIC_MIN, or METRIC_AVG
+ * @param count Number of frames within the time window
  * @return Weighted average value
  */
-float temporal_weighted_mean(int type) {
+float temporal_weighted_mean(int type, uint count) {
     float sum_inv_weighted = 0.0;
     float sum_weights = 0.0;
 
-    for (uint i = 0; i < temporal_stable_frames; i++) {
+    for (uint i = 0u; i < count; i++) {
         // Select appropriate buffer based on metric type
         float current;
         if (type == METRIC_MAX) {
@@ -833,9 +869,11 @@ float apply_ema_smoothing(float new_value, float prev_value) {
 /**
  * Gradually transitions temporal buffers during scene changes
  * Blends old values towards new values to avoid sudden jumps
+ *
+ * @param count Number of frames within the time window
  */
-void temporal_fill_gradual() {
-    for (uint i = 0; i < temporal_stable_frames; i++) {
+void temporal_fill_gradual(uint count) {
+    for (uint i = 0u; i < count; i++) {
         // Blend each buffer entry towards current value
         float old_max = to_float(metered_max_i_t[i]);
         float new_max = to_float(metered_max_i);
@@ -856,20 +894,21 @@ void temporal_fill_gradual() {
  * Uses least squares method to predict next frame value
  *
  * @param type Metric type: METRIC_MAX, METRIC_MIN, or METRIC_AVG
+ * @param count Number of frames within the time window
  * @return Predicted value for next frame
  */
-float temporal_predict(int type) {
+float temporal_predict(int type, uint count) {
     float sum_x = 0.0;
     float sum_y = 0.0;
     float sum_x2 = 0.0;
     float sum_xy = 0.0;
 
-    float n = float(temporal_stable_frames);
+    float n = float(count);
     float xp = n + 1.0; // Predict position n+1
 
     // Accumulate sums for least squares regression
-    for (int i = 0; i < int(temporal_stable_frames); i++) {
-        float x = float(i + 1);
+    for (uint i = 0u; i < count; i++) {
+        float x = float(i + 1u);
         float y;
 
         // Select appropriate buffer based on metric type
@@ -877,7 +916,7 @@ float temporal_predict(int type) {
             y = to_float(metered_max_i_t[i]);
         } else if (type == METRIC_MIN) {
             y = to_float(metered_min_i_t[i]);
-        } else { // METRIC_AVG
+        } else {
             y = to_float(metered_avg_i_t[i]);
         }
 
@@ -941,8 +980,12 @@ bool is_scene_changed(float max_current, float min_current, float avg_current,
  * Main temporal stabilization hook
  * Processes max, min, and avg metrics with multi-stage smoothing
  * and intelligent scene change detection
+ * Uses PTS-based time window instead of fixed frame count
  */
 void hook() {
+    // Determine how many history frames are within the time window
+    uint count = temporal_frame_count();
+
     // Cache current frame raw values before any processing
     float max_current = to_float(metered_max_i);
     float min_current = to_float(metered_min_i);
@@ -955,9 +998,9 @@ void hook() {
 
     // Generate predictions BEFORE prepending current frame to history
     // This ensures predictions are based on historical data only
-    float max_pred = temporal_predict(METRIC_MAX);
-    float min_pred = temporal_predict(METRIC_MIN);
-    float avg_pred = temporal_predict(METRIC_AVG);
+    float max_pred = temporal_predict(METRIC_MAX, count);
+    float min_pred = temporal_predict(METRIC_MIN, count);
+    float avg_pred = temporal_predict(METRIC_AVG, count);
 
     // Detect scene changes by comparing current raw values against predictions
     bool scene_changed = is_scene_changed(max_current, min_current, avg_current,
@@ -966,11 +1009,14 @@ void hook() {
     // Update temporal history with current frame
     temporal_prepend();
 
+    // Recalculate count after prepend (current frame is now in buffer)
+    count = temporal_frame_count();
+
     // Stage 1: Weighted harmonic mean (exponential decay)
     // Gives more weight to recent frames, resistant to outliers
-    float max_weighted = temporal_weighted_mean(METRIC_MAX);
-    float min_weighted = temporal_weighted_mean(METRIC_MIN);
-    float avg_weighted = temporal_weighted_mean(METRIC_AVG);
+    float max_weighted = temporal_weighted_mean(METRIC_MAX, count);
+    float min_weighted = temporal_weighted_mean(METRIC_MIN, count);
+    float avg_weighted = temporal_weighted_mean(METRIC_AVG, count);
 
     // Stage 2: Exponential moving average smoothing
     // Uses previous frame's smoothed output for proper EMA
@@ -981,7 +1027,7 @@ void hook() {
     // Handle scene changes
     if (scene_changed) {
         // Gradually transition buffer values to new scene
-        temporal_fill_gradual();
+        temporal_fill_gradual(count);
 
         // Apply reduced smoothing for scene cuts to maintain some stability
         // while still responding to the new scene quickly

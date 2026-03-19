@@ -62,11 +62,6 @@ For more detailed information, please visit the [wiki](https://github.com/natura
   glsl-shader-opts-append=chroma_correction_rate=3.0
   ```
 
-- **What does hdr-toys.lua do?**
-
-  This provides a way to indirectly pass the necessary information using the [glsl-shader-opts](https://mpv.io/manual/master/#options-glsl-shader-opts).
-  - the number of frames for 1/3 second, for reduce flickering.
-
 - **I don't use mpv, can I use these shaders?**
 
   These shaders use [mpv .hook syntax](https://libplacebo.org/custom-shaders/), which requires `libplacebo` for execution. ffmpeg and VLC should be able to use. In theory, porting to other shader like languages is very feasible.
