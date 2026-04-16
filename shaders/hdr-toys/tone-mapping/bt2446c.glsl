@@ -249,6 +249,51 @@ float curve(float x) {
     return f(x, k1, k3, ip);
 }
 
+vec4 hook() {
+    vec4 color = HOOKED_tex(HOOKED_pos);
+
+    color.rgb = RGB_to_XYZ(color.rgb);
+    color.rgb = XYZ_to_xyY(color.rgb);
+    color.z   = curve(color.z);
+    color.rgb = xyY_to_XYZ(color.rgb);
+    color.rgb = XYZ_to_RGB(color.rgb);
+
+    return color;
+}
+
+//!HOOK OUTPUT
+//!BIND HOOKED
+//!WHEN alpha
+//!DESC tone mapping (bt.2446c, inverse crosstalk)
+
+// The inverse crosstalk matrix is applied to ensure that the original hues of input HDR images are
+// recovered.
+
+vec3 crosstalk_inv(vec3 x, float a) {
+    float b = 1.0 - a;
+    float c = 1.0 / (1.0 - 3.0 * a);
+    mat3 transform = mat3(
+        b, -a, -a,
+        -a, b, -a,
+        -a, -a, b
+    );
+    return x * transform * c;
+}
+
+vec4 hook() {
+    vec4 color = HOOKED_tex(HOOKED_pos);
+
+    color.rgb = crosstalk_inv(color.rgb, alpha);
+
+    return color;
+}
+
+//!HOOK OUTPUT
+//!BIND HOOKED
+//!DESC tone mapping (bt.2446c, signal scaling)
+
+// Handling 109% range (super-whites) and black point compensation
+
 float f_slope(float x0, float y0, float x1, float y1) {
     float num = (y1 - y0);
     float den = (x1 - x0);
@@ -280,11 +325,6 @@ vec3 f_scale(vec3 x, float x0, float y0, float x1, float y1) {
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
-    color.rgb = RGB_to_XYZ(color.rgb);
-    color.rgb = XYZ_to_xyY(color.rgb);
-    color.z   = curve(color.z);
-    color.rgb = xyY_to_XYZ(color.rgb);
-    color.rgb = XYZ_to_RGB(color.rgb);
     color.rgb = f_scale(color.rgb, 0.0, 0.001, 1019.0 / 940.0, 1.0);
 
     return color;
