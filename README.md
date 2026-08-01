@@ -2,7 +2,9 @@
 
 A set of color conversion shaders for mpv-player (gpu-next).
 
-For more detailed information, please visit the [wiki](https://github.com/natural-harmonia-gropius/hdr-toys/wiki).
+~~For more detailed information, please visit the [wiki](https://github.com/natural-harmonia-gropius/hdr-toys/wiki).~~
+
+I'm quite lazy, so it'll happen eventually. For now, please open an [issue](https://github.com/natural-harmonia-gropius/hdr-toys/issues) if you have any questions.
 
 | <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/a84b3bbf-3b31-493a-b392-6433f301092b" /> | <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/07ee08a9-7387-41a7-8312-dbb43a971b96" /> | <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/c7351e7d-4e6f-480f-8a87-2ca9fed0a182" /> |
 | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
