@@ -62,13 +62,13 @@
 //!MAXIMUM 1.0
 0.6
 
-//!PARAM auto_exposure_limit_negtive
+//!PARAM auto_exposure_limit_negative
 //!TYPE float
 //!MINIMUM 0.0
 //!MAXIMUM 5.0
 2.3
 
-//!PARAM auto_exposure_limit_postive
+//!PARAM auto_exposure_limit_positive
 //!TYPE float
 //!MINIMUM 0.0
 //!MAXIMUM 5.0
@@ -1168,8 +1168,8 @@ float get_ev(float avg_i, float max_i, float min_i) {
 
     float ev = log2(anchor / average);
 
-    float ev_limit_neg = min(auto_exposure_limit_negtive, log2(maximum / average));
-    float ev_limit_pos = min(auto_exposure_limit_postive, log2(average / minimum));
+    float ev_limit_neg = min(auto_exposure_limit_negative, log2(maximum / average));
+    float ev_limit_pos = min(auto_exposure_limit_positive, log2(average / minimum));
 
     return clamp(ev, -ev_limit_neg, ev_limit_pos);
 }
