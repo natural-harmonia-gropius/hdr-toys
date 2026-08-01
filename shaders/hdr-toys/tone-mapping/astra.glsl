@@ -938,6 +938,12 @@ float temporal_predict(int type, uint count) {
         sum_xy += x * y;
     }
 
+    // Linear regression requires at least two samples. With one sample,
+    // use that value directly instead of producing 0 / 0 below.
+    if (count < 2u) {
+        return sum_y;
+    }
+
     // Calculate linear regression coefficients
     // y = a*x + b
     float denominator = n * sum_x2 - sum_x * sum_x;
