@@ -80,6 +80,12 @@
 //!MAXIMUM 1
 1
 
+//!PARAM exposure_value
+//!TYPE float
+//!MINIMUM -64
+//!MAXIMUM  64
+0.0
+
 //!PARAM shadow_weight
 //!TYPE float
 //!MINIMUM 0.0
@@ -1216,6 +1222,12 @@ void hook() {
         ev = get_ev(avg_i, max_i, min_i);
     } else {
         ev = 0.0;
+    }
+
+    // Optional external override (name and range per utils/exposure.glsl):
+    // replaces the metered value entirely. 0.0 = automatic metering.
+    if (exposure_value != 0.0) {
+        ev = exposure_value;
     }
 
     if (ev != 0.0) {
