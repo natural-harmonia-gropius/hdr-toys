@@ -280,6 +280,8 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
+//!WIDTH METERING.w
+//!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 0 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
@@ -303,6 +305,8 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
+//!WIDTH METERING.w
+//!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 0 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
@@ -322,6 +326,8 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
+//!WIDTH METERING.w
+//!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 1 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
@@ -341,6 +347,8 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
+//!WIDTH METERING.w
+//!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 1 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
@@ -360,6 +368,8 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
+//!WIDTH METERING.w
+//!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 2 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
@@ -379,6 +389,8 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
+//!WIDTH METERING.w
+//!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 2 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
@@ -398,6 +410,8 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
+//!WIDTH METERING.w
+//!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 3 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
@@ -417,6 +431,8 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
+//!WIDTH METERING.w
+//!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 3 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
@@ -436,6 +452,8 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
+//!WIDTH METERING.w
+//!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 4 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
@@ -455,6 +473,8 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
+//!WIDTH METERING.w
+//!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 4 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
@@ -474,6 +494,8 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
+//!WIDTH METERING.w
+//!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 5 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
@@ -493,6 +515,8 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
+//!WIDTH METERING.w
+//!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 5 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
@@ -512,6 +536,8 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
+//!WIDTH METERING.w
+//!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 6 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
@@ -531,6 +557,8 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
+//!WIDTH METERING.w
+//!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 6 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
@@ -550,6 +578,8 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
+//!WIDTH METERING.w
+//!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 7 >
 //!DESC metering (spatial stabilization, blur, horizonal)
 
@@ -569,6 +599,8 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
+//!WIDTH METERING.w
+//!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 7 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
