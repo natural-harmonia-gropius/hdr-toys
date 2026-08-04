@@ -1847,7 +1847,8 @@ float hke_fh_hellwig(float h, float a1, float a2, float a3, float a4, float a5) 
 
 // CIELAB: 0.1644, 0.0603, 0.1307, 0.0060
 float hke_fh_high(float h, float k1, float k2, float k3, float k4) {
-    h = mod(mod(degrees(h), 360.0) + 360.0, 360.0);
+    // atan() already returns [-pi, pi], so one wrap is enough.
+    h = mod(degrees(h) + 360.0, 360.0);
     float by = k1 * abs(sin(radians((h - 90.0)/ 2.0))) + k2;
     float r  = h <= 90.0 || h >= 270.0 ? k3 * abs(cos(radians(h))) + k4 : 0.0;
     return by + r;
@@ -1856,7 +1857,8 @@ float hke_fh_high(float h, float k1, float k2, float k3, float k4) {
 // CIECAM16: 1.5940, 45.0, 2.6518
 // CIELAB: 0.1644, 45.0, 0.1024
 float hke_fh_liao(float h, float k3, float k4, float k5) {
-    h = mod(mod(degrees(h), 360.0) + 360.0, 360.0);
+    // atan() already returns [-pi, pi], so one wrap is enough.
+    h = mod(degrees(h) + 360.0, 360.0);
     return k3 * abs(log(((h + k4) / (90.0 + k4)))) + k5;
 }
 
@@ -1869,19 +1871,7 @@ float hke_fh(float h) {
 // on the Helmholtz-Kohlrausch effect
 // by Liao et al.
 // https://doi.org/10.1364/OE.534073
-float J_to_Jhk(vec3 JCh) {
-    float J = JCh.x;
-    float C = JCh.y;
-    float h = JCh.z;
-    return J + C * hke_fh(h);
-}
 
-float Jhk_to_J(vec3 JCh) {
-    float J = JCh.x;
-    float C = JCh.y;
-    float h = JCh.z;
-    return J - C * hke_fh(h);
-}
 
 // https://www.itu.int/rec/R-REC-BT.2124
 // ΔE_ITP_JND = 1 / 720
@@ -1918,7 +1908,7 @@ vec3 LCh_to_Lab(vec3 LCh) {
 //
 // an optimized version of the LMS to Iab matrix was used,
 // and H-K effect compensation was added.
-vec3 RGB_to_Jab(vec3 color) {
+vec3 RGB_to_Jab(vec3 color, out float fh) {
     color *= reference_white;
     color = RGB_to_XYZ(color);
     color = XYZ_to_XYZm(color);
@@ -1926,12 +1916,20 @@ vec3 RGB_to_Jab(vec3 color) {
     color = iz_eotf_inv(color);
     color = LMS_to_Iab_optimized(color);
     color.x = I_to_J(color.x);
-    color.x = J_to_Jhk(Lab_to_LCh(color));
+
+    // The Helmholtz-Kohlrausch term depends only on hue, and chroma_correction
+    // scales ab by a non-negative scalar, so the hue survives tone mapping and
+    // the same value applies on the way back. Deriving it once here saves a
+    // second hke_fh() and a second atan() per pixel in Jab_to_RGB.
+    float C = length(color.yz);
+    fh = hke_fh(C < epsilon ? 0.0 : atan(color.z, color.y));
+    color.x += C * fh;
+
     return color;
 }
 
-vec3 Jab_to_RGB(vec3 color) {
-    color.x = Jhk_to_J(Lab_to_LCh(color));
+vec3 Jab_to_RGB(vec3 color, float fh) {
+    color.x -= length(color.yz) * fh;
     color.x = J_to_I(color.x);
     color = Iab_to_LMS_optimized(color);
     color = iz_eotf(color);
@@ -2083,9 +2081,10 @@ vec3 tone_mapping(vec3 lab) {
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
-    color.rgb = RGB_to_Jab(color.rgb);
+    float fh;
+    color.rgb = RGB_to_Jab(color.rgb, fh);
     color.rgb = tone_mapping(color.rgb);
-    color.rgb = Jab_to_RGB(color.rgb);
+    color.rgb = Jab_to_RGB(color.rgb, fh);
 
     return color;
 }
