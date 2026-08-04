@@ -603,6 +603,8 @@ void hook() {
 //!BIND METERING
 //!BIND METERED
 //!SAVE EMPTY
+//!WIDTH METERING.w
+//!HEIGHT METERING.h
 //!COMPUTE 32 32
 //!DESC metering (max, min)
 
