@@ -222,6 +222,50 @@ vec4 hook() {
     return vec4(vec3(intensity), 1.0);
 }
 
+// The metering map used to be reduced to 512x288 in a single step. At 4K that
+// is a factor of 7.5 per axis taken with one bilinear tap, i.e. point sampling
+// with aliasing: which pixels survive depends on the subpixel alignment, so a
+// small moving highlight makes metered_max_i jump while nothing in the scene
+// changes. Halving repeatedly instead averages exactly 2x2 per step, the same
+// way the average chain below already does it. The passes are conditional, so
+// only as many run as the source resolution needs: two at 4K, one at 1080p.
+
+//!HOOK OUTPUT
+//!BIND METERING
+//!SAVE METERING
+//!WIDTH METERING.w 2 /
+//!HEIGHT METERING.h 2 /
+//!WHEN METERING.w 1024 >
+//!DESC metering (spatial stabilization, halve 1)
+vec4 hook() { return METERING_tex(METERING_pos); }
+
+//!HOOK OUTPUT
+//!BIND METERING
+//!SAVE METERING
+//!WIDTH METERING.w 2 /
+//!HEIGHT METERING.h 2 /
+//!WHEN METERING.w 1024 >
+//!DESC metering (spatial stabilization, halve 2)
+vec4 hook() { return METERING_tex(METERING_pos); }
+
+//!HOOK OUTPUT
+//!BIND METERING
+//!SAVE METERING
+//!WIDTH METERING.w 2 /
+//!HEIGHT METERING.h 2 /
+//!WHEN METERING.w 1024 >
+//!DESC metering (spatial stabilization, halve 3)
+vec4 hook() { return METERING_tex(METERING_pos); }
+
+//!HOOK OUTPUT
+//!BIND METERING
+//!SAVE METERING
+//!WIDTH METERING.w 2 /
+//!HEIGHT METERING.h 2 /
+//!WHEN METERING.w 1024 >
+//!DESC metering (spatial stabilization, halve 4)
+vec4 hook() { return METERING_tex(METERING_pos); }
+
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
@@ -637,58 +681,62 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND AVG
 //!SAVE AVG
-//!WIDTH AVG.w 2 /
-//!HEIGHT AVG.h 2 /
-//!DESC metering (avg, 128)
-vec4 hook() { return AVG_tex(AVG_pos); }
-
-//!HOOK OUTPUT
-//!BIND AVG
-//!SAVE AVG
-//!WIDTH AVG.w 2 /
-//!HEIGHT AVG.h 2 /
+//!WIDTH AVG.w 4 /
+//!HEIGHT AVG.h 4 /
 //!DESC metering (avg, 64)
-vec4 hook() { return AVG_tex(AVG_pos); }
+// Four bilinear taps, each averaging 2x2, tiled over the 4x4 source block.
+vec4 hook() {
+    float s = AVG_texOff(vec2(-1.0, -1.0)).x
+            + AVG_texOff(vec2( 1.0, -1.0)).x
+            + AVG_texOff(vec2(-1.0,  1.0)).x
+            + AVG_texOff(vec2( 1.0,  1.0)).x;
+    return vec4(s * 0.25, 0.0, 0.0, 1.0);
+}
 
 //!HOOK OUTPUT
 //!BIND AVG
 //!SAVE AVG
-//!WIDTH AVG.w 2 /
-//!HEIGHT AVG.h 2 /
-//!DESC metering (avg, 32)
-vec4 hook() { return AVG_tex(AVG_pos); }
-
-//!HOOK OUTPUT
-//!BIND AVG
-//!SAVE AVG
-//!WIDTH AVG.w 2 /
-//!HEIGHT AVG.h 2 /
+//!WIDTH AVG.w 4 /
+//!HEIGHT AVG.h 4 /
 //!DESC metering (avg, 16)
-vec4 hook() { return AVG_tex(AVG_pos); }
+// Four bilinear taps, each averaging 2x2, tiled over the 4x4 source block.
+vec4 hook() {
+    float s = AVG_texOff(vec2(-1.0, -1.0)).x
+            + AVG_texOff(vec2( 1.0, -1.0)).x
+            + AVG_texOff(vec2(-1.0,  1.0)).x
+            + AVG_texOff(vec2( 1.0,  1.0)).x;
+    return vec4(s * 0.25, 0.0, 0.0, 1.0);
+}
 
 //!HOOK OUTPUT
 //!BIND AVG
 //!SAVE AVG
-//!WIDTH AVG.w 2 /
-//!HEIGHT AVG.h 2 /
-//!DESC metering (avg, 8)
-vec4 hook() { return AVG_tex(AVG_pos); }
-
-//!HOOK OUTPUT
-//!BIND AVG
-//!SAVE AVG
-//!WIDTH AVG.w 2 /
-//!HEIGHT AVG.h 2 /
+//!WIDTH AVG.w 4 /
+//!HEIGHT AVG.h 4 /
 //!DESC metering (avg, 4)
-vec4 hook() { return AVG_tex(AVG_pos); }
+// Four bilinear taps, each averaging 2x2, tiled over the 4x4 source block.
+vec4 hook() {
+    float s = AVG_texOff(vec2(-1.0, -1.0)).x
+            + AVG_texOff(vec2( 1.0, -1.0)).x
+            + AVG_texOff(vec2(-1.0,  1.0)).x
+            + AVG_texOff(vec2( 1.0,  1.0)).x;
+    return vec4(s * 0.25, 0.0, 0.0, 1.0);
+}
 
 //!HOOK OUTPUT
 //!BIND AVG
 //!SAVE AVG
-//!WIDTH AVG.w 2 /
-//!HEIGHT AVG.h 2 /
-//!DESC metering (avg, 2)
-vec4 hook() { return AVG_tex(AVG_pos); }
+//!WIDTH AVG.w 4 /
+//!HEIGHT AVG.h 4 /
+//!DESC metering (avg, 1)
+// Four bilinear taps, each averaging 2x2, tiled over the 4x4 source block.
+vec4 hook() {
+    float s = AVG_texOff(vec2(-1.0, -1.0)).x
+            + AVG_texOff(vec2( 1.0, -1.0)).x
+            + AVG_texOff(vec2(-1.0,  1.0)).x
+            + AVG_texOff(vec2( 1.0,  1.0)).x;
+    return vec4(s * 0.25, 0.0, 0.0, 1.0);
+}
 
 //!HOOK OUTPUT
 //!BIND AVG
