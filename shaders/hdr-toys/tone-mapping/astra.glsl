@@ -1163,13 +1163,20 @@ float get_max_i() {
 }
 
 float get_min_i() {
+    if (max_pq_y > 0.0)
+        return 0.0;
+
+    vec3 scene_max_rgb = vec3(scene_max_r, scene_max_g, scene_max_b);
+    if (max(max(scene_max_rgb.r, scene_max_rgb.g), scene_max_rgb.b) > 0.0)
+        return 0.0;
+
     if (enable_metering > 0)
         return to_float(metered_min_i);
 
     if (min_luma > 0.0)
         return pq_eotf_inv(min_luma);
 
-    return pq_eotf_inv(0.0);
+    return 0.0;
 }
 
 float get_avg_i() {
