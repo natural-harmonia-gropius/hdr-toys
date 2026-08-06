@@ -235,7 +235,7 @@ vec4 hook() {
 //!SAVE METERING
 //!WIDTH METERING.w 2 /
 //!HEIGHT METERING.h 2 /
-//!WHEN METERING.w 1024 >
+//!WHEN OUTPUT.w 1024 >
 //!DESC metering (spatial stabilization, halve 1)
 vec4 hook() { return METERING_tex(METERING_pos); }
 
@@ -244,7 +244,7 @@ vec4 hook() { return METERING_tex(METERING_pos); }
 //!SAVE METERING
 //!WIDTH METERING.w 2 /
 //!HEIGHT METERING.h 2 /
-//!WHEN METERING.w 1024 >
+//!WHEN OUTPUT.w 2048 >
 //!DESC metering (spatial stabilization, halve 2)
 vec4 hook() { return METERING_tex(METERING_pos); }
 
@@ -253,7 +253,7 @@ vec4 hook() { return METERING_tex(METERING_pos); }
 //!SAVE METERING
 //!WIDTH METERING.w 2 /
 //!HEIGHT METERING.h 2 /
-//!WHEN METERING.w 1024 >
+//!WHEN OUTPUT.w 4096 >
 //!DESC metering (spatial stabilization, halve 3)
 vec4 hook() { return METERING_tex(METERING_pos); }
 
@@ -262,7 +262,7 @@ vec4 hook() { return METERING_tex(METERING_pos); }
 //!SAVE METERING
 //!WIDTH METERING.w 2 /
 //!HEIGHT METERING.h 2 /
-//!WHEN METERING.w 1024 >
+//!WHEN OUTPUT.w 8192 >
 //!DESC metering (spatial stabilization, halve 4)
 vec4 hook() { return METERING_tex(METERING_pos); }
 
