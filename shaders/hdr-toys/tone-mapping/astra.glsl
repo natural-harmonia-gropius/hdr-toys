@@ -188,6 +188,26 @@
 //!VAR float min_i
 //!VAR float avg_i
 //!VAR float ev
+//!VAR float c_x0
+//!VAR float c_y0
+//!VAR float c_x1
+//!VAR float c_y1
+//!VAR float c_x2
+//!VAR float c_y2
+//!VAR float c_x3
+//!VAR float c_y3
+//!VAR float c_slope
+//!VAR float c_intercept
+//!VAR float c_slope_toe
+//!VAR float c_slope_shoulder
+//!VAR float c_toe_k
+//!VAR float c_toe_scale
+//!VAR float c_toe_base
+//!VAR float c_sh_a
+//!VAR float c_sh_b
+//!VAR float c_sh_vx
+//!VAR float c_sh_vy
+//!VAR float c_sh_yw
 //!STORAGE
 
 //!HOOK OUTPUT
@@ -1278,6 +1298,72 @@ float get_avg_i() {
     return 0.0;
 }
 
+float f_slope(float x0, float y0, float x1, float y1) {
+    float num = (y1 - y0);
+    float den = (x1 - x0);
+    return abs(den) < 1e-6 ? 1.0 : num / den;
+}
+
+float f_intercept(float slope, float x0, float y0) {
+    return y0 - slope * x0;
+}
+
+float f_contrast(float c) {
+    float range = 40.0;
+    float angle = radians(45.0 + range * c);
+    float slope = tan(angle);
+    return 1.0 - 1.0 / slope;
+}
+
+// Derives every part of the tone curve that depends only on the metadata and
+// the tunable parameters. curve() used to redo all of this for every pixel;
+// max_i and min_i come from a storage buffer, so the compiler cannot hoist it.
+void derive_curve() {
+    float ow = I_to_J(iz_eotf_inv(reference_white));
+    float ob = I_to_J(iz_eotf_inv(reference_white / contrast_ratio));
+    float iw = max(I_to_J(iz_eotf_inv(pq_eotf(max_i))), ow);
+    float ib = min(I_to_J(iz_eotf_inv(pq_eotf(min_i))), ob);
+
+    float midgray   = 0.5 * ow;
+    float shadow    = mix(midgray, ob, shadow_weight);
+    float highlight = mix(midgray, ow, highlight_weight);
+    float contrast  = f_contrast(contrast_bias);
+
+    c_x0 = ib;
+    c_y0 = ob;
+    c_x1 = mix(shadow, midgray, contrast);
+    c_y1 = shadow;
+    c_x2 = mix(highlight, midgray, contrast);
+    c_y2 = highlight;
+    c_x3 = iw;
+    c_y3 = ow;
+
+    c_slope          = f_slope(c_x1, c_y1, c_x2, c_y2);
+    c_intercept      = f_intercept(c_slope, c_x1, c_y1);
+    c_slope_toe      = f_slope(c_x0, c_y0, c_x1, c_y1);
+    c_slope_shoulder = f_slope(c_x2, c_y2, c_x3, c_y3);
+
+    // Suzuki toe: only dt = x - x0 varies per pixel.
+    float tdx = c_x1 - c_x0;
+    float tdy = c_y1 - c_y0;
+    c_toe_k     = tdy - c_slope * tdx;
+    c_toe_scale = tdy * tdy;
+    c_toe_base  = c_slope * tdx * tdx;
+
+    // Hable shoulder with overshoot: the virtual white point, the constant
+    // part of the power law, and the normalization value at x3.
+    float sdx = c_x3 - c_x2;
+    float sdy = c_y3 - c_y2;
+    c_sh_vx = c_x3 + highlight_overshoot * sdx;
+    c_sh_vy = c_y3 + highlight_overshoot * sdy;
+
+    float vdx = c_sh_vx - c_x2;
+    float vdy = c_sh_vy - c_y2;
+    c_sh_b  = c_slope * vdx / vdy;
+    c_sh_a  = log(vdy) - c_sh_b * log(vdx);
+    c_sh_yw = c_sh_vy - exp(c_sh_a + c_sh_b * log(max(c_sh_vx - c_x3, 1e-6)));
+}
+
 float get_ev(float avg_i, float max_i, float min_i) {
     float reference_iz = iz_eotf_inv(reference_white);
     float reference_j = I_to_J(reference_iz);
@@ -1324,6 +1410,9 @@ void hook() {
         max_i = pq_eotf_inv(pq_eotf(max_i) * ev_scale);
         min_i = pq_eotf_inv(pq_eotf(min_i) * ev_scale);
     }
+
+    // Must run after the exposure has been folded into max_i and min_i.
+    derive_curve();
 }
 
 //!HOOK OUTPUT
@@ -1840,7 +1929,8 @@ float hke_fh_hellwig(float h, float a1, float a2, float a3, float a4, float a5) 
 
 // CIELAB: 0.1644, 0.0603, 0.1307, 0.0060
 float hke_fh_high(float h, float k1, float k2, float k3, float k4) {
-    h = mod(mod(degrees(h), 360.0) + 360.0, 360.0);
+    // atan() already returns [-pi, pi], so one wrap is enough.
+    h = mod(degrees(h) + 360.0, 360.0);
     float by = k1 * abs(sin(radians((h - 90.0)/ 2.0))) + k2;
     float r  = h <= 90.0 || h >= 270.0 ? k3 * abs(cos(radians(h))) + k4 : 0.0;
     return by + r;
@@ -1849,7 +1939,8 @@ float hke_fh_high(float h, float k1, float k2, float k3, float k4) {
 // CIECAM16: 1.5940, 45.0, 2.6518
 // CIELAB: 0.1644, 45.0, 0.1024
 float hke_fh_liao(float h, float k3, float k4, float k5) {
-    h = mod(mod(degrees(h), 360.0) + 360.0, 360.0);
+    // atan() already returns [-pi, pi], so one wrap is enough.
+    h = mod(degrees(h) + 360.0, 360.0);
     return k3 * abs(log(((h + k4) / (90.0 + k4)))) + k5;
 }
 
@@ -1862,19 +1953,7 @@ float hke_fh(float h) {
 // on the Helmholtz-Kohlrausch effect
 // by Liao et al.
 // https://doi.org/10.1364/OE.534073
-float J_to_Jhk(vec3 JCh) {
-    float J = JCh.x;
-    float C = JCh.y;
-    float h = JCh.z;
-    return J + C * hke_fh(h);
-}
 
-float Jhk_to_J(vec3 JCh) {
-    float J = JCh.x;
-    float C = JCh.y;
-    float h = JCh.z;
-    return J - C * hke_fh(h);
-}
 
 // https://www.itu.int/rec/R-REC-BT.2124
 // ΔE_ITP_JND = 1 / 720
@@ -1911,7 +1990,7 @@ vec3 LCh_to_Lab(vec3 LCh) {
 //
 // an optimized version of the LMS to Iab matrix was used,
 // and H-K effect compensation was added.
-vec3 RGB_to_Jab(vec3 color) {
+vec3 RGB_to_Jab(vec3 color, out float fh) {
     color *= reference_white;
     color = RGB_to_XYZ(color);
     color = XYZ_to_XYZm(color);
@@ -1919,12 +1998,20 @@ vec3 RGB_to_Jab(vec3 color) {
     color = iz_eotf_inv(color);
     color = LMS_to_Iab_optimized(color);
     color.x = I_to_J(color.x);
-    color.x = J_to_Jhk(Lab_to_LCh(color));
+
+    // The Helmholtz-Kohlrausch term depends only on hue, and chroma_correction
+    // scales ab by a non-negative scalar, so the hue survives tone mapping and
+    // the same value applies on the way back. Deriving it once here saves a
+    // second hke_fh() and a second atan() per pixel in Jab_to_RGB.
+    float C = length(color.yz);
+    fh = hke_fh(C < epsilon ? 0.0 : atan(color.z, color.y));
+    color.x += C * fh;
+
     return color;
 }
 
-vec3 Jab_to_RGB(vec3 color) {
-    color.x = Jhk_to_J(Lab_to_LCh(color));
+vec3 Jab_to_RGB(vec3 color, float fh) {
+    color.x -= length(color.yz) * fh;
     color.x = J_to_I(color.x);
     color = Iab_to_LMS_optimized(color);
     color = iz_eotf(color);
@@ -2001,103 +2088,41 @@ float f_toe_hable(float x, float slope, float x0, float y0, float x1, float y1) 
     return exp(a + b * log(v)) * s + o;
 }
 
-float f_shoulder_hable(float x, float slope, float x0, float y0, float x1, float y1) {
-    float dx = x1 - x0;
-    float dy = y1 - y0;
-
-    float b = slope * dx / dy;
-    float a = log(dy) - b * log(dx);
-    float s = -1.0;
-
-    float v = max((x - x1) * s, 1e-6);
-    float o = y1;
-
-    return exp(a + b * log(v)) * s + o;
-}
-
-// Hable shoulder with overshoot: extends the virtual white point to
-// (x1 + overshoot * dx, y1 + overshoot * dy), so the curve still has
-// non-zero slope at x1.  Accepts a slight slope discontinuity at x0.
-// overshoot = 0 recovers f_shoulder_hable.
-float f_shoulder_hable_overshoot(float x, float slope, float x0, float y0, float x1, float y1, float overshoot) {
-    float dx = x1 - x0;
-    float dy = y1 - y0;
-    float vx = x1 + overshoot * dx;
-    float vy = y1 + overshoot * dy;
-
-    float y  = f_shoulder_hable(x,  slope, x0, y0, vx, vy);
-    float yw = f_shoulder_hable(x1, slope, x0, y0, vx, vy);
-
+// Hable shoulder with overshoot. The virtual white point (vx, vy), the power
+// law constants (a, b) and the normalization value yw are frame constants and
+// are derived once per frame in the metadata pass.
+float f_shoulder_hable_overshoot(float x, float a, float b, float vx, float vy, float yw, float y0, float y1) {
+    float y = vy - exp(a + b * log(max(vx - x, 1e-6)));
     float t = (y - y0) / (yw - y0);
-
     return mix(y0, y1, t);
 }
 
-float f(
-    float x, float iw, float ib, float ow, float ob,
-    float sw, float hw, float cb
-) {
-    float midgray   = 0.5 * ow;
-    float shadow    = mix(midgray, ob, sw);
-    float highlight = mix(midgray, ow, hw);
-    float contrast  = f_contrast(cb);
+float f(float x) {
+    if (x >= c_x1 && x <= c_x2)
+        return f_linear(x, c_slope, c_intercept);
 
-    float x0 = ib;
-    float y0 = ob;
-    float x1 = mix(shadow, midgray, contrast);
-    float y1 = shadow;
-    float x2 = mix(highlight, midgray, contrast);
-    float y2 = highlight;
-    float x3 = iw;
-    float y3 = ow;
+    if (x < c_x1) {
+        if (c_slope_toe >= c_slope)
+            return f_linear(x, c_slope, c_intercept);
 
-    float slope = f_slope(x1, y1, x2, y2);
-    float intercept = f_intercept(slope, x1, y1);
-
-    if (x >= x1 && x <= x2) {
-        return f_linear(x, slope, intercept);
+        float dt = x - c_x0;
+        return c_y0 + c_toe_scale * dt / (dt * c_toe_k + c_toe_base);
     }
 
-    if (x < x1) {
-        float slope_toe = f_slope(x0, y0, x1, y1);
-        if (slope_toe >= slope) {
-            return f_linear(x, slope, intercept);
-        }
+    if (x > c_x2) {
+        if (c_slope_shoulder >= c_slope)
+            return f_linear(x, c_slope, c_intercept);
 
-        return f_toe_suzuki(x, slope, x0, y0, x1, y1);
-    }
-
-    if (x > x2) {
-        float slope_shoulder = f_slope(x2, y2, x3, y3);
-        if (slope_shoulder >= slope) {
-            return f_linear(x, slope, intercept);
-        }
-
-        return f_shoulder_hable_overshoot(x, slope, x2, y2, x3, y3, highlight_overshoot);
+        return f_shoulder_hable_overshoot(
+            x, c_sh_a, c_sh_b, c_sh_vx, c_sh_vy, c_sh_yw, c_y2, c_y3
+        );
     }
 
     return x;
 }
 
-float f(float x, float iw, float ib, float ow, float ob) {
-    return f(
-        x, iw, ib, ow, ob,
-        shadow_weight, highlight_weight, contrast_bias
-    );
-}
-
 float curve(float x) {
-    float ow = I_to_J(iz_eotf_inv(reference_white));
-    float ob = I_to_J(iz_eotf_inv(reference_white / contrast_ratio));
-    float iw = I_to_J(iz_eotf_inv(pq_eotf(max_i)));
-    float ib = I_to_J(iz_eotf_inv(pq_eotf(min_i)));
-
-    iw = max(iw, ow);
-    ib = min(ib, ob);
-
-    float y = f(x, iw, ib, ow, ob);
-
-    return clamp(y, ob, ow);
+    return clamp(f(x), c_y0, c_y3);
 }
 
 float chroma_correction_attenuation(float x, float rate, float threshold) {
@@ -2138,9 +2163,10 @@ vec3 tone_mapping(vec3 lab) {
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
-    color.rgb = RGB_to_Jab(color.rgb);
+    float fh;
+    color.rgb = RGB_to_Jab(color.rgb, fh);
     color.rgb = tone_mapping(color.rgb);
-    color.rgb = Jab_to_RGB(color.rgb);
+    color.rgb = Jab_to_RGB(color.rgb, fh);
 
     return color;
 }
