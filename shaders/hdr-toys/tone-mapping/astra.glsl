@@ -1662,9 +1662,12 @@ vec4 hook() {
 }
 
 //!HOOK OUTPUT
-//!BIND HOOKED
 //!BIND METADATA
-//!DESC tone mapping (astra)
+//!SAVE LUTS
+//!WIDTH 4225
+//!HEIGHT 131
+//!COMPUTE 32 8
+//!DESC tone mapping (LUT generation, astra)
 
 const float m1 = 2610.0 / 4096.0 / 4.0;
 const float m2 = 2523.0 / 4096.0 * 128.0;
@@ -1916,7 +1919,7 @@ vec3 RGB_to_Jab(vec3 color) {
     color = RGB_to_XYZ(color);
     color = XYZ_to_XYZm(color);
     color = XYZ_to_LMS(color);
-    color = iz_eotf_inv(color);
+    color = iz_eotf_inv(max(color, vec3(0.0)));
     color = LMS_to_Iab_optimized(color);
     color.x = I_to_J(color.x);
     color.x = J_to_Jhk(Lab_to_LCh(color));
@@ -1927,11 +1930,11 @@ vec3 Jab_to_RGB(vec3 color) {
     color.x = Jhk_to_J(Lab_to_LCh(color));
     color.x = J_to_I(color.x);
     color = Iab_to_LMS_optimized(color);
-    color = iz_eotf(color);
+    color = iz_eotf(max(color, vec3(0.0)));
     color = LMS_to_XYZ(color);
     color = XYZm_to_XYZ(color);
     color = XYZ_to_RGB(color);
-    color /= reference_white;
+    color /= max(reference_white, 1e-6);
     return color;
 }
 
@@ -2100,6 +2103,252 @@ float curve(float x) {
     return clamp(y, ob, ow);
 }
 
+// LUT atlas layout: two flattened 65^3 LUTs followed by one 1024-point row.
+const int LUT_SIZE = 65;
+const int LUT_LAST = LUT_SIZE - 1;
+const int RGB_TO_LAB_ROW = 0;
+const int LAB_TO_RGB_ROW = LUT_SIZE;
+const int CURVE_ROW = LUT_SIZE * 2;
+const int CURVE_SIZE = 1024;
+
+// LAB chroma-coordinate shaper: the scale concentrates precision near neutral,
+// while the limits define the representable ranges of the a/L and b/L ratios.
+const float AB_RATIO_SCALE = 0.25;
+const float A_RATIO_LIMIT = 2.0;
+const float B_RATIO_LIMIT = 2.5;
+
+vec3 lut_coordinates_to_RGB(vec3 coordinates) {
+    vec3 absolute_rgb = pq_eotf(clamp(coordinates, 0.0, 1.0));
+    return absolute_rgb / max(reference_white, 1e-6);
+}
+
+float decode_signed_coordinate(float coordinate, float limit) {
+    float qmax = limit / (limit + AB_RATIO_SCALE);
+    float signed_coordinate = 2.0 * clamp(coordinate, 0.0, 1.0) - 1.0;
+    float q = abs(signed_coordinate) * qmax;
+    float value = AB_RATIO_SCALE * q / max(1.0 - q, 1e-6);
+    return sign(signed_coordinate) * value;
+}
+
+vec3 lut_coordinates_to_LAB(vec3 coordinates) {
+    float L = clamp(coordinates.x, 0.0, 1.0);
+    float a_ratio = decode_signed_coordinate(coordinates.y, A_RATIO_LIMIT);
+    float b_ratio = decode_signed_coordinate(coordinates.z, B_RATIO_LIMIT);
+    return vec3(L, a_ratio * L, b_ratio * L);
+}
+
+vec3 atlas_to_lut_coordinates(ivec2 atlas_position, int first_row) {
+    ivec3 lut_texel = ivec3(
+        atlas_position.x % LUT_SIZE,
+        atlas_position.x / LUT_SIZE,
+        atlas_position.y - first_row
+    );
+    return vec3(lut_texel) / float(LUT_LAST);
+}
+
+void store_atlas(ivec2 atlas_position, vec3 value) {
+    imageStore(out_image, atlas_position, vec4(value, 1.0));
+}
+
+void generate_RGB_to_LAB_lut(ivec2 atlas_position) {
+    vec3 coordinates = atlas_to_lut_coordinates(
+        atlas_position,
+        RGB_TO_LAB_ROW
+    );
+    vec3 rgb = lut_coordinates_to_RGB(coordinates);
+    store_atlas(atlas_position, RGB_to_Jab(rgb));
+}
+
+void generate_LAB_to_RGB_lut(ivec2 atlas_position) {
+    vec3 coordinates = atlas_to_lut_coordinates(
+        atlas_position,
+        LAB_TO_RGB_ROW
+    );
+    vec3 lab = lut_coordinates_to_LAB(coordinates);
+    store_atlas(atlas_position, Jab_to_RGB(lab));
+}
+
+void generate_curve_lut(ivec2 atlas_position) {
+    float coordinate = float(atlas_position.x) / float(CURVE_SIZE - 1);
+    store_atlas(atlas_position, vec3(curve(coordinate), 0.0, 0.0));
+}
+
+void hook() {
+    ivec2 atlas_position = ivec2(gl_GlobalInvocationID.xy);
+
+    if (atlas_position.x >= LUT_SIZE * LUT_SIZE ||
+        atlas_position.y > CURVE_ROW) {
+        return;
+    }
+
+    if (atlas_position.y < LAB_TO_RGB_ROW) {
+        generate_RGB_to_LAB_lut(atlas_position);
+    } else if (atlas_position.y < CURVE_ROW) {
+        generate_LAB_to_RGB_lut(atlas_position);
+    } else if (atlas_position.x < CURVE_SIZE) {
+        generate_curve_lut(atlas_position);
+    }
+}
+
+//!HOOK OUTPUT
+//!BIND HOOKED
+//!BIND LUTS
+//!DESC tone mapping (LUT application)
+
+// LUT atlas layout: two flattened 65^3 LUTs followed by one 1024-point row.
+const int LUT_SIZE = 65;
+const int LUT_LAST = LUT_SIZE - 1;
+const int RGB_TO_LAB_ROW = 0;
+const int LAB_TO_RGB_ROW = LUT_SIZE;
+const int CURVE_ROW = LUT_SIZE * 2;
+const int CURVE_SIZE = 1024;
+
+// LAB chroma-coordinate shaper: the scale concentrates precision near neutral,
+// while the limits define the representable ranges of the a/L and b/L ratios.
+const float AB_RATIO_SCALE = 0.25;
+const float A_RATIO_LIMIT = 2.0;
+const float B_RATIO_LIMIT = 2.5;
+
+// SMPTE ST 2084 (PQ), converting absolute luminance in nit to code values.
+const float m1 = 2610.0 / 4096.0 / 4.0;
+const float m2 = 2523.0 / 4096.0 * 128.0;
+const float c1 = 3424.0 / 4096.0;
+const float c2 = 2413.0 / 4096.0 * 32.0;
+const float c3 = 2392.0 / 4096.0 * 32.0;
+const float pw = 10000.0;
+
+vec3 pq_eotf_inv(vec3 x) {
+    vec3 t = pow(x / pw, vec3(m1));
+    return pow((c1 + c2 * t) / (1.0 + c3 * t), vec3(m2));
+}
+
+vec3 fetch_atlas_raw(ivec2 position) {
+    return texelFetch(LUTS_raw, position, 0).rgb;
+}
+
+vec3 fetch_lut3d_raw(int first_row, ivec3 texel) {
+    ivec2 atlas_position = ivec2(
+        texel.x + texel.y * LUT_SIZE,
+        first_row + texel.z
+    );
+    return fetch_atlas_raw(atlas_position);
+}
+
+// Select the two middle vertices of the tetrahedron and sort the fractional
+// coordinates into the corresponding interpolation order.
+void select_tetrahedron(
+    vec3 fraction,
+    out ivec3 second_offset,
+    out ivec3 third_offset,
+    out vec3 weights
+) {
+    if (fraction.x >= fraction.y) {
+        if (fraction.y >= fraction.z) {
+            second_offset = ivec3(1, 0, 0);
+            third_offset = ivec3(1, 1, 0);
+            weights = fraction.xyz;
+        } else if (fraction.x >= fraction.z) {
+            second_offset = ivec3(1, 0, 0);
+            third_offset = ivec3(1, 0, 1);
+            weights = fraction.xzy;
+        } else {
+            second_offset = ivec3(0, 0, 1);
+            third_offset = ivec3(1, 0, 1);
+            weights = fraction.zxy;
+        }
+    } else {
+        if (fraction.x >= fraction.z) {
+            second_offset = ivec3(0, 1, 0);
+            third_offset = ivec3(1, 1, 0);
+            weights = fraction.yxz;
+        } else if (fraction.y >= fraction.z) {
+            second_offset = ivec3(0, 1, 0);
+            third_offset = ivec3(0, 1, 1);
+            weights = fraction.yzx;
+        } else {
+            second_offset = ivec3(0, 0, 1);
+            third_offset = ivec3(0, 1, 1);
+            weights = fraction.zyx;
+        }
+    }
+}
+
+vec3 sample_lut_tetrahedral(vec3 lut_coordinates, int first_row) {
+    vec3 position = clamp(lut_coordinates, 0.0, 1.0) * float(LUT_LAST);
+    ivec3 base_texel = ivec3(floor(position));
+    vec3 fraction = fract(position);
+
+    ivec3 second_offset;
+    ivec3 third_offset;
+    vec3 weights;
+    select_tetrahedron(fraction, second_offset, third_offset, weights);
+
+    ivec3 last_texel = ivec3(LUT_LAST);
+    ivec3 texel0 = base_texel;
+    ivec3 texel1 = min(base_texel + second_offset, last_texel);
+    ivec3 texel2 = min(base_texel + third_offset, last_texel);
+    ivec3 texel3 = min(base_texel + ivec3(1), last_texel);
+
+    vec3 value0 = fetch_lut3d_raw(first_row, texel0);
+    vec3 value1 = fetch_lut3d_raw(first_row, texel1);
+    vec3 value2 = fetch_lut3d_raw(first_row, texel2);
+    vec3 value3 = fetch_lut3d_raw(first_row, texel3);
+
+    vec3 interpolated = value0
+                      + weights.x * (value1 - value0)
+                      + weights.y * (value2 - value1)
+                      + weights.z * (value3 - value2);
+    return LUTS_mul * interpolated;
+}
+
+// Rational signed shaper mapping [-limit, limit] to [0, 1], with additional
+// precision around zero where most a/b values are concentrated.
+float encode_signed_coordinate(float value, float limit) {
+    float maximum_magnitude = limit / (limit + AB_RATIO_SCALE);
+    float encoded_magnitude = abs(value) / (abs(value) + AB_RATIO_SCALE);
+    float signed_magnitude = sign(value) * encoded_magnitude / maximum_magnitude;
+    return clamp(0.5 + 0.5 * signed_magnitude, 0.0, 1.0);
+}
+
+vec3 RGB_to_lut_coordinates(vec3 rgb) {
+    vec3 absolute_rgb = clamp(
+        max(rgb, vec3(0.0)) * max(reference_white, 0.0),
+        0.0,
+        pw
+    );
+    return pq_eotf_inv(absolute_rgb);
+}
+
+vec3 LAB_to_lut_coordinates(vec3 lab) {
+    float L = max(lab.x, 0.0);
+    vec2 chroma_ratio = lab.yz / max(L, 1e-6);
+    return vec3(
+        clamp(L, 0.0, 1.0),
+        encode_signed_coordinate(chroma_ratio.x, A_RATIO_LIMIT),
+        encode_signed_coordinate(chroma_ratio.y, B_RATIO_LIMIT)
+    );
+}
+
+vec3 RGB_to_LAB(vec3 rgb) {
+    vec3 coordinates = RGB_to_lut_coordinates(rgb);
+    return sample_lut_tetrahedral(coordinates, RGB_TO_LAB_ROW);
+}
+
+vec3 LAB_to_RGB(vec3 lab) {
+    vec3 coordinates = LAB_to_lut_coordinates(lab);
+    return sample_lut_tetrahedral(coordinates, LAB_TO_RGB_ROW);
+}
+
+float curve(float x) {
+    float position = clamp(x, 0.0, 1.0) * float(CURVE_SIZE - 1);
+    int lower_index = int(floor(position));
+    int upper_index = min(lower_index + 1, CURVE_SIZE - 1);
+    float weight = fract(position);
+    float lower_value = fetch_atlas_raw(ivec2(lower_index, CURVE_ROW)).x;
+    float upper_value = fetch_atlas_raw(ivec2(upper_index, CURVE_ROW)).x;
+    return LUTS_mul * mix(lower_value, upper_value, weight);
+}
+
 float chroma_correction_attenuation(float x, float rate, float threshold) {
     float norm = max((x - threshold) / (1.0 - threshold), 0.0);
     return pow(norm, 1.0 + rate * (1.0 - norm));
@@ -2137,10 +2386,8 @@ vec3 tone_mapping(vec3 lab) {
 
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
-
-    color.rgb = RGB_to_Jab(color.rgb);
+    color.rgb = RGB_to_LAB(color.rgb);
     color.rgb = tone_mapping(color.rgb);
-    color.rgb = Jab_to_RGB(color.rgb);
-
+    color.rgb = LAB_to_RGB(color.rgb);
     return color;
 }
