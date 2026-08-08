@@ -1379,20 +1379,8 @@ void hook() {
 
 const float JND = 1.0 / 720.0;
 
-const vec3 red   = vec3(1.0, 0.0, 0.0);
-const vec3 green = vec3(0.0, 1.0, 0.0);
-const vec3 blue  = vec3(0.0, 0.0, 1.0);
-
 float to_float(uint x) {
     return float(x) / 4095.0;
-}
-
-float delta(float a, float b) {
-    return abs(a - b);
-}
-
-bool approx(float a, float b, float epsilon) {
-    return delta(a, b) < epsilon;
 }
 
 vec4 draw_highlights(float value) {
@@ -1408,12 +1396,6 @@ vec4 draw_highlights(float value) {
 
     float opacity = 0.75 * max(max(matches.x, matches.y), matches.z);
     return vec4(matches, opacity);
-}
-
-vec4 draw_line(float metric, vec3 tint) {
-    if (approx(1.0 - METERING_pos.y, metric, fwidth(METERING_pos.y)))
-        return vec4(tint, 1.0);
-    return vec4(0.0);
 }
 
 const float m1 = 2610.0 / 4096.0 / 4.0;
@@ -1486,14 +1468,6 @@ bool glyph_pixel(uint glyph, vec2 p) {
     if (p.x < 0.0 || p.x >= CHAR_W || p.y < 0.0 || p.y >= CHAR_H) return false;
     uint bit = uint(p.y) * 3u + uint(p.x);
     return (glyph & (1u << bit)) != 0u;
-}
-
-vec4 draw_background(vec2 origin, vec2 px, float width) {
-    vec2 local = (px - origin) / SCALE;
-    if (local.x >= -PAD && local.x <= width + PAD &&
-        local.y >= -PAD && local.y <= CHAR_H + PAD)
-        return vec4(0.0, 0.0, 0.0, 0.7);
-    return vec4(0.0);
 }
 
 vec4 draw_char(int ch, vec2 local, inout float cx) {
@@ -1606,7 +1580,6 @@ vec4 hook() {
 
     vec4 highlight = draw_highlights(value);
 
-    // Optional metric lines can be added to highlight here with draw_line().
     color.rgb = mix(color.rgb, highlight.rgb, highlight.a);
 
     // The longest row contains four label characters and a signed 5.2 number.
