@@ -299,7 +299,7 @@ vec4 hook() {
 //!WIDTH METERING.w
 //!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 0 >
-//!DESC metering (spatial stabilization, blur, horizonal)
+//!DESC metering (spatial stabilization, blur, horizontal)
 
 // Efficient Gaussian blur with linear sampling
 // by Daniel Rákos
@@ -345,7 +345,7 @@ vec4 hook() {
 //!WIDTH METERING.w
 //!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 1 >
-//!DESC metering (spatial stabilization, blur, horizonal)
+//!DESC metering (spatial stabilization, blur, horizontal)
 
 const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
 const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
@@ -387,7 +387,7 @@ vec4 hook() {
 //!WIDTH METERING.w
 //!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 2 >
-//!DESC metering (spatial stabilization, blur, horizonal)
+//!DESC metering (spatial stabilization, blur, horizontal)
 
 const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
 const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
@@ -429,7 +429,7 @@ vec4 hook() {
 //!WIDTH METERING.w
 //!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 3 >
-//!DESC metering (spatial stabilization, blur, horizonal)
+//!DESC metering (spatial stabilization, blur, horizontal)
 
 const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
 const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
@@ -471,7 +471,7 @@ vec4 hook() {
 //!WIDTH METERING.w
 //!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 4 >
-//!DESC metering (spatial stabilization, blur, horizonal)
+//!DESC metering (spatial stabilization, blur, horizontal)
 
 const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
 const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
@@ -513,7 +513,7 @@ vec4 hook() {
 //!WIDTH METERING.w
 //!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 5 >
-//!DESC metering (spatial stabilization, blur, horizonal)
+//!DESC metering (spatial stabilization, blur, horizontal)
 
 const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
 const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
@@ -555,7 +555,7 @@ vec4 hook() {
 //!WIDTH METERING.w
 //!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 6 >
-//!DESC metering (spatial stabilization, blur, horizonal)
+//!DESC metering (spatial stabilization, blur, horizontal)
 
 const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
 const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
@@ -597,7 +597,7 @@ vec4 hook() {
 //!WIDTH METERING.w
 //!HEIGHT METERING.h
 //!WHEN spatial_stable_iterations 7 >
-//!DESC metering (spatial stabilization, blur, horizonal)
+//!DESC metering (spatial stabilization, blur, horizontal)
 
 const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
 const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
