@@ -1270,58 +1270,53 @@ float to_float(uint x) {
     return float(x) / 4095.0;
 }
 
-float get_max_i() {
-    if (max_pq_y > 0.0)
-        return max_pq_y;
+struct MeteringMetrics {
+    float maximum;
+    float minimum;
+    float average;
+};
 
+MeteringMetrics resolve_metering_metrics() {
+    MeteringMetrics metrics;
     vec3 scene_max_rgb = vec3(scene_max_r, scene_max_g, scene_max_b);
-    if (max(max(scene_max_rgb.r, scene_max_rgb.g), scene_max_rgb.b) > 0.0)
-        return pq_eotf_inv(RGB_to_Y(scene_max_rgb));
+    bool has_pq_peak = max_pq_y > 0.0;
+    bool has_scene_peak = any(greaterThan(scene_max_rgb, vec3(0.0)));
 
-    if (enable_metering > 0)
-        return to_float(metered_max_i);
+    // This must match the peak-metadata conditions on the intensity-map pass.
+    // A skipped pass leaves METERED unchanged, so its values are not current.
+    bool use_measured = enable_metering > 0 &&
+                        !has_pq_peak && !has_scene_peak;
 
-    if (max_cll > 0.0)
-        return pq_eotf_inv(max_cll);
+    if (has_pq_peak)
+        metrics.maximum = max_pq_y;
+    else if (has_scene_peak)
+        metrics.maximum = pq_eotf_inv(RGB_to_Y(scene_max_rgb));
+    else if (use_measured)
+        metrics.maximum = to_float(metered_max_i);
+    else if (max_cll > 0.0)
+        metrics.maximum = pq_eotf_inv(max_cll);
+    else if (max_luma > 0.0)
+        metrics.maximum = pq_eotf_inv(max_luma);
+    else
+        metrics.maximum = pq_eotf_inv(1000.0);
 
-    if (max_luma > 0.0)
-        return pq_eotf_inv(max_luma);
+    if (use_measured)
+        metrics.minimum = to_float(metered_min_i);
+    else if (min_luma > 0.0)
+        metrics.minimum = pq_eotf_inv(min_luma);
+    else
+        metrics.minimum = 0.0;
 
-    return pq_eotf_inv(1000.0);
-}
-
-float get_min_i() {
-    if (max_pq_y > 0.0)
-        return 0.0;
-
-    vec3 scene_max_rgb = vec3(scene_max_r, scene_max_g, scene_max_b);
-    if (max(max(scene_max_rgb.r, scene_max_rgb.g), scene_max_rgb.b) > 0.0)
-        return 0.0;
-
-    if (enable_metering > 0)
-        return to_float(metered_min_i);
-
-    if (min_luma > 0.0)
-        return pq_eotf_inv(min_luma);
-
-    return 0.0;
-}
-
-float get_avg_i() {
     if (avg_pq_y > 0.0)
-        return avg_pq_y;
+        metrics.average = avg_pq_y;
+    else if (scene_avg > 0.0)
+        metrics.average = pq_eotf_inv(scene_avg);
+    else if (use_measured && enable_metering > 1)
+        metrics.average = to_float(metered_avg_i);
+    else
+        metrics.average = 0.0;
 
-    if (scene_avg > 0.0)
-        return pq_eotf_inv(scene_avg);
-
-    if (enable_metering > 1)
-        return to_float(metered_avg_i);
-
-    // not useful
-    // if (max_fall > 0.0)
-    //     return pq_eotf_inv(max_fall);
-
-    return 0.0;
+    return metrics;
 }
 
 float get_ev(float avg_i, float max_i, float min_i) {
@@ -1349,9 +1344,10 @@ float get_ev(float avg_i, float max_i, float min_i) {
 }
 
 void hook() {
-    max_i = get_max_i();
-    min_i = get_min_i();
-    avg_i = get_avg_i();
+    MeteringMetrics metrics = resolve_metering_metrics();
+    max_i = metrics.maximum;
+    min_i = metrics.minimum;
+    avg_i = metrics.average;
 
     if (avg_i > 0.0 && auto_exposure_anchor > 0.0) {
         ev = get_ev(avg_i, max_i, min_i);
