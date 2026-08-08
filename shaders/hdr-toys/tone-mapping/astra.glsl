@@ -639,27 +639,38 @@ void hook() {
 //!SAVE EMPTY
 //!WIDTH METERING.w
 //!HEIGHT METERING.h
-//!COMPUTE 32 32
+//!COMPUTE 32 32 16 16
 //!DESC metering (max, min)
 
-shared uint smax[1024];
-shared uint smin[1024];
+shared uint smax[256];
+shared uint smin[256];
 
 uint to_uint(float x) {
     return uint(x * 4095.0 + 0.5);
 }
 
+float fetch_metering(ivec2 position) {
+    return (METERING_mul * texelFetch(METERING_raw, position, 0)).x;
+}
+
 void hook() {
-    float value = METERING_tex(METERING_pos).x;
-    uint rounded = to_uint(value);
+    ivec2 block_base = ivec2(gl_WorkGroupID.xy) * 32;
+    ivec2 position = block_base + ivec2(gl_LocalInvocationID.xy) * 2;
+
+    float value00 = fetch_metering(position);
+    float value10 = fetch_metering(position + ivec2(1, 0));
+    float value01 = fetch_metering(position + ivec2(0, 1));
+    float value11 = fetch_metering(position + ivec2(1, 1));
+    float local_max = max(max(value00, value10), max(value01, value11));
+    float local_min = min(min(value00, value10), min(value01, value11));
 
     uint tid = gl_LocalInvocationIndex;
-    smax[tid] = rounded;
-    smin[tid] = rounded;
+    smax[tid] = to_uint(local_max);
+    smin[tid] = to_uint(local_min);
 
     barrier();
 
-    for (uint s = 512; s > 0; s >>= 1) {
+    for (uint s = 128; s > 0; s >>= 1) {
         if (tid < s) {
             smax[tid] = max(smax[tid], smax[tid + s]);
             smin[tid] = min(smin[tid], smin[tid + s]);
