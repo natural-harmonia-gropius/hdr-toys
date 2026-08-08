@@ -175,6 +175,8 @@
 //!VAR uint metered_min_i_t[256]
 //!VAR uint metered_avg_i_t[256]
 //!VAR uint metered_pts_t[256]
+//!VAR uint metered_history_head
+//!VAR uint metered_history_valid
 //!STORAGE
 
 //!BUFFER METERED_SMOOTHED
@@ -853,11 +855,6 @@ const float TEMPORAL_WEIGHT_MIN = 0.15; // Minimum is least reliable (noise)
 // This converts [0,1] differences to ΔE-like perceptual differences
 const float TEMPORAL_DELTA_SCALE = 720.0;
 
-// Metric type identifiers for array access
-const int METRIC_MAX = 0;
-const int METRIC_MIN = 1;
-const int METRIC_AVG = 2;
-
 float to_float(uint x) {
     return float(x) / 4095.0;
 }
@@ -878,7 +875,12 @@ uint pts_to_uint(float x) {
 // TEMPORAL STABILIZATION - Core Functions
 // ============================================================================
 
+// Must remain a power of two for the ring-buffer mask below.
 const uint TEMPORAL_BUFFER_SIZE = 256u;
+
+uint temporal_history_index(uint age) {
+    return (metered_history_head + age) & (TEMPORAL_BUFFER_SIZE - 1u);
+}
 
 /**
  * Count how many frames in the history buffer fall within the time window
@@ -887,71 +889,99 @@ const uint TEMPORAL_BUFFER_SIZE = 256u;
 uint temporal_frame_count() {
     float current_pts = PTS;
     uint count = 0u;
-    for (uint i = 0u; i < TEMPORAL_BUFFER_SIZE; i++) {
-        float dt = current_pts - pts_to_float(metered_pts_t[i]);
+    uint valid = min(metered_history_valid, TEMPORAL_BUFFER_SIZE);
+
+    for (uint i = 0u; i < valid; i++) {
+        uint index = temporal_history_index(i);
+        float dt = current_pts - pts_to_float(metered_pts_t[index]);
         if (dt >= 0.0 && dt <= temporal_stable_window)
             count = i + 1u;
         else
             break;
     }
-    return max(count, 1u);
+    return count;
 }
 
 /**
- * Prepends current frame values to temporal history arrays
- * Maintains a sliding window of the last N frames for all three metrics
- * Also stores the PTS for time-based window calculation
+ * Inserts current frame values at the front of the temporal ring buffer.
  */
 void temporal_prepend() {
-    // Shift all historical values one position forward
-    for (uint i = TEMPORAL_BUFFER_SIZE - 1u; i > 0u; i--) {
-        metered_max_i_t[i] = metered_max_i_t[i - 1u];
-        metered_min_i_t[i] = metered_min_i_t[i - 1u];
-        metered_avg_i_t[i] = metered_avg_i_t[i - 1u];
-        metered_pts_t[i]   = metered_pts_t[i - 1u];
+    metered_history_head = (metered_history_head + TEMPORAL_BUFFER_SIZE - 1u)
+                         & (TEMPORAL_BUFFER_SIZE - 1u);
+    uint index = metered_history_head;
+
+    metered_max_i_t[index] = metered_max_i;
+    metered_min_i_t[index] = metered_min_i;
+    metered_avg_i_t[index] = metered_avg_i;
+    metered_pts_t[index] = pts_to_uint(PTS);
+    metered_history_valid = min(metered_history_valid + 1u, TEMPORAL_BUFFER_SIZE);
+}
+
+struct TemporalStatistics {
+    vec3 sum;
+    vec3 indexed_sum;
+    vec3 weighted_reciprocal_sum;
+    float weight_sum;
+};
+
+/**
+ * Collects the shared history statistics used by prediction and smoothing.
+ */
+TemporalStatistics temporal_accumulate(uint count, vec3 current) {
+    TemporalStatistics statistics;
+    statistics.sum = vec3(0.0);
+    statistics.indexed_sum = vec3(0.0);
+    statistics.weighted_reciprocal_sum = 1.0 / max(current, vec3(1e-6));
+    statistics.weight_sum = 1.0;
+    float weight = TEMPORAL_DECAY;
+
+    for (uint i = 0u; i < count; i++) {
+        uint index = temporal_history_index(i);
+        float x = float(i + 1u);
+        vec3 value = vec3(
+            to_float(metered_max_i_t[index]),
+            to_float(metered_min_i_t[index]),
+            to_float(metered_avg_i_t[index])
+        );
+
+        statistics.sum += value;
+        statistics.indexed_sum += x * value;
+        statistics.weighted_reciprocal_sum += weight / max(value, vec3(1e-6));
+        statistics.weight_sum += weight;
+        weight *= TEMPORAL_DECAY;
     }
 
-    // Insert current frame values at position 0
-    metered_max_i_t[0] = metered_max_i;
-    metered_min_i_t[0] = metered_min_i;
-    metered_avg_i_t[0] = metered_avg_i;
-    metered_pts_t[0]   = pts_to_uint(PTS);
+    return statistics;
 }
 
 /**
- * Calculates weighted moving average with exponential decay
- * Recent frames have higher weight than older frames
- *
- * @param type Metric type: METRIC_MAX, METRIC_MIN, or METRIC_AVG
- * @param count Number of frames within the time window
- * @return Weighted average value
+ * Predicts maximum, minimum, and average intensity from historical samples.
  */
-float temporal_weighted_mean(int type, uint count) {
-    float sum_inv_weighted = 0.0;
-    float sum_weights = 0.0;
-
-    for (uint i = 0u; i < count; i++) {
-        // Select appropriate buffer based on metric type
-        float current;
-        if (type == METRIC_MAX) {
-            current = to_float(metered_max_i_t[i]);
-        } else if (type == METRIC_MIN) {
-            current = to_float(metered_min_i_t[i]);
-        } else { // METRIC_AVG
-            current = to_float(metered_avg_i_t[i]);
-        }
-
-        // Calculate exponential decay weight: w(i) = decay^i
-        // Recent frames (i=0) have weight=1.0, older frames decay exponentially
-        float weight = pow(TEMPORAL_DECAY, float(i));
-
-        // Harmonic mean: H = sum(w) / sum(w/x)
-        sum_inv_weighted += weight / max(current, 1e-6);
-        sum_weights += weight;
+vec3 temporal_predict(uint count, TemporalStatistics statistics) {
+    if (count < 2u) {
+        return statistics.sum;
     }
 
-    // Return weighted harmonic mean
-    return sum_weights / max(sum_inv_weighted, 1e-6);
+    float n = float(count);
+    float xp = n + 1.0;
+    float sum_x = n * xp * 0.5;
+    float sum_x2 = n * xp * (2.0 * n + 1.0) / 6.0;
+    float denominator = n * sum_x2 - sum_x * sum_x;
+    vec3 slope = (n * statistics.indexed_sum - sum_x * statistics.sum)
+               / denominator;
+    vec3 intercept = (statistics.sum - slope * sum_x) / n;
+    return slope * xp + intercept;
+}
+
+/**
+ * Calculates the weighted harmonic mean including the current frame.
+ * Recent frames receive more weight through exponential decay, while harmonic
+ * averaging reduces the influence of bright outliers.
+ * H = sum(w) / sum(w / x)
+ */
+vec3 temporal_weighted_mean(TemporalStatistics statistics) {
+    return vec3(statistics.weight_sum)
+         / max(statistics.weighted_reciprocal_sum, vec3(1e-6));
 }
 
 /**
@@ -971,75 +1001,22 @@ float apply_ema_smoothing(float new_value, float prev_value) {
  * Blends old values towards new values to avoid sudden jumps
  *
  * @param count Number of frames within the time window
+ * @param current Current maximum, minimum, and average intensity
  */
-void temporal_fill_gradual(uint count) {
+void temporal_fill_gradual(uint count, vec3 current) {
     for (uint i = 0u; i < count; i++) {
-        // Blend each buffer entry towards current value
-        float old_max = to_float(metered_max_i_t[i]);
-        float new_max = to_float(metered_max_i);
-        metered_max_i_t[i] = to_uint(mix(old_max, new_max, TEMPORAL_SCENE_BLEND));
+        uint index = temporal_history_index(i);
+        vec3 previous = vec3(
+            to_float(metered_max_i_t[index]),
+            to_float(metered_min_i_t[index]),
+            to_float(metered_avg_i_t[index])
+        );
+        vec3 blended = mix(previous, current, TEMPORAL_SCENE_BLEND);
 
-        float old_min = to_float(metered_min_i_t[i]);
-        float new_min = to_float(metered_min_i);
-        metered_min_i_t[i] = to_uint(mix(old_min, new_min, TEMPORAL_SCENE_BLEND));
-
-        float old_avg = to_float(metered_avg_i_t[i]);
-        float new_avg = to_float(metered_avg_i);
-        metered_avg_i_t[i] = to_uint(mix(old_avg, new_avg, TEMPORAL_SCENE_BLEND));
+        metered_max_i_t[index] = to_uint(blended.x);
+        metered_min_i_t[index] = to_uint(blended.y);
+        metered_avg_i_t[index] = to_uint(blended.z);
     }
-}
-
-/**
- * Performs linear regression prediction for scene change detection
- * Uses least squares method to predict next frame value
- *
- * @param type Metric type: METRIC_MAX, METRIC_MIN, or METRIC_AVG
- * @param count Number of frames within the time window
- * @return Predicted value for next frame
- */
-float temporal_predict(int type, uint count) {
-    float sum_x = 0.0;
-    float sum_y = 0.0;
-    float sum_x2 = 0.0;
-    float sum_xy = 0.0;
-
-    float n = float(count);
-    float xp = n + 1.0; // Predict position n+1
-
-    // Accumulate sums for least squares regression
-    for (uint i = 0u; i < count; i++) {
-        float x = float(i + 1u);
-        float y;
-
-        // Select appropriate buffer based on metric type
-        if (type == METRIC_MAX) {
-            y = to_float(metered_max_i_t[i]);
-        } else if (type == METRIC_MIN) {
-            y = to_float(metered_min_i_t[i]);
-        } else {
-            y = to_float(metered_avg_i_t[i]);
-        }
-
-        sum_x += x;
-        sum_y += y;
-        sum_x2 += x * x;
-        sum_xy += x * y;
-    }
-
-    // Linear regression requires at least two samples. With one sample,
-    // use that value directly instead of producing 0 / 0 below.
-    if (count < 2u) {
-        return sum_y;
-    }
-
-    // Calculate linear regression coefficients
-    // y = a*x + b
-    float denominator = n * sum_x2 - sum_x * sum_x;
-    float a = (n * sum_xy - sum_x * sum_y) / denominator;
-    float b = (sum_y - a * sum_x) / n;
-
-    // Return prediction for next frame
-    return a * xp + b;
 }
 
 /**
@@ -1102,11 +1079,12 @@ void hook() {
     float prev_min = to_float(smoothed_min_i);
     float prev_avg = to_float(smoothed_avg_i);
 
-    // Generate predictions BEFORE prepending current frame to history
-    // This ensures predictions are based on historical data only
-    float max_pred = temporal_predict(METRIC_MAX, count);
-    float min_pred = temporal_predict(METRIC_MIN, count);
-    float avg_pred = temporal_predict(METRIC_AVG, count);
+    TemporalStatistics statistics = temporal_accumulate(
+        count,
+        vec3(max_current, min_current, avg_current)
+    );
+    vec3 predicted = temporal_predict(count, statistics);
+    vec3 weighted = temporal_weighted_mean(statistics);
 
     // Detect scene changes by comparing current raw values against predictions
     bool scene_changed = false;
@@ -1116,34 +1094,26 @@ void hook() {
             max_current,
             min_current,
             avg_current,
-            max_pred,
-            min_pred,
-            avg_pred
+            predicted.x,
+            predicted.y,
+            predicted.z
         );
     }
 
     // Update temporal history with current frame
     temporal_prepend();
-
-    // Recalculate count after prepend (current frame is now in buffer)
-    count = temporal_frame_count();
-
-    // Stage 1: Weighted harmonic mean (exponential decay)
-    // Gives more weight to recent frames, resistant to outliers
-    float max_weighted = temporal_weighted_mean(METRIC_MAX, count);
-    float min_weighted = temporal_weighted_mean(METRIC_MIN, count);
-    float avg_weighted = temporal_weighted_mean(METRIC_AVG, count);
+    count = min(count + 1u, TEMPORAL_BUFFER_SIZE);
 
     // Stage 2: Exponential moving average smoothing
     // Uses previous frame's smoothed output for proper EMA
-    float max_smoothed = apply_ema_smoothing(max_weighted, prev_max);
-    float min_smoothed = apply_ema_smoothing(min_weighted, prev_min);
-    float avg_smoothed = apply_ema_smoothing(avg_weighted, prev_avg);
+    float max_smoothed = apply_ema_smoothing(weighted.x, prev_max);
+    float min_smoothed = apply_ema_smoothing(weighted.y, prev_min);
+    float avg_smoothed = apply_ema_smoothing(weighted.z, prev_avg);
 
     // Handle scene changes
     if (scene_changed) {
         // Gradually transition buffer values to new scene
-        temporal_fill_gradual(count);
+        temporal_fill_gradual(count, vec3(max_current, min_current, avg_current));
 
         // Apply reduced smoothing for scene cuts to maintain some stability
         // while still responding to the new scene quickly
