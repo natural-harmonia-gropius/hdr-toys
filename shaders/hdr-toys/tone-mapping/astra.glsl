@@ -893,11 +893,12 @@ void temporal_prepend(uvec3 current) {
 }
 
 struct TemporalPredictionStatistics {
-    vec3 sum;
-    vec3 time_weighted_sum;
+    vec3 weighted_value_sum;
+    vec3 weighted_time_value_sum;
     vec3 newest;
-    float time_sum;
-    float time_squared_sum;
+    float weight_sum;
+    float weighted_time_sum;
+    float weighted_time_squared_sum;
 };
 
 struct TemporalMeanStatistics {
@@ -915,12 +916,14 @@ struct TemporalStatistics {
 void temporal_add_prediction_sample(
     inout TemporalPredictionStatistics statistics,
     vec3 value,
-    float time
+    float time,
+    float weight
 ) {
-    statistics.sum += value;
-    statistics.time_weighted_sum += time * value;
-    statistics.time_sum += time;
-    statistics.time_squared_sum += time * time;
+    statistics.weighted_value_sum += weight * value;
+    statistics.weighted_time_value_sum += weight * time * value;
+    statistics.weight_sum += weight;
+    statistics.weighted_time_sum += weight * time;
+    statistics.weighted_time_squared_sum += weight * time * time;
 }
 
 void temporal_add_mean_sample(
@@ -939,11 +942,12 @@ TemporalStatistics temporal_collect_statistics(
     float newest_age
 ) {
     TemporalStatistics statistics;
-    statistics.prediction.sum = vec3(0.0);
-    statistics.prediction.time_weighted_sum = vec3(0.0);
+    statistics.prediction.weighted_value_sum = vec3(0.0);
+    statistics.prediction.weighted_time_value_sum = vec3(0.0);
     statistics.prediction.newest = current;
-    statistics.prediction.time_sum = 0.0;
-    statistics.prediction.time_squared_sum = 0.0;
+    statistics.prediction.weight_sum = 0.0;
+    statistics.prediction.weighted_time_sum = 0.0;
+    statistics.prediction.weighted_time_squared_sum = 0.0;
     statistics.mean.weighted_reciprocal_sum = vec3(0.0);
     statistics.mean.weight_sum = 0.0;
     statistics.count = 0u;
@@ -994,7 +998,12 @@ TemporalStatistics temporal_collect_statistics(
         if (i == 0u)
             statistics.prediction.newest = value;
 
-        temporal_add_prediction_sample(statistics.prediction, value, time);
+        temporal_add_prediction_sample(
+            statistics.prediction,
+            value,
+            time,
+            weight
+        );
         temporal_add_mean_sample(statistics.mean, value, weight);
         statistics.count = i + 1u;
         statistics.history_span = sample_age;
@@ -1011,25 +1020,31 @@ TemporalStatistics temporal_collect_statistics(
 }
 
 /**
- * Predicts maximum, minimum, and average intensity from historical samples.
+ * Predicts maximum, minimum, and average intensity with a weighted regression.
+ * Each sample receives the integrated temporal-kernel weight of its PTS
+ * interval, so denser sampling does not receive more influence.
  */
 vec3 temporal_predict(uint count, TemporalPredictionStatistics statistics) {
     if (count < 2u) {
         return statistics.newest;
     }
 
-    float n = float(count);
-    float denominator = n * statistics.time_squared_sum
-                      - statistics.time_sum * statistics.time_sum;
+    float weight_sum = statistics.weight_sum;
+    float denominator = weight_sum * statistics.weighted_time_squared_sum
+                      - statistics.weighted_time_sum
+                      * statistics.weighted_time_sum;
 
-    if (abs(denominator) < 1e-10) {
+    if (weight_sum < 1e-6 || abs(denominator) < 1e-10) {
         return statistics.newest;
     }
 
-    vec3 slope = (n * statistics.time_weighted_sum
-               - statistics.time_sum * statistics.sum)
+    vec3 slope = (weight_sum * statistics.weighted_time_value_sum
+               - statistics.weighted_time_sum
+               * statistics.weighted_value_sum)
                / denominator;
-    vec3 intercept = (statistics.sum - slope * statistics.time_sum) / n;
+    vec3 intercept = (statistics.weighted_value_sum
+                   - slope * statistics.weighted_time_sum)
+                   / weight_sum;
 
     // Historical sample times are negative relative to the current frame, so
     // the prediction at the current frame (t = 0) is the intercept.
