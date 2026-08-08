@@ -717,61 +717,35 @@ vec4 hook() {
 //!HOOK OUTPUT
 //!BIND AVG
 //!SAVE AVG
-//!WIDTH AVG.w 4 /
-//!HEIGHT AVG.h 4 /
-//!DESC metering (avg, 64)
-// Four bilinear taps, each averaging 2x2, tiled over the 4x4 source block.
-vec4 hook() {
-    float s = AVG_texOff(vec2(-1.0, -1.0)).x
-            + AVG_texOff(vec2( 1.0, -1.0)).x
-            + AVG_texOff(vec2(-1.0,  1.0)).x
-            + AVG_texOff(vec2( 1.0,  1.0)).x;
-    return vec4(s * 0.25, 0.0, 0.0, 1.0);
-}
-
-//!HOOK OUTPUT
-//!BIND AVG
-//!SAVE AVG
-//!WIDTH AVG.w 4 /
-//!HEIGHT AVG.h 4 /
+//!WIDTH AVG.w 16 /
+//!HEIGHT AVG.h 16 /
 //!DESC metering (avg, 16)
-// Four bilinear taps, each averaging 2x2, tiled over the 4x4 source block.
+// Sixty-four bilinear taps, each averaging 2x2, tile the 16x16 source block.
 vec4 hook() {
-    float s = AVG_texOff(vec2(-1.0, -1.0)).x
-            + AVG_texOff(vec2( 1.0, -1.0)).x
-            + AVG_texOff(vec2(-1.0,  1.0)).x
-            + AVG_texOff(vec2( 1.0,  1.0)).x;
-    return vec4(s * 0.25, 0.0, 0.0, 1.0);
+    float sum = 0.0;
+    for (int y = -7; y <= 7; y += 2) {
+        for (int x = -7; x <= 7; x += 2) {
+            sum += AVG_texOff(vec2(float(x), float(y))).x;
+        }
+    }
+    return vec4(sum / 64.0, 0.0, 0.0, 1.0);
 }
 
 //!HOOK OUTPUT
 //!BIND AVG
 //!SAVE AVG
-//!WIDTH AVG.w 4 /
-//!HEIGHT AVG.h 4 /
-//!DESC metering (avg, 4)
-// Four bilinear taps, each averaging 2x2, tiled over the 4x4 source block.
-vec4 hook() {
-    float s = AVG_texOff(vec2(-1.0, -1.0)).x
-            + AVG_texOff(vec2( 1.0, -1.0)).x
-            + AVG_texOff(vec2(-1.0,  1.0)).x
-            + AVG_texOff(vec2( 1.0,  1.0)).x;
-    return vec4(s * 0.25, 0.0, 0.0, 1.0);
-}
-
-//!HOOK OUTPUT
-//!BIND AVG
-//!SAVE AVG
-//!WIDTH AVG.w 4 /
-//!HEIGHT AVG.h 4 /
+//!WIDTH AVG.w 16 /
+//!HEIGHT AVG.h 16 /
 //!DESC metering (avg, 1)
-// Four bilinear taps, each averaging 2x2, tiled over the 4x4 source block.
+// Sixty-four bilinear taps, each averaging 2x2, tile the 16x16 source block.
 vec4 hook() {
-    float s = AVG_texOff(vec2(-1.0, -1.0)).x
-            + AVG_texOff(vec2( 1.0, -1.0)).x
-            + AVG_texOff(vec2(-1.0,  1.0)).x
-            + AVG_texOff(vec2( 1.0,  1.0)).x;
-    return vec4(s * 0.25, 0.0, 0.0, 1.0);
+    float sum = 0.0;
+    for (int y = -7; y <= 7; y += 2) {
+        for (int x = -7; x <= 7; x += 2) {
+            sum += AVG_texOff(vec2(float(x), float(y))).x;
+        }
+    }
+    return vec4(sum / 64.0, 0.0, 0.0, 1.0);
 }
 
 //!HOOK OUTPUT
