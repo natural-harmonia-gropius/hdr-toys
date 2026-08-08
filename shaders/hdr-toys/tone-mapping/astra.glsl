@@ -1319,18 +1319,18 @@ MeteringMetrics resolve_metering_metrics() {
     return metrics;
 }
 
-float get_ev(float avg_i, float max_i, float min_i) {
+float calculate_auto_exposure(MeteringMetrics metrics) {
     float reference_iz = iz_eotf_inv(reference_white);
     float reference_j = I_to_J(reference_iz);
     float anchor_j = auto_exposure_anchor * reference_j;
     float anchor_iz = J_to_I(anchor_j);
     float anchor = iz_eotf(anchor_iz);
 
-    float average = max(pq_eotf(avg_i), 1e-6);
-    float maximum = max(pq_eotf(max_i), 1e-6);
-    float minimum = max(pq_eotf(min_i), 1e-6);
+    float average = max(pq_eotf(metrics.average), 1e-6);
+    float maximum = max(pq_eotf(metrics.maximum), 1e-6);
+    float minimum = max(pq_eotf(metrics.minimum), 1e-6);
 
-    float ev = log2(anchor / average);
+    float exposure = log2(anchor / average);
 
     float ev_limit_neg = auto_exposure_limit_negative;
     float ev_limit_pos = auto_exposure_limit_positive;
@@ -1340,32 +1340,38 @@ float get_ev(float avg_i, float max_i, float min_i) {
         ev_limit_pos = min(ev_limit_pos, log2(average / minimum));
     }
 
-    return clamp(ev, -ev_limit_neg, ev_limit_pos);
+    return clamp(exposure, -ev_limit_neg, ev_limit_pos);
+}
+
+float resolve_exposure(MeteringMetrics metrics) {
+    // A non-zero external value replaces automatic exposure entirely.
+    if (exposure_value != 0.0)
+        return exposure_value;
+
+    if (metrics.average <= 0.0 || auto_exposure_anchor <= 0.0)
+        return 0.0;
+
+    return calculate_auto_exposure(metrics);
+}
+
+void apply_exposure_to_range(inout MeteringMetrics metrics, float exposure) {
+    if (exposure == 0.0)
+        return;
+
+    float scale = exp2(exposure);
+    metrics.maximum = pq_eotf_inv(pq_eotf(metrics.maximum) * scale);
+    metrics.minimum = pq_eotf_inv(pq_eotf(metrics.minimum) * scale);
 }
 
 void hook() {
     MeteringMetrics metrics = resolve_metering_metrics();
+
+    ev = resolve_exposure(metrics);
+    apply_exposure_to_range(metrics, ev);
+
     max_i = metrics.maximum;
     min_i = metrics.minimum;
     avg_i = metrics.average;
-
-    if (avg_i > 0.0 && auto_exposure_anchor > 0.0) {
-        ev = get_ev(avg_i, max_i, min_i);
-    } else {
-        ev = 0.0;
-    }
-
-    // Optional external override (name and range per utils/exposure.glsl):
-    // replaces the metered value entirely. 0.0 = automatic metering.
-    if (exposure_value != 0.0) {
-        ev = exposure_value;
-    }
-
-    if (ev != 0.0) {
-        float ev_scale = exp2(ev);
-        max_i = pq_eotf_inv(pq_eotf(max_i) * ev_scale);
-        min_i = pq_eotf_inv(pq_eotf(min_i) * ev_scale);
-    }
 }
 
 //!HOOK OUTPUT
