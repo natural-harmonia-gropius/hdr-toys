@@ -180,9 +180,9 @@
 //!STORAGE
 
 //!BUFFER METERED_SMOOTHED
-//!VAR uint smoothed_max_i
-//!VAR uint smoothed_min_i
-//!VAR uint smoothed_avg_i
+//!VAR float smoothed_max_i
+//!VAR float smoothed_min_i
+//!VAR float smoothed_avg_i
 //!STORAGE
 
 //!BUFFER METADATA
@@ -237,7 +237,7 @@ vec4 hook() {
 //!SAVE METERING
 //!WIDTH METERING.w 2 /
 //!HEIGHT METERING.h 2 /
-//!WHEN OUTPUT.w 1024 >
+//!WHEN OUTPUT.w 1024 > OUTPUT.h 576 > +
 //!DESC metering (spatial stabilization, halve 1)
 vec4 hook() { return METERING_tex(METERING_pos); }
 
@@ -246,7 +246,7 @@ vec4 hook() { return METERING_tex(METERING_pos); }
 //!SAVE METERING
 //!WIDTH METERING.w 2 /
 //!HEIGHT METERING.h 2 /
-//!WHEN OUTPUT.w 2048 >
+//!WHEN OUTPUT.w 2048 > OUTPUT.h 1152 > +
 //!DESC metering (spatial stabilization, halve 2)
 vec4 hook() { return METERING_tex(METERING_pos); }
 
@@ -255,7 +255,7 @@ vec4 hook() { return METERING_tex(METERING_pos); }
 //!SAVE METERING
 //!WIDTH METERING.w 2 /
 //!HEIGHT METERING.h 2 /
-//!WHEN OUTPUT.w 4096 >
+//!WHEN OUTPUT.w 4096 > OUTPUT.h 2304 > +
 //!DESC metering (spatial stabilization, halve 3)
 vec4 hook() { return METERING_tex(METERING_pos); }
 
@@ -264,7 +264,7 @@ vec4 hook() { return METERING_tex(METERING_pos); }
 //!SAVE METERING
 //!WIDTH METERING.w 2 /
 //!HEIGHT METERING.h 2 /
-//!WHEN OUTPUT.w 8192 >
+//!WHEN OUTPUT.w 8192 > OUTPUT.h 4608 > +
 //!DESC metering (spatial stabilization, halve 4)
 vec4 hook() { return METERING_tex(METERING_pos); }
 
@@ -276,7 +276,21 @@ vec4 hook() { return METERING_tex(METERING_pos); }
 //!DESC metering (spatial stabilization, downscaling)
 
 vec4 hook() {
-    return METERING_tex(METERING_pos);
+    const vec2 target_size = vec2(512.0, 288.0);
+    vec2 scale = METERING_size / target_size;
+
+    if (all(lessThanEqual(scale, vec2(1.0)))) {
+        return METERING_tex(METERING_pos);
+    }
+
+    // Extend the bilinear footprint to approximate an area average. At 2x
+    // downscaling the four taps land at the centers of the source 2x2 block.
+    vec2 offset = 0.5 * max(scale - vec2(1.0), vec2(0.0));
+    vec4 sum = METERING_texOff(vec2(-offset.x, -offset.y))
+             + METERING_texOff(vec2( offset.x, -offset.y))
+             + METERING_texOff(vec2(-offset.x,  offset.y))
+             + METERING_texOff(vec2( offset.x,  offset.y));
+    return sum * 0.25;
 }
 
 //!HOOK OUTPUT
@@ -794,20 +808,16 @@ void hook() {
 // These parameters control the temporal smoothing behavior to reduce flicker
 // while maintaining responsiveness to actual scene changes.
 
-// Exponential decay factor for weighted moving average
-// Range: 0.7-0.95. Lower = more smoothing but slower response
-// Default: 0.85 balances smoothness and responsiveness
-const float TEMPORAL_DECAY = 0.85;
-
-// EMA (Exponential Moving Average) smoothing factor
-// Range: 0.1-0.3. Lower = smoother but less responsive
-// Default: 0.2 provides good stability without excessive lag
-const float TEMPORAL_EMA_ALPHA = 0.2;
-
-// Blend factor for gradual scene transition
-// Range: 0.3-0.7. Lower = smoother transitions during scene cuts
-// Default: 0.5 provides balanced transition speed
-const float TEMPORAL_SCENE_BLEND = 0.5;
+// Historical-weight half-life relative to the configured temporal window.
+// At the default 0.33 s window this yields a half-life of about 0.178 s.
+const float TEMPORAL_WEIGHT_HALF_LIFE_SCALE = 0.54;
+const float TEMPORAL_MIN_TIME_CONSTANT = 1.0 / 240.0;
+const float TEMPORAL_FAST_TIME_SCALE = 0.125;
+const float TEMPORAL_AVERAGE_TIME_SCALE = 0.25;
+const float TEMPORAL_SLOW_TIME_SCALE = 0.5;
+// Re-arm cut detection after history covers this fraction of the window.
+const float TEMPORAL_SCENE_MIN_HISTORY_SCALE = 0.25;
+const float TEMPORAL_PTS_EPSILON = 1e-6;
 
 // Scene change blend factor (applied when cut is detected)
 // Range: 0.2-0.5. Lower = smoother but may blur real scene changes
@@ -887,53 +897,119 @@ uint temporal_frame_count() {
     return count;
 }
 
-/**
- * Inserts current frame values at the front of the temporal ring buffer.
- */
-void temporal_prepend() {
+void temporal_store_sample(uint index, uvec3 value) {
+    metered_max_i_t[index] = value.x;
+    metered_min_i_t[index] = value.y;
+    metered_avg_i_t[index] = value.z;
+    metered_pts_t[index] = pts_to_uint(PTS);
+}
+
+/** Inserts the current frame at the front of the temporal ring buffer. */
+void temporal_prepend(uvec3 current) {
     metered_history_head = (metered_history_head + TEMPORAL_BUFFER_SIZE - 1u)
                          & (TEMPORAL_BUFFER_SIZE - 1u);
-    uint index = metered_history_head;
-
-    metered_max_i_t[index] = metered_max_i;
-    metered_min_i_t[index] = metered_min_i;
-    metered_avg_i_t[index] = metered_avg_i;
-    metered_pts_t[index] = pts_to_uint(PTS);
+    temporal_store_sample(metered_history_head, current);
     metered_history_valid = min(metered_history_valid + 1u, TEMPORAL_BUFFER_SIZE);
 }
 
-struct TemporalStatistics {
+struct TemporalPredictionStatistics {
     vec3 sum;
-    vec3 indexed_sum;
+    vec3 time_weighted_sum;
+    vec3 newest;
+    float time_sum;
+    float time_squared_sum;
+};
+
+struct TemporalMeanStatistics {
     vec3 weighted_reciprocal_sum;
     float weight_sum;
 };
 
+struct TemporalStatistics {
+    TemporalPredictionStatistics prediction;
+    TemporalMeanStatistics mean;
+};
+
+void temporal_add_prediction_sample(
+    inout TemporalPredictionStatistics statistics,
+    vec3 value,
+    float time
+) {
+    statistics.sum += value;
+    statistics.time_weighted_sum += time * value;
+    statistics.time_sum += time;
+    statistics.time_squared_sum += time * time;
+}
+
+void temporal_add_mean_sample(
+    inout TemporalMeanStatistics statistics,
+    vec3 value,
+    float weight
+) {
+    statistics.weighted_reciprocal_sum += weight / max(value, vec3(1e-6));
+    statistics.weight_sum += weight;
+}
+
 /**
- * Collects the shared history statistics used by prediction and smoothing.
+ * Reads history once and dispatches each sample to its dedicated accumulator.
  */
-TemporalStatistics temporal_accumulate(uint count, vec3 current) {
+TemporalStatistics temporal_collect_statistics(uint count, vec3 current) {
     TemporalStatistics statistics;
-    statistics.sum = vec3(0.0);
-    statistics.indexed_sum = vec3(0.0);
-    statistics.weighted_reciprocal_sum = 1.0 / max(current, vec3(1e-6));
-    statistics.weight_sum = 1.0;
-    float weight = TEMPORAL_DECAY;
+    statistics.prediction.sum = vec3(0.0);
+    statistics.prediction.time_weighted_sum = vec3(0.0);
+    statistics.prediction.newest = current;
+    statistics.prediction.time_sum = 0.0;
+    statistics.prediction.time_squared_sum = 0.0;
+    statistics.mean.weighted_reciprocal_sum = vec3(0.0);
+    statistics.mean.weight_sum = 0.0;
+    float half_life = max(
+        temporal_stable_window * TEMPORAL_WEIGHT_HALF_LIFE_SCALE,
+        TEMPORAL_MIN_TIME_CONSTANT
+    );
+
+    // Treat samples as points on a continuous time axis. Midpoints between
+    // adjacent PTS values bound each sample's interval, and integrating the
+    // exponential kernel over those intervals removes sample-rate bias.
+    float newest_age = max(
+        PTS - pts_to_float(metered_pts_t[temporal_history_index(0u)]),
+        0.0
+    );
+    float boundary_decay = exp2(-0.5 * newest_age / half_life);
+    float current_weight = 1.0 - boundary_decay;
+    temporal_add_mean_sample(statistics.mean, current, current_weight);
+
+    float age = newest_age;
 
     for (uint i = 0u; i < count; i++) {
         uint index = temporal_history_index(i);
-        float x = float(i + 1u);
+        float time = -age;
+        float interval_end = temporal_stable_window;
+        float next_age = age;
+
+        if (i + 1u < count) {
+            uint next_index = temporal_history_index(i + 1u);
+            next_age = max(
+                PTS - pts_to_float(metered_pts_t[next_index]),
+                age
+            );
+            interval_end = 0.5 * (age + next_age);
+        }
+
+        float next_boundary_decay = exp2(-interval_end / half_life);
+        float weight = max(boundary_decay - next_boundary_decay, 0.0);
         vec3 value = vec3(
             to_float(metered_max_i_t[index]),
             to_float(metered_min_i_t[index]),
             to_float(metered_avg_i_t[index])
         );
 
-        statistics.sum += value;
-        statistics.indexed_sum += x * value;
-        statistics.weighted_reciprocal_sum += weight / max(value, vec3(1e-6));
-        statistics.weight_sum += weight;
-        weight *= TEMPORAL_DECAY;
+        if (i == 0u)
+            statistics.prediction.newest = value;
+
+        temporal_add_prediction_sample(statistics.prediction, value, time);
+        temporal_add_mean_sample(statistics.mean, value, weight);
+        boundary_decay = next_boundary_decay;
+        age = next_age;
     }
 
     return statistics;
@@ -942,20 +1018,27 @@ TemporalStatistics temporal_accumulate(uint count, vec3 current) {
 /**
  * Predicts maximum, minimum, and average intensity from historical samples.
  */
-vec3 temporal_predict(uint count, TemporalStatistics statistics) {
+vec3 temporal_predict(uint count, TemporalPredictionStatistics statistics) {
     if (count < 2u) {
-        return statistics.sum;
+        return statistics.newest;
     }
 
     float n = float(count);
-    float xp = n + 1.0;
-    float sum_x = n * xp * 0.5;
-    float sum_x2 = n * xp * (2.0 * n + 1.0) / 6.0;
-    float denominator = n * sum_x2 - sum_x * sum_x;
-    vec3 slope = (n * statistics.indexed_sum - sum_x * statistics.sum)
+    float denominator = n * statistics.time_squared_sum
+                      - statistics.time_sum * statistics.time_sum;
+
+    if (abs(denominator) < 1e-10) {
+        return statistics.newest;
+    }
+
+    vec3 slope = (n * statistics.time_weighted_sum
+               - statistics.time_sum * statistics.sum)
                / denominator;
-    vec3 intercept = (statistics.sum - slope * sum_x) / n;
-    return slope * xp + intercept;
+    vec3 intercept = (statistics.sum - slope * statistics.time_sum) / n;
+
+    // Historical sample times are negative relative to the current frame, so
+    // the prediction at the current frame (t = 0) is the intercept.
+    return clamp(intercept, vec3(0.0), vec3(1.0));
 }
 
 /**
@@ -964,84 +1047,89 @@ vec3 temporal_predict(uint count, TemporalStatistics statistics) {
  * averaging reduces the influence of bright outliers.
  * H = sum(w) / sum(w / x)
  */
-vec3 temporal_weighted_mean(TemporalStatistics statistics) {
+vec3 temporal_weighted_mean(TemporalMeanStatistics statistics) {
     return vec3(statistics.weight_sum)
          / max(statistics.weighted_reciprocal_sum, vec3(1e-6));
 }
 
-/**
- * Applies Exponential Moving Average (EMA) smoothing
- * Provides additional stability on top of weighted average
- *
- * @param new_value New computed value
- * @param prev_value Previous frame's value
- * @return Smoothed value: prev + alpha * (new - prev)
- */
-float apply_ema_smoothing(float new_value, float prev_value) {
-    return prev_value + TEMPORAL_EMA_ALPHA * (new_value - prev_value);
+/** Calculates a frame-rate-independent EMA coefficient. */
+float temporal_alpha(float delta_time, float time_constant) {
+    return 1.0 - exp(-delta_time / max(time_constant, TEMPORAL_MIN_TIME_CONSTANT));
 }
 
-/**
- * Gradually transitions temporal buffers during scene changes
- * Blends old values towards new values to avoid sudden jumps
- *
- * @param count Number of frames within the time window
- * @param current Current maximum, minimum, and average intensity
- */
-void temporal_fill_gradual(uint count, vec3 current) {
-    for (uint i = 0u; i < count; i++) {
-        uint index = temporal_history_index(i);
-        vec3 previous = vec3(
-            to_float(metered_max_i_t[index]),
-            to_float(metered_min_i_t[index]),
-            to_float(metered_avg_i_t[index])
-        );
-        vec3 blended = mix(previous, current, TEMPORAL_SCENE_BLEND);
+vec3 apply_temporal_smoothing(vec3 current, vec3 previous, float delta_time) {
+    float fast_time = temporal_stable_window * TEMPORAL_FAST_TIME_SCALE;
+    float average_time = temporal_stable_window * TEMPORAL_AVERAGE_TIME_SCALE;
+    float slow_time = temporal_stable_window * TEMPORAL_SLOW_TIME_SCALE;
 
-        metered_max_i_t[index] = to_uint(blended.x);
-        metered_min_i_t[index] = to_uint(blended.y);
-        metered_avg_i_t[index] = to_uint(blended.z);
+    vec3 time_constant = vec3(
+        current.x > previous.x ? fast_time : slow_time,
+        current.y < previous.y ? fast_time : slow_time,
+        average_time
+    );
+    vec3 alpha = vec3(
+        temporal_alpha(delta_time, time_constant.x),
+        temporal_alpha(delta_time, time_constant.y),
+        temporal_alpha(delta_time, time_constant.z)
+    );
+    return mix(previous, current, alpha);
+}
+
+bool temporal_scene_history_ready(uint count) {
+    if (count < 2u) {
+        return false;
     }
+
+    uint oldest_index = temporal_history_index(count - 1u);
+    float history_span = max(
+        PTS - pts_to_float(metered_pts_t[oldest_index]),
+        0.0
+    );
+    float required_span = max(
+        temporal_stable_window * TEMPORAL_SCENE_MIN_HISTORY_SCALE,
+        TEMPORAL_MIN_TIME_CONSTANT
+    );
+    return history_span >= required_span;
 }
 
-/**
- * Detects scene changes using multi-metric prediction error analysis
- * Compares current frame raw values against predictions from history
- *
- * @param max_current Current frame maximum value (raw)
- * @param min_current Current frame minimum value (raw)
- * @param avg_current Current frame average value (raw)
- * @param max_pred Predicted maximum value
- * @param min_pred Predicted minimum value
- * @param avg_pred Predicted average value
- * @return true if scene change is detected
- */
-bool is_scene_changed(float max_current, float min_current, float avg_current,
-                      float max_pred, float min_pred, float avg_pred) {
-    // Detect pure black scenes (always considered a scene change)
-    if (max_current < TEMPORAL_BLACK_THRESHOLD) {
-        return true;
+void temporal_reset_history(uvec3 current) {
+    metered_history_head = 0u;
+    metered_history_valid = 1u;
+    temporal_store_sample(0u, current);
+}
+
+void temporal_publish(vec3 smoothed) {
+    metered_max_i = to_uint(smoothed.x);
+    metered_min_i = to_uint(smoothed.y);
+    metered_avg_i = to_uint(smoothed.z);
+    smoothed_max_i = smoothed.x;
+    smoothed_min_i = smoothed.y;
+    smoothed_avg_i = smoothed.z;
+}
+
+float temporal_scene_change_score(vec3 current, vec3 predicted) {
+    // Metric layout is (max, min, avg).
+    vec3 delta = TEMPORAL_DELTA_SCALE * abs(current - predicted);
+    return dot(delta, vec3(
+        TEMPORAL_WEIGHT_MAX,
+        TEMPORAL_WEIGHT_MIN,
+        TEMPORAL_WEIGHT_AVG
+    ));
+}
+
+/** Detects scene changes by comparing current values with their prediction. */
+bool temporal_is_scene_changed(vec3 current, vec3 predicted) {
+    // Entering black is a cut, but a sustained black scene is not.
+    if (current.x < TEMPORAL_BLACK_THRESHOLD) {
+        return predicted.x >= TEMPORAL_BLACK_THRESHOLD;
     }
 
     // Calculate adaptive tolerance based on current brightness
     // Brighter scenes get higher tolerance to reduce false positives
     float adaptive_tolerance = TEMPORAL_BASE_TOLERANCE *
-                               (1.0 + max_current * TEMPORAL_ADAPTIVE_SCALE);
+                               (1.0 + current.x * TEMPORAL_ADAPTIVE_SCALE);
 
-    // Calculate prediction errors in perceptual units (ΔE-like)
-    // Compare current values against predictions
-    float max_delta = TEMPORAL_DELTA_SCALE * abs(max_current - max_pred);
-    float min_delta = TEMPORAL_DELTA_SCALE * abs(min_current - min_pred);
-    float avg_delta = TEMPORAL_DELTA_SCALE * abs(avg_current - avg_pred);
-
-    // Combine errors using weighted average
-    // Average is most reliable, max is important, min is least reliable
-    float weighted_delta = avg_delta * TEMPORAL_WEIGHT_AVG +
-                           max_delta * TEMPORAL_WEIGHT_MAX +
-                           min_delta * TEMPORAL_WEIGHT_MIN;
-
-    // Scene change detected if weighted error exceeds adaptive threshold
-    return weighted_delta > adaptive_tolerance;
+    return temporal_scene_change_score(current, predicted) > adaptive_tolerance;
 }
 
 /**
@@ -1051,71 +1139,74 @@ bool is_scene_changed(float max_current, float min_current, float avg_current,
  * Uses PTS-based time window instead of fixed frame count
  */
 void hook() {
-    // Determine how many history frames are within the time window
-    uint count = temporal_frame_count();
-
     // Cache current frame raw values before any processing
-    float max_current = to_float(metered_max_i);
-    float min_current = to_float(metered_min_i);
-    float avg_current = to_float(metered_avg_i);
+    uvec3 current_quantized = uvec3(
+        metered_max_i,
+        metered_min_i,
+        metered_avg_i
+    );
+    vec3 current = vec3(current_quantized) / 4095.0;
 
     // Get previous frame's smoothed values from persistent buffer
-    float prev_max = to_float(smoothed_max_i);
-    float prev_min = to_float(smoothed_min_i);
-    float prev_avg = to_float(smoothed_avg_i);
+    vec3 previous = vec3(smoothed_max_i, smoothed_min_i, smoothed_avg_i);
+    uint valid = min(metered_history_valid, TEMPORAL_BUFFER_SIZE);
 
-    TemporalStatistics statistics = temporal_accumulate(
-        count,
-        vec3(max_current, min_current, avg_current)
+    if (valid == 0u) {
+        temporal_reset_history(current_quantized);
+        temporal_publish(current);
+        return;
+    }
+
+    float newest_pts = pts_to_float(
+        metered_pts_t[temporal_history_index(0u)]
     );
-    vec3 predicted = temporal_predict(count, statistics);
-    vec3 weighted = temporal_weighted_mean(statistics);
+    float delta_time = PTS - newest_pts;
+
+    // Redrawing the same video frame must not advance temporal state.
+    if (abs(delta_time) <= TEMPORAL_PTS_EPSILON) {
+        temporal_publish(previous);
+        return;
+    }
+
+    // Reset on seeks, timestamp discontinuities, or gaps outside the active
+    // history window instead of mixing unrelated temporal segments.
+    if (delta_time < 0.0 || delta_time > temporal_stable_window) {
+        temporal_reset_history(current_quantized);
+        temporal_publish(current);
+        return;
+    }
+
+    uint count = temporal_frame_count();
+
+    if (count == 0u) {
+        temporal_reset_history(current_quantized);
+        temporal_publish(current);
+        return;
+    }
+
+    TemporalStatistics statistics = temporal_collect_statistics(
+        count,
+        current
+    );
+    vec3 predicted = temporal_predict(count, statistics.prediction);
+    vec3 weighted = temporal_weighted_mean(statistics.mean);
 
     // Detect scene changes by comparing current raw values against predictions
     bool scene_changed = false;
 
-    if (temporal_stable_scene_change > 0) {
-        scene_changed = is_scene_changed(
-            max_current,
-            min_current,
-            avg_current,
-            predicted.x,
-            predicted.y,
-            predicted.z
-        );
+    if (temporal_stable_scene_change > 0 &&
+        temporal_scene_history_ready(count)) {
+        scene_changed = temporal_is_scene_changed(current, predicted);
     }
 
-    // Update temporal history with current frame
-    temporal_prepend();
-    count = min(count + 1u, TEMPORAL_BUFFER_SIZE);
-
-    // Stage 2: Exponential moving average smoothing
-    // Uses previous frame's smoothed output for proper EMA
-    float max_smoothed = apply_ema_smoothing(weighted.x, prev_max);
-    float min_smoothed = apply_ema_smoothing(weighted.y, prev_min);
-    float avg_smoothed = apply_ema_smoothing(weighted.z, prev_avg);
-
-    // Handle scene changes
     if (scene_changed) {
-        // Gradually transition buffer values to new scene
-        temporal_fill_gradual(count, vec3(max_current, min_current, avg_current));
-
-        // Apply reduced smoothing for scene cuts to maintain some stability
-        // while still responding to the new scene quickly
-        max_smoothed = mix(prev_max, max_current, TEMPORAL_CUT_BLEND);
-        min_smoothed = mix(prev_min, min_current, TEMPORAL_CUT_BLEND);
-        avg_smoothed = mix(prev_avg, avg_current, TEMPORAL_CUT_BLEND);
+        temporal_reset_history(current_quantized);
+        temporal_publish(mix(previous, current, TEMPORAL_CUT_BLEND));
+        return;
     }
 
-    // Write back smoothed values
-    metered_max_i = to_uint(max_smoothed);
-    metered_min_i = to_uint(min_smoothed);
-    metered_avg_i = to_uint(avg_smoothed);
-
-    // Store smoothed values for next frame's EMA calculation
-    smoothed_max_i = metered_max_i;
-    smoothed_min_i = metered_min_i;
-    smoothed_avg_i = metered_avg_i;
+    temporal_prepend(current_quantized);
+    temporal_publish(apply_temporal_smoothing(weighted, previous, delta_time));
 }
 
 //!HOOK OUTPUT
