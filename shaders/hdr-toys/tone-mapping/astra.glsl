@@ -1304,6 +1304,10 @@ MeteringMetrics resolve_metering_metrics() {
         metrics.average = pq_eotf_inv(scene_avg);
     else if (use_measured && enable_metering > 1)
         metrics.average = to_float(metered_avg_i);
+    // MaxFALL is the static-metadata fallback for average luminance, but using
+    // it as the exposure anchor produced poor results in practice.
+    // else if (max_fall > 0.0)
+    //     metrics.average = pq_eotf_inv(max_fall);
     else
         metrics.average = 0.0;
 
