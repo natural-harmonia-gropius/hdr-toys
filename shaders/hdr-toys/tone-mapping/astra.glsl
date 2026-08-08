@@ -877,26 +877,6 @@ uint temporal_history_index(uint age) {
     return (metered_history_head + age) & (TEMPORAL_BUFFER_SIZE - 1u);
 }
 
-/**
- * Count how many frames in the history buffer fall within the time window
- * Uses PTS to determine temporal distance instead of fixed frame count
- */
-uint temporal_frame_count() {
-    float current_pts = PTS;
-    uint count = 0u;
-    uint valid = min(metered_history_valid, TEMPORAL_BUFFER_SIZE);
-
-    for (uint i = 0u; i < valid; i++) {
-        uint index = temporal_history_index(i);
-        float dt = current_pts - pts_to_float(metered_pts_t[index]);
-        if (dt >= 0.0 && dt <= temporal_stable_window)
-            count = i + 1u;
-        else
-            break;
-    }
-    return count;
-}
-
 void temporal_store_sample(uint index, uvec3 value) {
     metered_max_i_t[index] = value.x;
     metered_min_i_t[index] = value.y;
@@ -928,6 +908,8 @@ struct TemporalMeanStatistics {
 struct TemporalStatistics {
     TemporalPredictionStatistics prediction;
     TemporalMeanStatistics mean;
+    uint count;
+    float history_span;
 };
 
 void temporal_add_prediction_sample(
@@ -950,10 +932,12 @@ void temporal_add_mean_sample(
     statistics.weight_sum += weight;
 }
 
-/**
- * Reads history once and dispatches each sample to its dedicated accumulator.
- */
-TemporalStatistics temporal_collect_statistics(uint count, vec3 current) {
+/** Traverses the active history once and accumulates all temporal statistics. */
+TemporalStatistics temporal_collect_statistics(
+    uint valid,
+    vec3 current,
+    float newest_age
+) {
     TemporalStatistics statistics;
     statistics.prediction.sum = vec3(0.0);
     statistics.prediction.time_weighted_sum = vec3(0.0);
@@ -962,6 +946,8 @@ TemporalStatistics temporal_collect_statistics(uint count, vec3 current) {
     statistics.prediction.time_squared_sum = 0.0;
     statistics.mean.weighted_reciprocal_sum = vec3(0.0);
     statistics.mean.weight_sum = 0.0;
+    statistics.count = 0u;
+    statistics.history_span = 0.0;
     float half_life = max(
         temporal_stable_window * TEMPORAL_WEIGHT_HALF_LIFE_SCALE,
         TEMPORAL_MIN_TIME_CONSTANT
@@ -970,29 +956,31 @@ TemporalStatistics temporal_collect_statistics(uint count, vec3 current) {
     // Treat samples as points on a continuous time axis. Midpoints between
     // adjacent PTS values bound each sample's interval, and integrating the
     // exponential kernel over those intervals removes sample-rate bias.
-    float newest_age = max(
-        PTS - pts_to_float(metered_pts_t[temporal_history_index(0u)]),
-        0.0
-    );
     float boundary_decay = exp2(-0.5 * newest_age / half_life);
     float current_weight = 1.0 - boundary_decay;
     temporal_add_mean_sample(statistics.mean, current, current_weight);
 
     float age = newest_age;
+    float sample_age = newest_age;
 
-    for (uint i = 0u; i < count; i++) {
+    for (uint i = 0u; i < valid; i++) {
         uint index = temporal_history_index(i);
         float time = -age;
         float interval_end = temporal_stable_window;
         float next_age = age;
+        float next_sample_age = sample_age;
+        bool has_next = false;
 
-        if (i + 1u < count) {
+        if (i + 1u < valid) {
             uint next_index = temporal_history_index(i + 1u);
-            next_age = max(
-                PTS - pts_to_float(metered_pts_t[next_index]),
-                age
-            );
-            interval_end = 0.5 * (age + next_age);
+            next_sample_age = PTS - pts_to_float(metered_pts_t[next_index]);
+
+            if (next_sample_age >= 0.0 &&
+                next_sample_age <= temporal_stable_window) {
+                next_age = max(next_sample_age, age);
+                interval_end = 0.5 * (age + next_age);
+                has_next = true;
+            }
         }
 
         float next_boundary_decay = exp2(-interval_end / half_life);
@@ -1008,8 +996,15 @@ TemporalStatistics temporal_collect_statistics(uint count, vec3 current) {
 
         temporal_add_prediction_sample(statistics.prediction, value, time);
         temporal_add_mean_sample(statistics.mean, value, weight);
+        statistics.count = i + 1u;
+        statistics.history_span = sample_age;
         boundary_decay = next_boundary_decay;
+
+        if (!has_next)
+            break;
+
         age = next_age;
+        sample_age = next_sample_age;
     }
 
     return statistics;
@@ -1075,16 +1070,11 @@ vec3 apply_temporal_smoothing(vec3 current, vec3 previous, float delta_time) {
     return mix(previous, current, alpha);
 }
 
-bool temporal_scene_history_ready(uint count) {
+bool temporal_scene_history_ready(uint count, float history_span) {
     if (count < 2u) {
         return false;
     }
 
-    uint oldest_index = temporal_history_index(count - 1u);
-    float history_span = max(
-        PTS - pts_to_float(metered_pts_t[oldest_index]),
-        0.0
-    );
     float required_span = max(
         temporal_stable_window * TEMPORAL_SCENE_MIN_HISTORY_SCALE,
         TEMPORAL_MIN_TIME_CONSTANT
@@ -1176,7 +1166,12 @@ void hook() {
         return;
     }
 
-    uint count = temporal_frame_count();
+    TemporalStatistics statistics = temporal_collect_statistics(
+        valid,
+        current,
+        delta_time
+    );
+    uint count = statistics.count;
 
     if (count == 0u) {
         temporal_reset_history(current_quantized);
@@ -1184,10 +1179,6 @@ void hook() {
         return;
     }
 
-    TemporalStatistics statistics = temporal_collect_statistics(
-        count,
-        current
-    );
     vec3 predicted = temporal_predict(count, statistics.prediction);
     vec3 weighted = temporal_weighted_mean(statistics.mean);
 
@@ -1195,7 +1186,7 @@ void hook() {
     bool scene_changed = false;
 
     if (temporal_stable_scene_change > 0 &&
-        temporal_scene_history_ready(count)) {
+        temporal_scene_history_ready(count, statistics.history_span)) {
         scene_changed = temporal_is_scene_changed(current, predicted);
     }
 
