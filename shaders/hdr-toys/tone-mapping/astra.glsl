@@ -1285,8 +1285,9 @@ void hook() {
 //!BIND HOOKED
 //!BIND METERING
 //!BIND METERED
+//!BIND METADATA
 //!WHEN preview_metering
-//!DESC metering (metadata highlight)
+//!DESC metering (metadata, preview)
 
 const float JND = 1.0 / 720.0;
 
@@ -1306,10 +1307,19 @@ bool approx(float a, float b, float epsilon) {
     return delta(a, b) < epsilon;
 }
 
-vec4 draw_highlight(float metric, vec3 tint, float value) {
-    if (approx(value, metric, 5.0 * JND))
-        return vec4(tint, 0.75);
-    return vec4(0.0);
+vec4 draw_highlights(float value) {
+    vec3 metrics = vec3(
+        to_float(metered_max_i),
+        to_float(metered_avg_i),
+        to_float(metered_min_i)
+    );
+    vec3 matches = 1.0 - step(vec3(5.0 * JND), abs(metrics - value));
+
+    if (enable_metering <= 1)
+        matches.y = 0.0;
+
+    float opacity = 0.75 * max(max(matches.x, matches.y), matches.z);
+    return vec4(matches, opacity);
 }
 
 vec4 draw_line(float metric, vec3 tint) {
@@ -1317,34 +1327,6 @@ vec4 draw_line(float metric, vec3 tint) {
         return vec4(tint, 1.0);
     return vec4(0.0);
 }
-
-vec4 hook() {
-    vec4 color = HOOKED_tex(HOOKED_pos);
-    float value = METERING_tex(METERING_pos).x;
-
-    vec4 r = vec4(0.0);
-
-    // highlight pixels with similar intensity
-    r = max(r, draw_highlight(to_float(metered_max_i), red, value));
-    r = max(r, draw_highlight(to_float(metered_min_i), blue, value));
-    if (enable_metering > 1)
-        r = max(r, draw_highlight(to_float(metered_avg_i), green, value));
-
-    // draw lines
-    // r = max(r, draw_line(to_float(metered_max_i), red));
-    // r = max(r, draw_line(to_float(metered_min_i), blue));
-    // if (enable_metering > 1)
-    //     r = max(r, draw_line(to_float(metered_avg_i), green));
-
-    color.rgb = mix(color.rgb, r.rgb, r.a);
-    return color;
-}
-
-//!HOOK OUTPUT
-//!BIND HOOKED
-//!BIND METADATA
-//!WHEN preview_metering
-//!DESC metering (metadata overlay)
 
 const float m1 = 2610.0 / 4096.0 / 4.0;
 const float m2 = 2523.0 / 4096.0 * 128.0;
@@ -1367,42 +1349,16 @@ const float PAD = 2.0;
 const float SCALE = 4.0;
 const float LINE_H = CHAR_H + 2.0;
 
-const uint FONT_0 = 0x7B6Fu;
-const uint FONT_1 = 0x749Au;
-const uint FONT_2 = 0x73E7u;
-const uint FONT_3 = 0x79E7u;
-const uint FONT_4 = 0x49EDu;
-const uint FONT_5 = 0x79CFu;
-const uint FONT_6 = 0x7BCFu;
-const uint FONT_7 = 0x4927u;
-const uint FONT_8 = 0x7BEFu;
-const uint FONT_9 = 0x79EFu;
-const uint FONT_A = 0x5BEFu;
-const uint FONT_B = 0x3AEBu;
-const uint FONT_C = 0x724Fu;
-const uint FONT_D = 0x3B6Bu;
-const uint FONT_E = 0x72CFu;
-const uint FONT_F = 0x12CFu;
-const uint FONT_G = 0x7B4Fu;
-const uint FONT_H = 0x5BEDu;
-const uint FONT_I = 0x7497u;
-const uint FONT_J = 0x7B24u;
-const uint FONT_K = 0x5AEDu;
-const uint FONT_L = 0x7249u;
-const uint FONT_M = 0x5BFDu;
-const uint FONT_N = 0x5B6Fu;
-const uint FONT_O = 0x7B6Fu;
-const uint FONT_P = 0x13EFu;
-const uint FONT_Q = 0x49EFu;
-const uint FONT_R = 0x5AEFu;
-const uint FONT_S = 0x388Eu;
-const uint FONT_T = 0x2497u;
-const uint FONT_U = 0x7B6Du;
-const uint FONT_V = 0x256Du;
-const uint FONT_W = 0x5FEDu;
-const uint FONT_X = 0x5AADu;
-const uint FONT_Y = 0x24ADu;
-const uint FONT_Z = 0x72A7u;
+const uint FONT_DIGITS[10] = uint[10](
+    0x7B6Fu, 0x749Au, 0x73E7u, 0x79E7u, 0x49EDu,
+    0x79CFu, 0x7BCFu, 0x4927u, 0x7BEFu, 0x79EFu
+);
+const uint FONT_LETTERS[26] = uint[26](
+    0x5BEFu, 0x3AEBu, 0x724Fu, 0x3B6Bu, 0x72CFu, 0x12CFu, 0x7B4Fu,
+    0x5BEDu, 0x7497u, 0x7B24u, 0x5AEDu, 0x7249u, 0x5BFDu, 0x5B6Fu,
+    0x7B6Fu, 0x13EFu, 0x49EFu, 0x5AEFu, 0x388Eu, 0x2497u, 0x7B6Du,
+    0x256Du, 0x5FEDu, 0x5AADu, 0x24ADu, 0x72A7u
+);
 const uint FONT_COLON = 0x0410u;
 const uint FONT_DOT   = 0x2000u;
 const uint FONT_MINUS = 0x01C0u;
@@ -1412,57 +1368,29 @@ const uint FONT_TOFU  = 0x7FFFu;
 const int CH_SPACE = 32;
 const int CH_MINUS = 45;
 const int CH_DOT   = 46;
-const int CH_0 = 48; const int CH_1 = 49; const int CH_2 = 50; const int CH_3 = 51; const int CH_4 = 52;
-const int CH_5 = 53; const int CH_6 = 54; const int CH_7 = 55; const int CH_8 = 56; const int CH_9 = 57;
+const int CH_0 = 48;
+const int CH_9 = 57;
 const int CH_COLON = 58;
-const int CH_A = 65; const int CH_B = 66; const int CH_C = 67; const int CH_D = 68; const int CH_E = 69;
-const int CH_F = 70; const int CH_G = 71; const int CH_H = 72; const int CH_I = 73; const int CH_J = 74;
-const int CH_K = 75; const int CH_L = 76; const int CH_M = 77; const int CH_N = 78; const int CH_O = 79;
-const int CH_P = 80; const int CH_Q = 81; const int CH_R = 82; const int CH_S = 83; const int CH_T = 84;
-const int CH_U = 85; const int CH_V = 86; const int CH_W = 87; const int CH_X = 88; const int CH_Y = 89;
+const int CH_A = 65;
+const int CH_E = 69;
+const int CH_G = 71;
+const int CH_I = 73;
+const int CH_M = 77;
+const int CH_N = 78;
+const int CH_V = 86;
+const int CH_X = 88;
 const int CH_Z = 90;
 
 uint get_glyph(int ch) {
+    if (ch >= CH_0 && ch <= CH_9)
+        return FONT_DIGITS[ch - CH_0];
+    if (ch >= CH_A && ch <= CH_Z)
+        return FONT_LETTERS[ch - CH_A];
+
     if (ch == CH_SPACE) return FONT_SPACE;
     if (ch == CH_MINUS) return FONT_MINUS;
     if (ch == CH_DOT)   return FONT_DOT;
     if (ch == CH_COLON) return FONT_COLON;
-    if (ch == CH_0) return FONT_0;
-    if (ch == CH_1) return FONT_1;
-    if (ch == CH_2) return FONT_2;
-    if (ch == CH_3) return FONT_3;
-    if (ch == CH_4) return FONT_4;
-    if (ch == CH_5) return FONT_5;
-    if (ch == CH_6) return FONT_6;
-    if (ch == CH_7) return FONT_7;
-    if (ch == CH_8) return FONT_8;
-    if (ch == CH_9) return FONT_9;
-    if (ch == CH_A) return FONT_A;
-    if (ch == CH_B) return FONT_B;
-    if (ch == CH_C) return FONT_C;
-    if (ch == CH_D) return FONT_D;
-    if (ch == CH_E) return FONT_E;
-    if (ch == CH_F) return FONT_F;
-    if (ch == CH_G) return FONT_G;
-    if (ch == CH_H) return FONT_H;
-    if (ch == CH_I) return FONT_I;
-    if (ch == CH_J) return FONT_J;
-    if (ch == CH_K) return FONT_K;
-    if (ch == CH_L) return FONT_L;
-    if (ch == CH_M) return FONT_M;
-    if (ch == CH_N) return FONT_N;
-    if (ch == CH_O) return FONT_O;
-    if (ch == CH_P) return FONT_P;
-    if (ch == CH_Q) return FONT_Q;
-    if (ch == CH_R) return FONT_R;
-    if (ch == CH_S) return FONT_S;
-    if (ch == CH_T) return FONT_T;
-    if (ch == CH_U) return FONT_U;
-    if (ch == CH_V) return FONT_V;
-    if (ch == CH_W) return FONT_W;
-    if (ch == CH_X) return FONT_X;
-    if (ch == CH_Y) return FONT_Y;
-    if (ch == CH_Z) return FONT_Z;
     return FONT_TOFU;
 }
 
@@ -1470,12 +1398,6 @@ bool glyph_pixel(uint glyph, vec2 p) {
     if (p.x < 0.0 || p.x >= CHAR_W || p.y < 0.0 || p.y >= CHAR_H) return false;
     uint bit = uint(p.y) * 3u + uint(p.x);
     return (glyph & (1u << bit)) != 0u;
-}
-
-uint extract_digit(uint value, uint pos) {
-    uint d = 1u;
-    for (uint i = 0u; i < pos; i++) d *= 10u;
-    return (value / d) % 10u;
 }
 
 vec4 draw_background(vec2 origin, vec2 px, float width) {
@@ -1486,8 +1408,7 @@ vec4 draw_background(vec2 origin, vec2 px, float width) {
     return vec4(0.0);
 }
 
-vec4 draw_char(int ch, vec2 origin, vec2 px, inout float cx) {
-    vec2 local = (px - origin) / SCALE;
+vec4 draw_char(int ch, vec2 local, inout float cx) {
     vec2 cp = local - vec2(cx, 0.0);
     cx += CHAR_W + SPACING;
     if (cp.x >= 0.0 && cp.x < CHAR_W && cp.y >= 0.0 && cp.y < CHAR_H) {
@@ -1497,24 +1418,48 @@ vec4 draw_char(int ch, vec2 origin, vec2 px, inout float cx) {
     return vec4(0.0);
 }
 
-vec4 draw_number(float value, vec2 origin, vec2 px, inout float cx) {
+float number_width(float value) {
+    float abs_val = min(abs(value), 99999.99);
+    uint int_part = uint(abs_val * 100.0 + 0.5) / 100u;
+
+    uint digits = 1u;
+    if      (int_part >= 10000u) digits = 5u;
+    else if (int_part >= 1000u)  digits = 4u;
+    else if (int_part >= 100u)   digits = 3u;
+    else if (int_part >= 10u)    digits = 2u;
+
+    float characters = float(digits + 3u) + (value < 0.0 ? 1.0 : 0.0);
+    return characters * (CHAR_W + SPACING);
+}
+
+float pq_number_width(float value) {
+    // PQ codes where two-decimal formatting rounds up to 10, 100, 1000,
+    // and 10000 nits respectively.
+    const vec4 digit_thresholds = vec4(
+        0.299659661,
+        0.508073403,
+        0.751826551,
+        0.999999948
+    );
+    float digits = 1.0 + dot(step(digit_thresholds, vec4(value)), vec4(1.0));
+    return (digits + 3.0) * (CHAR_W + SPACING);
+}
+
+vec4 draw_number(float value, vec2 local, inout float cx) {
     bool negative = value < 0.0;
     float abs_val = min(abs(value), 99999.99);
 
-    uint int_part = uint(abs_val);
-    uint dec_part = uint(fract(abs_val) * 100.0 + 0.5);
-    if (dec_part >= 100u) {
-        int_part += 1u;
-        dec_part -= 100u;
-    }
+    uint fixed_value = uint(abs_val * 100.0 + 0.5);
+    uint int_part = fixed_value / 100u;
+    uint dec_part = fixed_value - int_part * 100u;
 
-    uint d0 = extract_digit(int_part, 4u);
-    uint d1 = extract_digit(int_part, 3u);
-    uint d2 = extract_digit(int_part, 2u);
-    uint d3 = extract_digit(int_part, 1u);
-    uint d4 = extract_digit(int_part, 0u);
-    uint d5 = extract_digit(dec_part, 1u);
-    uint d6 = extract_digit(dec_part, 0u);
+    uint d0 = (int_part / 10000u) % 10u;
+    uint d1 = (int_part / 1000u) % 10u;
+    uint d2 = (int_part / 100u) % 10u;
+    uint d3 = (int_part / 10u) % 10u;
+    uint d4 = int_part % 10u;
+    uint d5 = dec_part / 10u;
+    uint d6 = dec_part % 10u;
 
     uint first = 4u;
     if (d0 > 0u) first = 0u;
@@ -1524,15 +1469,15 @@ vec4 draw_number(float value, vec2 origin, vec2 px, inout float cx) {
 
     vec4 r = vec4(0.0);
 
-    if (negative)    r = max(r, draw_char(CH_MINUS, origin, px, cx));
-    if (first <= 0u) r = max(r, draw_char(int(d0) + CH_0, origin, px, cx));
-    if (first <= 1u) r = max(r, draw_char(int(d1) + CH_0, origin, px, cx));
-    if (first <= 2u) r = max(r, draw_char(int(d2) + CH_0, origin, px, cx));
-    if (first <= 3u) r = max(r, draw_char(int(d3) + CH_0, origin, px, cx));
-    r = max(r, draw_char(int(d4) + CH_0, origin, px, cx));
-    r = max(r, draw_char(CH_DOT, origin, px, cx));
-    r = max(r, draw_char(int(d5) + CH_0, origin, px, cx));
-    r = max(r, draw_char(int(d6) + CH_0, origin, px, cx));
+    if (negative)    r = max(r, draw_char(CH_MINUS, local, cx));
+    if (first <= 0u) r = max(r, draw_char(int(d0) + CH_0, local, cx));
+    if (first <= 1u) r = max(r, draw_char(int(d1) + CH_0, local, cx));
+    if (first <= 2u) r = max(r, draw_char(int(d2) + CH_0, local, cx));
+    if (first <= 3u) r = max(r, draw_char(int(d3) + CH_0, local, cx));
+    r = max(r, draw_char(int(d4) + CH_0, local, cx));
+    r = max(r, draw_char(CH_DOT, local, cx));
+    r = max(r, draw_char(int(d5) + CH_0, local, cx));
+    r = max(r, draw_char(int(d6) + CH_0, local, cx));
 
     return r;
 }
@@ -1540,58 +1485,91 @@ vec4 draw_number(float value, vec2 origin, vec2 px, inout float cx) {
 // Draw a labeled row: "LABEL:value"
 // Returns max cx across all rows for background width.
 vec4 draw_row(float value, vec2 origin, vec2 px, int c0, int c1, int c2, inout float cx) {
+    float label_width = 4.0 * (CHAR_W + SPACING);
+    float width = label_width + number_width(value);
+    vec2 local = (px - origin) / SCALE;
+
+    if (local.x < 0.0 || local.x >= width ||
+        local.y < 0.0 || local.y >= CHAR_H) {
+        cx = width;
+        return vec4(0.0);
+    }
+
     vec4 r = vec4(0.0);
-    r = max(r, draw_char(c0, origin, px, cx));
-    r = max(r, draw_char(c1, origin, px, cx));
-    r = max(r, draw_char(c2, origin, px, cx));
-    r = max(r, draw_char(CH_COLON, origin, px, cx));
-    r = max(r, draw_number(value, origin, px, cx));
+
+    if (local.x < label_width) {
+        r = max(r, draw_char(c0, local, cx));
+        r = max(r, draw_char(c1, local, cx));
+        r = max(r, draw_char(c2, local, cx));
+        r = max(r, draw_char(CH_COLON, local, cx));
+    } else {
+        cx = label_width;
+        r = max(r, draw_number(value, local, cx));
+    }
+
+    cx = width;
     return r;
 }
 
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
     vec2 px = HOOKED_pos * HOOKED_size;
+    float value = METERING_tex(METERING_pos).x;
 
-    float max_nits = pq_eotf(max_i);
-    float min_nits = pq_eotf(min_i);
-    float avg_nits = pq_eotf(avg_i);
+    vec4 highlight = draw_highlights(value);
 
-    vec4 r = vec4(0.0);
-    float max_w = 0.0;
+    // Optional metric lines can be added to highlight here with draw_line().
+    color.rgb = mix(color.rgb, highlight.rgb, highlight.a);
 
-    // Row 0 (bottom): "EV :value"
+    // The longest row contains four label characters and a signed 5.2 number.
+    const float MAX_ROW_WIDTH = 13.0 * (CHAR_W + SPACING);
     vec2 o3 = vec2(MARGIN * SCALE, HOOKED_size.y - MARGIN * SCALE - CHAR_H * SCALE);
-    float cx3 = 0.0;
+    vec2 o0 = o3 - vec2(0.0, 3.0 * LINE_H * SCALE);
+    vec2 panel_min = o0 - vec2(PAD * SCALE);
+    vec2 panel_max = vec2(
+        o0.x + (MAX_ROW_WIDTH + PAD) * SCALE,
+        o3.y + (CHAR_H + PAD) * SCALE
+    );
 
-    // Row 1: "AVG:value"
-    vec2 o2 = o3 - vec2(0.0, LINE_H * SCALE);
-    float cx2 = 0.0;
-    r = max(r, draw_row(avg_nits, o2, px, CH_A, CH_V, CH_G, cx2));
-    max_w = max(max_w, cx2);
+    if (any(lessThan(px, panel_min)) || any(greaterThan(px, panel_max))) {
+        return color;
+    }
 
-    // Row 2: "MIN:value"
-    vec2 o1 = o2 - vec2(0.0, LINE_H * SCALE);
-    float cx1 = 0.0;
-    r = max(r, draw_row(min_nits, o1, px, CH_M, CH_I, CH_N, cx1));
-    max_w = max(max_w, cx1);
+    float label_width = 4.0 * (CHAR_W + SPACING);
+    vec4 row_widths = label_width + vec4(
+        pq_number_width(max_i),
+        pq_number_width(min_i),
+        pq_number_width(avg_i),
+        number_width(ev)
+    );
+    float max_w = max(max(row_widths.x, row_widths.y),
+                      max(row_widths.z, row_widths.w));
 
-    // Row 3 (top): "MAX:value"
-    vec2 o0 = o1 - vec2(0.0, LINE_H * SCALE);
-    float cx0 = 0.0;
-    r = max(r, draw_row(max_nits, o0, px, CH_M, CH_A, CH_X, cx0));
-    max_w = max(max_w, cx0);
+    if (px.x > o0.x + (max_w + PAD) * SCALE) {
+        return color;
+    }
 
-    r = max(r, draw_row(ev, o3, px, CH_E, CH_V, CH_SPACE, cx3));
-    max_w = max(max_w, cx3);
+    vec4 r = vec4(0.0, 0.0, 0.0, 1.0);
+    float row_stride = LINE_H * SCALE;
+    int row = int(floor((px.y - o0.y) / row_stride));
 
-    // Background: cover all 4 rows (o0 is top, o3 is bottom)
-    if (r.a == 0.0) {
-        vec2 local = (px - o0) / SCALE;
-        float total_h = 3.0 * LINE_H + CHAR_H;
-        if (local.x >= -PAD && local.x <= max_w + PAD &&
-            local.y >= -PAD && local.y <= total_h + PAD)
-            r = vec4(0.0, 0.0, 0.0, 1.0);
+    if (row >= 0 && row < 4) {
+        vec2 origin = o0 + vec2(0.0, float(row) * row_stride);
+        vec2 local = px - origin;
+
+        if (local.x >= 0.0 && local.x < row_widths[row] * SCALE &&
+            local.y >= 0.0 && local.y < CHAR_H * SCALE) {
+            float cx = 0.0;
+
+            if (row == 0)
+                r = max(r, draw_row(pq_eotf(max_i), origin, px, CH_M, CH_A, CH_X, cx));
+            else if (row == 1)
+                r = max(r, draw_row(pq_eotf(min_i), origin, px, CH_M, CH_I, CH_N, cx));
+            else if (row == 2)
+                r = max(r, draw_row(pq_eotf(avg_i), origin, px, CH_A, CH_V, CH_G, cx));
+            else
+                r = max(r, draw_row(ev, origin, px, CH_E, CH_V, CH_SPACE, cx));
+        }
     }
 
     color.rgb = mix(color.rgb, r.rgb, r.a);
