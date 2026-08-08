@@ -219,7 +219,7 @@ float RGB_to_Y(vec3 rgb) {
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
     float y = RGB_to_Y(color.rgb);
-    float y_abs = y * reference_white;
+    float y_abs = clamp(y * reference_white, 0.0, pw);
     float intensity = pq_eotf_inv(y_abs);
     return vec4(vec3(intensity), 1.0);
 }
