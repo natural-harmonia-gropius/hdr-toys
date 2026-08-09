@@ -173,13 +173,6 @@
 //!VAR float metered_average_groups[256]
 //!STORAGE
 
-//!BUFFER VECTORSCOPE
-//!VAR uint vectorscope_histogram[16384]
-//!VAR uint vectorscope_color_r[16384]
-//!VAR uint vectorscope_color_g[16384]
-//!VAR uint vectorscope_color_b[16384]
-//!STORAGE
-
 //!BUFFER METERED_TEMPORAL
 //!VAR float metered_reference_histogram[64]
 //!VAR float metered_previous_histogram[64]
@@ -214,6 +207,13 @@
 //!VAR float input_avg_i
 //!VAR float ev
 //!VAR float exposure_scale
+//!STORAGE
+
+//!BUFFER VECTORSCOPE
+//!VAR uint vectorscope_histogram[16384]
+//!VAR uint vectorscope_color_r[16384]
+//!VAR uint vectorscope_color_g[16384]
+//!VAR uint vectorscope_color_b[16384]
 //!STORAGE
 
 //!HOOK OUTPUT
