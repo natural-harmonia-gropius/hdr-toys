@@ -2021,8 +2021,8 @@ const int CURVE_SIZE = 1024;
 // LAB chroma-coordinate shaper: the scale concentrates precision near neutral,
 // while the limits define the representable ranges of the a/L and b/L ratios.
 const float AB_RATIO_SCALE = 0.25;
-const float A_RATIO_LIMIT = 2.0;
-const float B_RATIO_LIMIT = 2.5;
+const float A_RATIO_LIMIT = 2.5;
+const float B_RATIO_LIMIT = 3.0;
 
 vec3 lut_coordinates_to_RGB(vec3 coordinates) {
     vec3 absolute_rgb = pq_eotf(clamp(coordinates, 0.0, 1.0));
@@ -2310,8 +2310,8 @@ const int CURVE_SIZE = 1024;
 // LAB chroma-coordinate shaper: the scale concentrates precision near neutral,
 // while the limits define the representable ranges of the a/L and b/L ratios.
 const float AB_RATIO_SCALE = 0.25;
-const float A_RATIO_LIMIT = 2.0;
-const float B_RATIO_LIMIT = 2.5;
+const float A_RATIO_LIMIT = 2.5;
+const float B_RATIO_LIMIT = 3.0;
 
 // SMPTE ST 2084 (PQ), converting absolute luminance in nit to code values.
 const float m1 = 2610.0 / 4096.0 / 4.0;
