@@ -170,6 +170,7 @@
 //!VAR uint metered_avg_i
 //!VAR uint metered_histogram[1024]
 //!VAR uint metered_coarse_histogram[64]
+//!VAR float metered_average_groups[256]
 //!STORAGE
 
 //!BUFFER METERED_TEMPORAL
@@ -870,12 +871,19 @@ void hook() { reduce_metering_histogram(); }
 
 //!HOOK OUTPUT
 //!BIND METERING
-//!SAVE AVG
-//!COMPONENTS 1
+//!BIND METERED
+//!SAVE EMPTY
 //!WIDTH 256
 //!HEIGHT 256
+//!COMPUTE 16 16 16 16
 //!WHEN auto_exposure_anchor 0 > enable_metering 1 > * avg_pq_y 0 = * scene_avg 0 = *
-//!DESC metering (avg, 256, center-weighted)
+//!DESC metering (avg, center-weighted partials)
+
+const uint METERING_AVERAGE_SIZE = 256u;
+const uint METERING_AVERAGE_GROUP_SIZE = 256u;
+const uint METERING_AVERAGE_GROUPS_PER_AXIS = 16u;
+
+shared float average_partial[METERING_AVERAGE_GROUP_SIZE];
 
 vec2 map_coords(vec2 uv, float strength) {
     if (strength < 0.001) {
@@ -905,59 +913,90 @@ vec2 map_coords(vec2 uv) {
     return map_coords(uv, 2.0);
 }
 
-vec4 hook() {
-    return METERING_tex(map_coords(METERING_pos));
+float sample_center_weighted_metering() {
+    vec2 position = (vec2(gl_GlobalInvocationID.xy) + 0.5) /
+                    float(METERING_AVERAGE_SIZE);
+    return (
+        METERING_mul * textureLod(METERING_raw, map_coords(position), 0.0)
+    ).x;
 }
 
-//!HOOK OUTPUT
-//!BIND AVG
-//!SAVE AVG
-//!WIDTH AVG.w 16 /
-//!HEIGHT AVG.h 16 /
-//!DESC metering (avg, 16)
-// Sixty-four bilinear taps, each averaging 2x2, tile the 16x16 source block.
-vec4 hook() {
-    float sum = 0.0;
-    for (int y = -7; y <= 7; y += 2) {
-        for (int x = -7; x <= 7; x += 2) {
-            sum += AVG_texOff(vec2(float(x), float(y))).x;
+void reduce_average_partial(uint tid, float value) {
+    average_partial[tid] = value;
+    barrier();
+
+    for (uint size = METERING_AVERAGE_GROUP_SIZE >> 1u;
+         size > 0u;
+         size >>= 1u) {
+        if (tid < size) {
+            average_partial[tid] += average_partial[tid + size];
         }
+        barrier();
     }
-    return vec4(sum / 64.0, 0.0, 0.0, 1.0);
 }
 
-//!HOOK OUTPUT
-//!BIND AVG
-//!SAVE AVG
-//!WIDTH AVG.w 16 /
-//!HEIGHT AVG.h 16 /
-//!DESC metering (avg, 1)
-// Sixty-four bilinear taps, each averaging 2x2, tile the 16x16 source block.
-vec4 hook() {
-    float sum = 0.0;
-    for (int y = -7; y <= 7; y += 2) {
-        for (int x = -7; x <= 7; x += 2) {
-            sum += AVG_texOff(vec2(float(x), float(y))).x;
-        }
-    }
-    return vec4(sum / 64.0, 0.0, 0.0, 1.0);
+uint average_group_index() {
+    return gl_WorkGroupID.y * METERING_AVERAGE_GROUPS_PER_AXIS +
+           gl_WorkGroupID.x;
 }
 
+void publish_average_partial(uint tid) {
+    if (tid == 0u) {
+        metered_average_groups[average_group_index()] =
+            average_partial[0] / float(METERING_AVERAGE_GROUP_SIZE);
+    }
+}
+
+void calculate_center_weighted_average_partial() {
+    uint tid = gl_LocalInvocationIndex;
+    reduce_average_partial(tid, sample_center_weighted_metering());
+    publish_average_partial(tid);
+}
+
+void hook() { calculate_center_weighted_average_partial(); }
+
 //!HOOK OUTPUT
-//!BIND AVG
 //!BIND METERED
-//!SAVE AVG
-//!WIDTH 1
+//!SAVE EMPTY
+//!WIDTH 256
 //!HEIGHT 1
-//!COMPUTE 1 1
-//!DESC metering (avg)
+//!COMPUTE 256 1 256 1
+//!WHEN auto_exposure_anchor 0 > enable_metering 1 > * avg_pq_y 0 = * scene_avg 0 = *
+//!DESC metering (avg, reduction)
+
+const uint METERING_AVERAGE_GROUP_COUNT = 256u;
+
+shared float average_partial[METERING_AVERAGE_GROUP_COUNT];
 
 uint to_uint(float x) {
     return uint(x * 4095.0 + 0.5);
 }
 
+void reduce_average_groups(uint tid) {
+    average_partial[tid] = metered_average_groups[tid];
+    barrier();
+
+    for (uint size = METERING_AVERAGE_GROUP_COUNT >> 1u;
+         size > 0u;
+         size >>= 1u) {
+        if (tid < size)
+            average_partial[tid] += average_partial[tid + size];
+        barrier();
+    }
+}
+
+void publish_center_weighted_average(uint tid) {
+    if (tid == 0u) {
+        float average = average_partial[0] /
+                        float(METERING_AVERAGE_GROUP_COUNT);
+        metered_avg_i = to_uint(average);
+    }
+}
+
 void hook() {
-    metered_avg_i = to_uint(AVG_tex(AVG_pos).x);
+    uint tid = gl_LocalInvocationIndex;
+    reduce_average_groups(tid);
+    publish_center_weighted_average(tid);
 }
 
 //!HOOK OUTPUT
@@ -965,9 +1004,9 @@ void hook() {
 //!BIND METERED
 //!BIND METERED_TEMPORAL
 //!SAVE EMPTY
-//!WIDTH 1
+//!WIDTH 64
 //!HEIGHT 1
-//!COMPUTE 1 1
+//!COMPUTE 64 1 64 1
 //!WHEN temporal_stable_duration 0.0 >
 //!DESC metering (temporal stabilization)
 
@@ -985,6 +1024,19 @@ const float TEMPORAL_SCENE_CONFIRM_TIME_SCALE = 0.25;
 const float TEMPORAL_SCENE_ADAPTATION_TIME_SCALE = 0.50;
 const float TEMPORAL_MIN_TIME_CONSTANT = 1.0 / 240.0;
 const float TEMPORAL_PTS_EPSILON = 1e-6;
+
+const uint TEMPORAL_FRAME_SKIP = 0u;
+const uint TEMPORAL_FRAME_INITIALIZE = 1u;
+const uint TEMPORAL_FRAME_PROCESS = 2u;
+const uint TEMPORAL_REFERENCE_KEEP = 0u;
+const uint TEMPORAL_REFERENCE_BLEND = 1u;
+const uint TEMPORAL_REFERENCE_REPLACE = 2u;
+
+shared vec2 temporal_distance_partial[TEMPORAL_HISTOGRAM_SIZE];
+shared uint temporal_frame_operation;
+shared uint temporal_reference_operation;
+shared float temporal_delta_time;
+shared float temporal_reference_alpha;
 
 float pts_to_float(uint x) {
     return uintBitsToFloat(x);
@@ -1010,12 +1062,7 @@ void temporal_clear_scene_candidate() {
     metered_scene_candidate_active = 0u;
 }
 
-void temporal_initialize_state() {
-    for (uint i = 0u; i < TEMPORAL_HISTOGRAM_SIZE; i++) {
-        float current = temporal_histogram_value(i);
-        metered_reference_histogram[i] = current;
-        metered_previous_histogram[i] = current;
-    }
+void temporal_initialize_scalar_state() {
     temporal_clear_scene_candidate();
     metered_histogram_valid = 1u;
     metered_temporal_pts = pts_to_uint(PTS);
@@ -1023,28 +1070,34 @@ void temporal_initialize_state() {
     metered_scene_fast_response = 0u;
 }
 
-vec2 temporal_measure_distances() {
-    vec2 distance = vec2(0.0);
-    for (uint i = 0u; i < TEMPORAL_HISTOGRAM_SIZE; i++) {
-        float current = temporal_histogram_value(i);
-        distance.x += abs(current - metered_reference_histogram[i]);
-        distance.y += abs(current - metered_previous_histogram[i]);
-        metered_previous_histogram[i] = current;
-    }
-    return 0.5 * distance;
+vec2 temporal_measure_distance(uint index, float current) {
+    vec2 distance = vec2(
+        abs(current - metered_reference_histogram[index]),
+        abs(current - metered_previous_histogram[index])
+    );
+    metered_previous_histogram[index] = current;
+    return distance;
 }
 
-void temporal_update_reference(float delta_time) {
+void temporal_reduce_distances(uint tid, vec2 distance) {
+    temporal_distance_partial[tid] = distance;
+    barrier();
+
+    for (uint size = TEMPORAL_HISTOGRAM_SIZE >> 1u;
+         size > 0u;
+         size >>= 1u) {
+        if (tid < size) {
+            temporal_distance_partial[tid] +=
+                temporal_distance_partial[tid + size];
+        }
+        barrier();
+    }
+}
+
+float temporal_reference_blend_alpha(float delta_time) {
     float time_constant = temporal_stable_duration *
                           TEMPORAL_HISTOGRAM_TIME_SCALE;
-    float alpha = temporal_alpha(delta_time, time_constant);
-    for (uint i = 0u; i < TEMPORAL_HISTOGRAM_SIZE; i++) {
-        metered_reference_histogram[i] = mix(
-            metered_reference_histogram[i],
-            metered_previous_histogram[i],
-            alpha
-        );
-    }
+    return temporal_alpha(delta_time, time_constant);
 }
 
 float temporal_scene_confirmation_time() {
@@ -1084,17 +1137,15 @@ bool temporal_scene_candidate_active(
 }
 
 void temporal_confirm_scene_change() {
-    for (uint i = 0u; i < TEMPORAL_HISTOGRAM_SIZE; i++)
-        metered_reference_histogram[i] = metered_previous_histogram[i];
     temporal_clear_scene_candidate();
     metered_scene_adaptation_end_pts = pts_to_uint(
         PTS + temporal_scene_adaptation_time()
     );
     metered_scene_fast_response = 1u;
+    temporal_reference_operation = TEMPORAL_REFERENCE_REPLACE;
 }
 
-void temporal_process_distribution(float delta_time) {
-    vec2 distance = temporal_measure_distances();
+void temporal_process_distances(vec2 distance) {
     bool candidate = temporal_stable_scene_change > 0 &&
                      temporal_scene_candidate_active(
                          distance.x,
@@ -1103,7 +1154,10 @@ void temporal_process_distribution(float delta_time) {
 
     if (!candidate) {
         temporal_clear_scene_candidate();
-        temporal_update_reference(delta_time);
+        temporal_reference_operation = TEMPORAL_REFERENCE_BLEND;
+        temporal_reference_alpha = temporal_reference_blend_alpha(
+            temporal_delta_time
+        );
         return;
     }
 
@@ -1119,9 +1173,13 @@ void temporal_process_distribution(float delta_time) {
         temporal_confirm_scene_change();
 }
 
-void analyze_metering_temporally() {
+void temporal_prepare_frame() {
+    temporal_frame_operation = TEMPORAL_FRAME_SKIP;
+    temporal_reference_operation = TEMPORAL_REFERENCE_KEEP;
+
     if (metered_histogram_valid == 0u) {
-        temporal_initialize_state();
+        temporal_initialize_scalar_state();
+        temporal_frame_operation = TEMPORAL_FRAME_INITIALIZE;
         return;
     }
 
@@ -1133,13 +1191,64 @@ void analyze_metering_temporally() {
         return;
 
     if (delta_time < 0.0 || delta_time > temporal_stable_duration) {
-        temporal_initialize_state();
+        temporal_initialize_scalar_state();
+        temporal_frame_operation = TEMPORAL_FRAME_INITIALIZE;
         return;
     }
 
+    temporal_delta_time = delta_time;
     metered_temporal_pts = pts_to_uint(PTS);
     temporal_update_fast_response();
-    temporal_process_distribution(delta_time);
+    temporal_frame_operation = TEMPORAL_FRAME_PROCESS;
+}
+
+void temporal_initialize_histogram(uint index, float current) {
+    metered_reference_histogram[index] = current;
+    metered_previous_histogram[index] = current;
+}
+
+void temporal_update_reference_bin(uint index, float current) {
+    if (temporal_reference_operation == TEMPORAL_REFERENCE_BLEND) {
+        metered_reference_histogram[index] = mix(
+            metered_reference_histogram[index],
+            current,
+            temporal_reference_alpha
+        );
+    } else if (
+        temporal_reference_operation == TEMPORAL_REFERENCE_REPLACE
+    ) {
+        metered_reference_histogram[index] = current;
+    }
+}
+
+void analyze_metering_temporally() {
+    uint index = gl_LocalInvocationIndex;
+
+    if (index == 0u)
+        temporal_prepare_frame();
+    barrier();
+
+    if (temporal_frame_operation == TEMPORAL_FRAME_SKIP)
+        return;
+
+    float current = temporal_histogram_value(index);
+
+    if (temporal_frame_operation == TEMPORAL_FRAME_INITIALIZE) {
+        temporal_initialize_histogram(index, current);
+        return;
+    }
+
+    vec2 distance = temporal_measure_distance(index, current);
+    temporal_reduce_distances(index, distance);
+
+    if (index == 0u) {
+        temporal_process_distances(
+            0.5 * temporal_distance_partial[0]
+        );
+    }
+    barrier();
+
+    temporal_update_reference_bin(index, current);
 }
 
 void hook() { analyze_metering_temporally(); }
