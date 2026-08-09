@@ -209,6 +209,9 @@
 //!VAR float max_i
 //!VAR float min_i
 //!VAR float avg_i
+//!VAR float input_max_i
+//!VAR float input_min_i
+//!VAR float input_avg_i
 //!VAR float ev
 //!VAR float exposure_scale
 //!STORAGE
@@ -1541,10 +1544,17 @@ void publish_metering_metadata(MeteringMetrics metrics) {
     avg_i = metrics.average;
 }
 
+void publish_input_metering_metadata(MeteringMetrics metrics) {
+    input_max_i = metrics.maximum;
+    input_min_i = metrics.minimum;
+    input_avg_i = metrics.average;
+}
+
 void update_metering_metadata() {
     prepare_curve_temporal();
 
     MeteringMetrics metrics = resolve_metering_metrics();
+    publish_input_metering_metadata(metrics);
     float target_ev = resolve_exposure(metrics);
     ev = stabilize_auto_exposure(
         target_ev,
@@ -2973,9 +2983,9 @@ vec4 draw_metrics_panel(vec2 px) {
 
     float label_width = 4.0 * (CHAR_W + SPACING);
     vec4 row_widths = label_width + vec4(
-        pq_number_width(max_i),
-        pq_number_width(min_i),
-        pq_number_width(avg_i),
+        pq_number_width(input_max_i),
+        pq_number_width(input_min_i),
+        pq_number_width(input_avg_i),
         number_width(ev)
     );
     float max_w = max(max(row_widths.x, row_widths.y),
@@ -2995,11 +3005,11 @@ vec4 draw_metrics_panel(vec2 px) {
         if (local.x >= 0.0 && local.x < row_widths[row] * SCALE &&
             local.y >= 0.0 && local.y < CHAR_H * SCALE) {
             if (row == 0)
-                r = max(r, draw_row(pq_eotf(max_i), origin, px, CH_M, CH_A, CH_X));
+                r = max(r, draw_row(pq_eotf(input_max_i), origin, px, CH_M, CH_A, CH_X));
             else if (row == 1)
-                r = max(r, draw_row(pq_eotf(min_i), origin, px, CH_M, CH_I, CH_N));
+                r = max(r, draw_row(pq_eotf(input_min_i), origin, px, CH_M, CH_I, CH_N));
             else if (row == 2)
-                r = max(r, draw_row(pq_eotf(avg_i), origin, px, CH_A, CH_V, CH_G));
+                r = max(r, draw_row(pq_eotf(input_avg_i), origin, px, CH_A, CH_V, CH_G));
             else
                 r = max(r, draw_row(ev, origin, px, CH_E, CH_V, CH_SPACE));
         }
