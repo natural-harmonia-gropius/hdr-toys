@@ -184,7 +184,7 @@
 //!VAR uint metered_scene_fast_response
 //!STORAGE
 
-//!BUFFER METERED_SMOOTHED
+//!BUFFER EXPOSURE_TEMPORAL
 //!VAR float smoothed_ev
 //!VAR uint smoothed_ev_pts
 //!VAR uint smoothed_ev_valid
@@ -1266,7 +1266,7 @@ void hook() { analyze_metering_temporally(); }
 //!HOOK OUTPUT
 //!BIND METERED
 //!BIND METERED_TEMPORAL
-//!BIND METERED_SMOOTHED
+//!BIND EXPOSURE_TEMPORAL
 //!BIND CURVE_TEMPORAL
 //!BIND METADATA
 //!SAVE EMPTY
