@@ -173,6 +173,13 @@
 //!VAR float metered_average_groups[256]
 //!STORAGE
 
+//!BUFFER VECTORSCOPE
+//!VAR uint vectorscope_histogram[16384]
+//!VAR uint vectorscope_color_r[16384]
+//!VAR uint vectorscope_color_g[16384]
+//!VAR uint vectorscope_color_b[16384]
+//!STORAGE
+
 //!BUFFER METERED_TEMPORAL
 //!VAR float metered_reference_histogram[64]
 //!VAR float metered_previous_histogram[64]
@@ -2099,6 +2106,184 @@ void hook() {
 }
 
 //!HOOK OUTPUT
+//!BIND VECTORSCOPE
+//!SAVE EMPTY
+//!COMPONENTS 1
+//!WIDTH 128
+//!HEIGHT 128
+//!COMPUTE 16 16 16 16
+//!WHEN preview_metering
+//!DESC metering (vectorscope, init)
+
+const uint VECTORSCOPE_SIZE = 128u;
+
+void hook() {
+    uvec2 position = gl_GlobalInvocationID.xy;
+    if (any(greaterThanEqual(position, uvec2(VECTORSCOPE_SIZE))))
+        return;
+
+    uint index = position.y * VECTORSCOPE_SIZE + position.x;
+    vectorscope_histogram[index] = 0u;
+    vectorscope_color_r[index] = 0u;
+    vectorscope_color_g[index] = 0u;
+    vectorscope_color_b[index] = 0u;
+}
+
+//!HOOK OUTPUT
+//!BIND HOOKED
+//!BIND LUTS
+//!BIND VECTORSCOPE
+//!SAVE EMPTY
+//!COMPONENTS 1
+//!WIDTH 256
+//!HEIGHT 144
+//!COMPUTE 16 16 16 16
+//!WHEN preview_metering
+//!DESC metering (vectorscope, Jab projection)
+
+// Sample Astra's original linear-RGB input sparsely, convert it with the
+// generated RGB-to-Jab LUT, and scatter its a/b projection into a compact
+// density map. The fixed range covers the Rec. 2020 gamut up to PQ peak while
+// retaining useful resolution around ordinary display colours.
+const int VECTORSCOPE_LUT_SIZE = 65;
+const int VECTORSCOPE_LUT_LAST = VECTORSCOPE_LUT_SIZE - 1;
+const int VECTORSCOPE_RGB_TO_LAB_ROW = 0;
+const uint VECTORSCOPE_SIZE = 128u;
+const float VECTORSCOPE_AB_RANGE = 0.36;
+const float VECTORSCOPE_COLOR_SCALE = 65535.0;
+
+const float m1 = 2610.0 / 4096.0 / 4.0;
+const float m2 = 2523.0 / 4096.0 * 128.0;
+const float c1 = 3424.0 / 4096.0;
+const float c2 = 2413.0 / 4096.0 * 32.0;
+const float c3 = 2392.0 / 4096.0 * 32.0;
+const float pw = 10000.0;
+
+vec3 pq_eotf_inv(vec3 x) {
+    vec3 t = pow(x / pw, vec3(m1));
+    return pow((c1 + c2 * t) / (1.0 + c3 * t), vec3(m2));
+}
+
+vec3 fetch_vectorscope_atlas(ivec2 position) {
+    return texelFetch(LUTS_raw, position, 0).rgb;
+}
+
+vec3 fetch_vectorscope_lut(ivec3 texel) {
+    ivec2 atlas_position = ivec2(
+        texel.x + texel.y * VECTORSCOPE_LUT_SIZE,
+        VECTORSCOPE_RGB_TO_LAB_ROW + texel.z
+    );
+    return fetch_vectorscope_atlas(atlas_position);
+}
+
+void select_vectorscope_tetrahedron(
+    vec3 fraction,
+    out ivec3 second_offset,
+    out ivec3 third_offset,
+    out vec3 weights
+) {
+    if (fraction.x >= fraction.y) {
+        if (fraction.y >= fraction.z) {
+            second_offset = ivec3(1, 0, 0);
+            third_offset = ivec3(1, 1, 0);
+            weights = fraction.xyz;
+        } else if (fraction.x >= fraction.z) {
+            second_offset = ivec3(1, 0, 0);
+            third_offset = ivec3(1, 0, 1);
+            weights = fraction.xzy;
+        } else {
+            second_offset = ivec3(0, 0, 1);
+            third_offset = ivec3(1, 0, 1);
+            weights = fraction.zxy;
+        }
+    } else {
+        if (fraction.x >= fraction.z) {
+            second_offset = ivec3(0, 1, 0);
+            third_offset = ivec3(1, 1, 0);
+            weights = fraction.yxz;
+        } else if (fraction.y >= fraction.z) {
+            second_offset = ivec3(0, 1, 0);
+            third_offset = ivec3(0, 1, 1);
+            weights = fraction.yzx;
+        } else {
+            second_offset = ivec3(0, 0, 1);
+            third_offset = ivec3(0, 1, 1);
+            weights = fraction.zyx;
+        }
+    }
+}
+
+vec3 sample_vectorscope_rgb_to_jab(vec3 rgb) {
+    vec3 absolute_rgb = clamp(
+        max(rgb, vec3(0.0)) * max(reference_white, 0.0),
+        0.0,
+        pw
+    );
+    vec3 position = pq_eotf_inv(absolute_rgb) *
+                    float(VECTORSCOPE_LUT_LAST);
+    ivec3 base_texel = ivec3(floor(position));
+    vec3 fraction = fract(position);
+
+    ivec3 second_offset;
+    ivec3 third_offset;
+    vec3 weights;
+    select_vectorscope_tetrahedron(
+        fraction,
+        second_offset,
+        third_offset,
+        weights
+    );
+
+    ivec3 last_texel = ivec3(VECTORSCOPE_LUT_LAST);
+    vec3 value0 = fetch_vectorscope_lut(base_texel);
+    vec3 value1 = fetch_vectorscope_lut(
+        min(base_texel + second_offset, last_texel)
+    );
+    vec3 value2 = fetch_vectorscope_lut(
+        min(base_texel + third_offset, last_texel)
+    );
+    vec3 value3 = fetch_vectorscope_lut(
+        min(base_texel + ivec3(1), last_texel)
+    );
+
+    return LUTS_mul * (
+        value0
+        + weights.x * (value1 - value0)
+        + weights.y * (value2 - value1)
+        + weights.z * (value3 - value2)
+    );
+}
+
+uint vectorscope_bin(vec2 ab) {
+    vec2 coordinate = vec2(
+        0.5 + 0.5 * ab.x / VECTORSCOPE_AB_RANGE,
+        0.5 - 0.5 * ab.y / VECTORSCOPE_AB_RANGE
+    );
+    uvec2 bin = min(
+        uvec2(clamp(coordinate, 0.0, 1.0) *
+              float(VECTORSCOPE_SIZE)),
+        uvec2(VECTORSCOPE_SIZE - 1u)
+    );
+    return bin.y * VECTORSCOPE_SIZE + bin.x;
+}
+
+void hook() {
+    vec3 rgb = HOOKED_tex(HOOKED_pos).rgb;
+    vec3 jab = sample_vectorscope_rgb_to_jab(rgb);
+    uint index = vectorscope_bin(jab.yz);
+    uvec3 encoded_rgb = uvec3(
+        clamp(rgb, 0.0, 1.0) * VECTORSCOPE_COLOR_SCALE + 0.5
+    );
+
+    // At 256x144 samples, even a single fully occupied bin remains below the
+    // uint limit with 16-bit channel sums.
+    atomicAdd(vectorscope_histogram[index], 1u);
+    atomicAdd(vectorscope_color_r[index], encoded_rgb.r);
+    atomicAdd(vectorscope_color_g[index], encoded_rgb.g);
+    atomicAdd(vectorscope_color_b[index], encoded_rgb.b);
+}
+
+//!HOOK OUTPUT
 //!BIND HOOKED
 //!BIND LUTS
 //!BIND METADATA
@@ -2307,6 +2492,7 @@ vec4 hook() {
     return color;
 }
 
+
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!BIND METERING
@@ -2314,6 +2500,7 @@ vec4 hook() {
 //!BIND METERED_TEMPORAL
 //!BIND METADATA
 //!BIND LUTS
+//!BIND VECTORSCOPE
 //!WHEN preview_metering
 //!DESC metering (preview)
 
@@ -2426,6 +2613,10 @@ const uint PREVIEW_HISTOGRAM_SIZE = 64u;
 const uint PREVIEW_HISTOGRAM_RAW_SIZE = 1024u;
 const float PREVIEW_HISTOGRAM_BIN_WIDTH = 4.0;
 const float PREVIEW_HISTOGRAM_EXTENT = 256.0;
+const uint PREVIEW_VECTORSCOPE_SIZE = 128u;
+const float PREVIEW_VECTORSCOPE_EXTENT = 256.0;
+const float PREVIEW_PANEL_GAP = 6.0 * SCALE;
+const float PREVIEW_VECTORSCOPE_COLOR_SCALE = 65535.0;
 
 float preview_unexposed_pq(float exposed_pq, float inverse_exposure) {
     float absolute_exposed = pq_eotf(clamp(exposed_pq, 0.0, 1.0));
@@ -2547,6 +2738,62 @@ vec4 draw_histogram(vec2 px) {
     if (abs(level - pq_output) <= 1.5 / plot_height)
         tint = vec3(1.0, 0.78, 0.12);
 
+    return vec4(tint, 1.0);
+}
+
+vec4 draw_vectorscope(vec2 px) {
+    vec2 origin = vec2(
+        MARGIN * SCALE,
+        MARGIN * SCALE + PREVIEW_HISTOGRAM_EXTENT + PREVIEW_PANEL_GAP
+    );
+    vec2 padding = vec2(PAD * SCALE);
+    vec2 panel_min = origin - padding;
+    vec2 panel_max = origin + vec2(PREVIEW_VECTORSCOPE_EXTENT) + padding;
+
+    if (any(lessThan(px, panel_min)) || any(greaterThan(px, panel_max)))
+        return vec4(0.0);
+
+    vec2 local = px - origin;
+    if (local.x < 0.0 || local.x >= PREVIEW_VECTORSCOPE_EXTENT ||
+        local.y < 0.0 || local.y >= PREVIEW_VECTORSCOPE_EXTENT)
+        return vec4(0.0, 0.0, 0.0, 1.0);
+
+    vec2 unit = (local + 0.5) / PREVIEW_VECTORSCOPE_EXTENT;
+    uvec2 bin = min(
+        uvec2(unit * float(PREVIEW_VECTORSCOPE_SIZE)),
+        uvec2(PREVIEW_VECTORSCOPE_SIZE - 1u)
+    );
+    uint index = bin.y * PREVIEW_VECTORSCOPE_SIZE + bin.x;
+    float count = float(vectorscope_histogram[index]);
+    float density = clamp(log2(1.0 + count) / 8.0, 0.0, 1.0);
+    vec3 color_sum = vec3(
+        vectorscope_color_r[index],
+        vectorscope_color_g[index],
+        vectorscope_color_b[index]
+    );
+    vec3 average_color = color_sum / max(
+        count * PREVIEW_VECTORSCOPE_COLOR_SCALE,
+        1.0
+    );
+    float color_peak = max(
+        max(average_color.r, average_color.g),
+        average_color.b
+    );
+    vec3 trace_color = color_peak > 1e-4
+        ? average_color / color_peak
+        : vec3(1.0);
+
+    vec2 plane = vec2(2.0 * unit.x - 1.0, 1.0 - 2.0 * unit.y);
+    float radius = length(plane);
+    float line_width = 2.0 / PREVIEW_VECTORSCOPE_EXTENT;
+    float axis_distance = min(abs(plane.x), abs(plane.y));
+    float ring_distance = min(abs(radius - 0.5), abs(radius - 1.0));
+
+    vec3 tint = vec3(0.0);
+    if (axis_distance < line_width || ring_distance < line_width)
+        tint = vec3(0.10);
+
+    tint = max(tint, trace_color * sqrt(density));
     return vec4(tint, 1.0);
 }
 
@@ -2704,7 +2951,16 @@ vec4 draw_row(float value, vec2 origin, vec2 px, int c0, int c1, int c2) {
 vec4 draw_metrics_panel(vec2 px) {
     // The longest row contains four label characters and a signed 5.2 number.
     const float MAX_ROW_WIDTH = 13.0 * (CHAR_W + SPACING);
-    vec2 o3 = vec2(MARGIN * SCALE, HOOKED_size.y - MARGIN * SCALE - CHAR_H * SCALE);
+    float metrics_bottom = HOOKED_size.y - MARGIN * SCALE - CHAR_H * SCALE;
+    float metrics_top = metrics_bottom - 3.0 * LINE_H * SCALE;
+    float chart_stack_bottom = MARGIN * SCALE +
+                               PREVIEW_HISTOGRAM_EXTENT +
+                               PREVIEW_PANEL_GAP +
+                               PREVIEW_VECTORSCOPE_EXTENT + PAD * SCALE;
+    float metrics_x = metrics_top - PAD * SCALE < chart_stack_bottom
+        ? MARGIN * SCALE + PREVIEW_VECTORSCOPE_EXTENT + PREVIEW_PANEL_GAP
+        : MARGIN * SCALE;
+    vec2 o3 = vec2(metrics_x, metrics_bottom);
     vec2 o0 = o3 - vec2(0.0, 3.0 * LINE_H * SCALE);
     vec2 panel_min = o0 - vec2(PAD * SCALE);
     vec2 panel_max = vec2(
@@ -2763,6 +3019,7 @@ vec4 render_metering_preview() {
 
     color.rgb = composite_preview_layer(color.rgb, draw_highlights(value));
     color.rgb = composite_preview_layer(color.rgb, draw_histogram(px));
+    color.rgb = composite_preview_layer(color.rgb, draw_vectorscope(px));
     color.rgb = composite_preview_layer(color.rgb, draw_metrics_panel(px));
 
     return color;
