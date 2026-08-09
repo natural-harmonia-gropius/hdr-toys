@@ -738,6 +738,7 @@ void hook() {
 }
 
 //!HOOK OUTPUT
+//!BIND METERING
 //!BIND METERED
 //!SAVE EMPTY
 //!WIDTH 1
