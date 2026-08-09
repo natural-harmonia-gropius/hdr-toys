@@ -140,7 +140,7 @@
 //!MAXIMUM 8
 2
 
-//!PARAM temporal_stable_window
+//!PARAM temporal_stable_duration
 //!TYPE float
 //!MINIMUM 0.0
 //!MAXIMUM 2.0
@@ -889,7 +889,7 @@ void hook() {
 //!WIDTH 1
 //!HEIGHT 1
 //!COMPUTE 1 1
-//!WHEN temporal_stable_window 0.0 >
+//!WHEN temporal_stable_duration 0.0 >
 //!DESC metering (temporal stabilization)
 
 // Scene analysis is distribution-based. The current frame is compared both
@@ -960,7 +960,7 @@ vec2 temporal_measure_distances() {
 }
 
 void temporal_update_reference(float delta_time) {
-    float time_constant = temporal_stable_window *
+    float time_constant = temporal_stable_duration *
                           TEMPORAL_HISTOGRAM_TIME_SCALE;
     float alpha = temporal_alpha(delta_time, time_constant);
     for (uint i = 0u; i < TEMPORAL_HISTOGRAM_SIZE; i++) {
@@ -974,14 +974,14 @@ void temporal_update_reference(float delta_time) {
 
 float temporal_scene_confirmation_time() {
     return max(
-        temporal_stable_window * TEMPORAL_SCENE_CONFIRM_TIME_SCALE,
+        temporal_stable_duration * TEMPORAL_SCENE_CONFIRM_TIME_SCALE,
         TEMPORAL_MIN_TIME_CONSTANT
     );
 }
 
 float temporal_scene_adaptation_time() {
     return max(
-        temporal_stable_window * TEMPORAL_SCENE_ADAPTATION_TIME_SCALE,
+        temporal_stable_duration * TEMPORAL_SCENE_ADAPTATION_TIME_SCALE,
         TEMPORAL_MIN_TIME_CONSTANT
     );
 }
@@ -1057,7 +1057,7 @@ void analyze_metering_temporally() {
     if (abs(delta_time) <= TEMPORAL_PTS_EPSILON)
         return;
 
-    if (delta_time < 0.0 || delta_time > temporal_stable_window) {
+    if (delta_time < 0.0 || delta_time > temporal_stable_duration) {
         temporal_initialize_state();
         return;
     }
@@ -1242,7 +1242,7 @@ float output_temporal_time_scale(float normal_scale) {
         metered_scene_adaptation_end_pts
     );
     float adaptation_duration = max(
-        temporal_stable_window * OUTPUT_TEMPORAL_SCENE_ADAPTATION_SCALE,
+        temporal_stable_duration * OUTPUT_TEMPORAL_SCENE_ADAPTATION_SCALE,
         EXPOSURE_MIN_TIME_CONSTANT
     );
     bool fast_response = metered_scene_fast_response > 0u &&
@@ -1254,7 +1254,7 @@ float output_temporal_time_scale(float normal_scale) {
 }
 
 float stabilize_auto_exposure(float target, bool automatic) {
-    if (!automatic || temporal_stable_window <= 0.0) {
+    if (!automatic || temporal_stable_duration <= 0.0) {
         smoothed_ev = target;
         smoothed_ev_pts = floatBitsToUint(PTS);
         smoothed_ev_valid = 1u;
@@ -1272,7 +1272,7 @@ float stabilize_auto_exposure(float target, bool automatic) {
     if (abs(delta_time) <= EXPOSURE_PTS_EPSILON)
         return smoothed_ev;
 
-    if (delta_time < 0.0 || delta_time > temporal_stable_window) {
+    if (delta_time < 0.0 || delta_time > temporal_stable_duration) {
         smoothed_ev = target;
         smoothed_ev_pts = floatBitsToUint(PTS);
         return target;
@@ -1283,7 +1283,7 @@ float stabilize_auto_exposure(float target, bool automatic) {
         : EXPOSURE_FALL_TIME_SCALE;
     time_scale = output_temporal_time_scale(time_scale);
     float time_constant = max(
-        temporal_stable_window * time_scale,
+        temporal_stable_duration * time_scale,
         EXPOSURE_MIN_TIME_CONSTANT
     );
     float alpha = 1.0 - exp(-delta_time / time_constant);
@@ -1296,7 +1296,7 @@ void prepare_curve_temporal() {
     curve_temporal_alpha = 1.0;
     curve_temporal_reset = 1u;
 
-    if (temporal_stable_window <= 0.0) {
+    if (temporal_stable_duration <= 0.0) {
         curve_temporal_pts = floatBitsToUint(PTS);
         curve_temporal_valid = 1u;
         return;
@@ -1316,14 +1316,14 @@ void prepare_curve_temporal() {
     }
 
     curve_temporal_pts = floatBitsToUint(PTS);
-    if (delta_time < 0.0 || delta_time > temporal_stable_window)
+    if (delta_time < 0.0 || delta_time > temporal_stable_duration)
         return;
 
     float time_scale = output_temporal_time_scale(
         CURVE_TEMPORAL_TIME_SCALE
     );
     float time_constant = max(
-        temporal_stable_window * time_scale,
+        temporal_stable_duration * time_scale,
         CURVE_TEMPORAL_MIN_TIME_CONSTANT
     );
     curve_temporal_alpha = 1.0 - exp(-delta_time / time_constant);
