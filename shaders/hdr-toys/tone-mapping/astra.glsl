@@ -169,6 +169,7 @@
 //!VAR uint metered_min_i
 //!VAR uint metered_avg_i
 //!VAR uint metered_histogram[1024]
+//!VAR uint metered_coarse_histogram[64]
 //!STORAGE
 
 //!BUFFER METERED_TEMPORAL
@@ -201,6 +202,7 @@
 //!VAR float min_i
 //!VAR float avg_i
 //!VAR float ev
+//!VAR float exposure_scale
 //!STORAGE
 
 //!HOOK OUTPUT
@@ -741,54 +743,130 @@ void hook() {
 //!BIND METERING
 //!BIND METERED
 //!SAVE EMPTY
-//!WIDTH 1
+//!WIDTH 256
 //!HEIGHT 1
-//!COMPUTE 1 1
-//!DESC metering (robust black, white)
+//!COMPUTE 256 1 256 1
+//!DESC metering (histogram reduction)
 
 const uint METERING_HISTOGRAM_SIZE = 1024u;
+const uint METERING_REDUCTION_SIZE = 256u;
+const uint METERING_BINS_PER_THREAD = 4u;
+const uint METERING_COARSE_HISTOGRAM_SIZE = 64u;
+const uint METERING_BLOCKS_PER_COARSE_BIN = 4u;
 const uint METERING_SAMPLE_COUNT = 512u * 288u;
 const float METERING_BLACK_PERCENTILE = 0.005;
 const float METERING_WHITE_PERCENTILE = 0.995;
 
-uvec2 histogram_range_at_percentiles(uint total) {
+shared uint histogram_prefix[METERING_REDUCTION_SIZE];
+shared uint black_bin;
+shared uint white_bin;
+
+uvec4 load_histogram_block(uint first) {
+    return uvec4(
+        metered_histogram[first],
+        metered_histogram[first + 1u],
+        metered_histogram[first + 2u],
+        metered_histogram[first + 3u]
+    );
+}
+
+uint sum_histogram_block(uvec4 counts) {
+    return counts.x + counts.y + counts.z + counts.w;
+}
+
+void scan_histogram_blocks(uint tid, uint block_count) {
+    histogram_prefix[tid] = block_count;
+    barrier();
+
+    for (uint offset = 1u; offset < METERING_REDUCTION_SIZE; offset <<= 1u) {
+        uint inclusive = histogram_prefix[tid];
+        if (tid >= offset)
+            inclusive += histogram_prefix[tid - offset];
+        barrier();
+        histogram_prefix[tid] = inclusive;
+        barrier();
+    }
+}
+
+uint find_percentile_bin(
+    uvec4 counts,
+    uint first,
+    uint cumulative,
+    uint target
+) {
+    for (uint i = 0u; i < METERING_BINS_PER_THREAD; i++) {
+        cumulative += counts[i];
+        if (cumulative >= target)
+            return first + i;
+    }
+    return first + METERING_BINS_PER_THREAD - 1u;
+}
+
+void publish_coarse_histogram(uint tid) {
+    if (tid >= METERING_COARSE_HISTOGRAM_SIZE)
+        return;
+
+    uint last_block = (tid + 1u) * METERING_BLOCKS_PER_COARSE_BIN - 1u;
+    uint first_block = tid * METERING_BLOCKS_PER_COARSE_BIN;
+    uint cumulative_before = first_block == 0u
+        ? 0u
+        : histogram_prefix[first_block - 1u];
+    metered_coarse_histogram[tid] =
+        histogram_prefix[last_block] - cumulative_before;
+}
+
+void locate_percentiles(uint tid, uint first, uvec4 counts) {
+    uint cumulative_before = tid == 0u ? 0u : histogram_prefix[tid - 1u];
+    uint cumulative = histogram_prefix[tid];
     uint black_target = max(
-        uint(ceil(float(total) * METERING_BLACK_PERCENTILE)),
+        uint(ceil(float(METERING_SAMPLE_COUNT) * METERING_BLACK_PERCENTILE)),
         1u
     );
     uint white_target = max(
-        uint(ceil(float(total) * METERING_WHITE_PERCENTILE)),
+        uint(ceil(float(METERING_SAMPLE_COUNT) * METERING_WHITE_PERCENTILE)),
         1u
     );
-    uint cumulative = 0u;
-    uint black_code = 0u;
-    uint white_code = 4095u;
-    bool black_found = false;
 
-    for (uint i = 0u; i < METERING_HISTOGRAM_SIZE; i++) {
-        cumulative += metered_histogram[i];
+    if (cumulative_before < black_target && cumulative >= black_target) {
+        black_bin = find_percentile_bin(
+            counts,
+            first,
+            cumulative_before,
+            black_target
+        );
+    }
+    if (cumulative_before < white_target && cumulative >= white_target) {
+        white_bin = find_percentile_bin(
+            counts,
+            first,
+            cumulative_before,
+            white_target
+        );
+    }
+}
 
-        if (!black_found && cumulative >= black_target) {
-            black_code = i << 2u;
-            black_found = true;
-        }
+void reduce_metering_histogram() {
+    uint tid = gl_LocalInvocationIndex;
+    uint first = tid * METERING_BINS_PER_THREAD;
+    uvec4 counts = load_histogram_block(first);
 
-        if (cumulative >= white_target) {
-            white_code = min((i << 2u) + 3u, 4095u);
-            break;
-        }
+    if (tid == 0u) {
+        black_bin = 0u;
+        white_bin = METERING_HISTOGRAM_SIZE - 1u;
     }
 
-    return uvec2(black_code, white_code);
+    scan_histogram_blocks(tid, sum_histogram_block(counts));
+    publish_coarse_histogram(tid);
+    locate_percentiles(tid, first, counts);
+    barrier();
+
+    if (tid == 0u) {
+        metered_min_i = black_bin << 2u;
+        metered_max_i = min((white_bin << 2u) + 3u, 4095u);
+    }
 }
 
-void publish_robust_metering_range() {
-    uvec2 range = histogram_range_at_percentiles(METERING_SAMPLE_COUNT);
-    metered_min_i = range.x;
-    metered_max_i = range.y;
-}
-
-void hook() { publish_robust_metering_range(); }
+void hook() { reduce_metering_histogram(); }
 
 //!HOOK OUTPUT
 //!BIND METERING
@@ -899,7 +977,6 @@ void hook() {
 // become cuts merely because they eventually move far from the old reference.
 
 const uint TEMPORAL_HISTOGRAM_SIZE = 64u;
-const uint TEMPORAL_HISTOGRAM_GROUP_SIZE = 16u;
 const uint TEMPORAL_HISTOGRAM_SAMPLE_COUNT = 512u * 288u;
 const float TEMPORAL_HISTOGRAM_CUT_THRESHOLD = 0.20;
 const float TEMPORAL_HISTOGRAM_FRAME_THRESHOLD = 0.10;
@@ -924,11 +1001,8 @@ float temporal_alpha(float delta_time, float time_constant) {
 }
 
 float temporal_histogram_value(uint coarse_index) {
-    uint count = 0u;
-    uint first = coarse_index * TEMPORAL_HISTOGRAM_GROUP_SIZE;
-    for (uint i = 0u; i < TEMPORAL_HISTOGRAM_GROUP_SIZE; i++)
-        count += metered_histogram[first + i];
-    return float(count) / float(TEMPORAL_HISTOGRAM_SAMPLE_COUNT);
+    return float(metered_coarse_histogram[coarse_index]) /
+           float(TEMPORAL_HISTOGRAM_SAMPLE_COUNT);
 }
 
 void temporal_clear_scene_candidate() {
@@ -1331,11 +1405,10 @@ void prepare_curve_temporal() {
     curve_temporal_reset = 0u;
 }
 
-void apply_exposure_to_range(inout MeteringMetrics metrics, float exposure) {
-    if (exposure == 0.0)
+void apply_exposure_to_range(inout MeteringMetrics metrics, float scale) {
+    if (scale == 1.0)
         return;
 
-    float scale = exp2(exposure);
     metrics.maximum = pq_eotf_inv(pq_eotf(metrics.maximum) * scale);
     metrics.minimum = pq_eotf_inv(pq_eotf(metrics.minimum) * scale);
 }
@@ -1361,30 +1434,12 @@ void update_metering_metadata() {
         target_ev,
         automatic_exposure_enabled(metrics)
     );
-    apply_exposure_to_range(metrics, ev);
+    exposure_scale = exp2(ev);
+    apply_exposure_to_range(metrics, exposure_scale);
     publish_metering_metadata(metrics);
 }
 
 void hook() { update_metering_metadata(); }
-
-
-//!HOOK OUTPUT
-//!BIND HOOKED
-//!BIND METADATA
-//!WHEN auto_exposure_anchor 0 > enable_metering 1 > avg_pq_y 0 > + scene_avg 0 > + *
-//!DESC tone mapping (auto exposure)
-
-vec3 exposure(vec3 x, float ev) {
-    return x * exp2(ev);
-}
-
-vec4 hook() {
-    vec4 color = HOOKED_tex(HOOKED_pos);
-
-    color.rgb = exposure(color.rgb, ev);
-
-    return color;
-}
 
 //!HOOK OUTPUT
 //!BIND METADATA
@@ -1937,6 +1992,7 @@ void hook() {
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!BIND LUTS
+//!BIND METADATA
 //!DESC tone mapping (LUT application)
 
 // LUT atlas layout: two flattened 65^3 LUTs followed by one 1024-point row.
@@ -2078,6 +2134,10 @@ vec3 RGB_to_LAB(vec3 rgb) {
     return sample_lut_tetrahedral(coordinates, RGB_TO_LAB_ROW);
 }
 
+vec3 apply_exposure(vec3 rgb) {
+    return rgb * exposure_scale;
+}
+
 vec3 LAB_to_RGB(vec3 lab) {
     vec3 coordinates = LAB_to_lut_coordinates(lab);
     return sample_lut_tetrahedral(coordinates, LAB_TO_RGB_ROW);
@@ -2131,6 +2191,7 @@ vec3 tone_mapping(vec3 lab) {
 
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
+    color.rgb = apply_exposure(color.rgb);
     color.rgb = RGB_to_LAB(color.rgb);
     color.rgb = tone_mapping(color.rgb);
     color.rgb = LAB_to_RGB(color.rgb);
@@ -2271,7 +2332,7 @@ float preview_unexposed_pq(float exposed_pq, float inverse_exposure) {
 // final displayed bin, so that bin deliberately extends to source PQ 1.
 vec2 preview_histogram_source_interval(uint displayed_index) {
     float inverse_size = 1.0 / float(PREVIEW_HISTOGRAM_SIZE);
-    float inverse_exposure = exp2(-ev);
+    float inverse_exposure = 1.0 / exposure_scale;
     float exposed_lower = float(displayed_index) * inverse_size;
     float exposed_upper = float(displayed_index + 1u) * inverse_size;
     float source_lower = preview_unexposed_pq(
