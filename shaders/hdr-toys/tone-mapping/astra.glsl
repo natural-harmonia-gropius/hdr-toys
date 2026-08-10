@@ -814,19 +814,54 @@ const uint MATRIX_ZONE_ROWS = 9u;
 const uint MATRIX_ZONE_COUNT = MATRIX_ZONE_COLUMNS * MATRIX_ZONE_ROWS;
 const uint MATRIX_ZONE_SAMPLE_COUNT = 16u * 16u;
 const uint MATRIX_ZONE_HISTOGRAM_SIZE = 64u;
+// Pack a 15-bit PQ sum and a 9-bit sample count into each histogram uint.
+// A bin can contain all 256 samples without a count carry, while the maximum
+// packed sum remains below uint overflow. This preserves sub-bin precision
+// without adding a second shared atomic per sample.
+const uint MATRIX_ZONE_COUNT_BITS = 9u;
+const uint MATRIX_ZONE_COUNT_MASK =
+    (1u << MATRIX_ZONE_COUNT_BITS) - 1u;
+const uint MATRIX_ZONE_HISTOGRAM_SHIFT = 9u;
+const float MATRIX_ZONE_VALUE_SCALE = 32767.0;
 const float MATRIX_ZONE_TRIM_PERCENTILE = 0.05;
 const float MATRIX_ZONE_LOW_PERCENTILE = 0.10;
 const float MATRIX_ZONE_HIGH_PERCENTILE = 0.90;
 const vec2 MATRIX_METERING_SIZE = vec2(256.0, 144.0);
 
+// Each entry contains (sum_of_15_bit_values << 9) | sample_count.
 shared uint zone_histogram[MATRIX_ZONE_HISTOGRAM_SIZE];
 
-uint matrix_zone_histogram_bin(float value) {
-    return min(
-        uint(clamp(value, 0.0, 1.0) *
-             float(MATRIX_ZONE_HISTOGRAM_SIZE - 1u) + 0.5),
-        MATRIX_ZONE_HISTOGRAM_SIZE - 1u
-    );
+uint matrix_zone_value_code(float value) {
+    return uint(clamp(value, 0.0, 1.0) *
+                MATRIX_ZONE_VALUE_SCALE + 0.5);
+}
+
+uint matrix_zone_histogram_bin(uint value_code) {
+    return value_code >> MATRIX_ZONE_HISTOGRAM_SHIFT;
+}
+
+uint matrix_zone_packed_sample(uint value_code) {
+    return (value_code << MATRIX_ZONE_COUNT_BITS) + 1u;
+}
+
+uint matrix_zone_bin_count(uint packed) {
+    return packed & MATRIX_ZONE_COUNT_MASK;
+}
+
+float matrix_zone_retained_sum(
+    uint packed,
+    uint count,
+    uint retained
+) {
+    if (retained == 0u || count == 0u)
+        return 0.0;
+
+    uint value_sum = packed >> MATRIX_ZONE_COUNT_BITS;
+    float retained_fraction = retained == count
+        ? 1.0
+        : float(retained) / float(count);
+    return float(value_sum) / MATRIX_ZONE_VALUE_SCALE *
+           retained_fraction;
 }
 
 float sample_matrix_metering(vec2 position) {
@@ -874,16 +909,20 @@ void publish_matrix_zone(uint zone_index) {
     float sum = 0.0;
 
     for (uint i = 0u; i < MATRIX_ZONE_HISTOGRAM_SIZE; i++) {
-        uint next = cumulative + zone_histogram[i];
+        uint packed = zone_histogram[i];
+        uint count = matrix_zone_bin_count(packed);
+        uint next = cumulative + count;
         uint retained = retained_zone_count(
             cumulative,
             next,
             lower_target,
             upper_target
         );
-        float value = float(i) /
-                      float(MATRIX_ZONE_HISTOGRAM_SIZE - 1u);
-        sum += value * float(retained);
+        sum += matrix_zone_retained_sum(
+            packed,
+            count,
+            retained
+        );
 
         if (cumulative < low_target && next >= low_target)
             low_bin = i;
@@ -909,11 +948,11 @@ void analyze_matrix_zone() {
     clear_zone_histogram(tid);
     barrier();
 
+    float value = sample_matrix_metering(position);
+    uint value_code = matrix_zone_value_code(value);
     atomicAdd(
-        zone_histogram[matrix_zone_histogram_bin(
-            sample_matrix_metering(position)
-        )],
-        1u
+        zone_histogram[matrix_zone_histogram_bin(value_code)],
+        matrix_zone_packed_sample(value_code)
     );
     barrier();
 
