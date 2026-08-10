@@ -1006,6 +1006,14 @@ const float METERING_MATRIX_SPREAD_MIN = 0.06;
 const float METERING_MATRIX_SPREAD_MAX = 0.30;
 const float METERING_MATRIX_COHERENCE_MIN = 0.03;
 const float METERING_MATRIX_COHERENCE_MAX = 0.18;
+const float METERING_BORDER_BLACK_MAX = 0.02;
+const float METERING_BORDER_BLACK_RELATIVE_SCALE = 0.10;
+const float METERING_BORDER_SPREAD_MAX = 0.015;
+const float METERING_BORDER_GLOBAL_MIN = 0.02;
+const float METERING_BORDER_OCCUPANCY_MIN = 0.80;
+const uint METERING_ACTIVE_COLUMNS_MIN = 4u;
+const uint METERING_ACTIVE_ROWS_MIN = 3u;
+const float METERING_MATRIX_BORDER_WEIGHT = 0.95;
 
 shared uint histogram_prefix[METERING_REDUCTION_SIZE];
 shared float average_partial[METERING_REDUCTION_SIZE];
@@ -1014,6 +1022,8 @@ shared float robust_global_average;
 shared uint black_bin;
 shared uint white_bin;
 shared uint peak_bin;
+shared uvec4 matrix_active_bounds;
+shared float matrix_border_confidence;
 
 uvec4 load_histogram_block(uint first) {
     return uvec4(
@@ -1102,27 +1112,131 @@ uint pq_to_uint(float value) {
     return uint(clamp(value, 0.0, 1.0) * 4095.0 + 0.5);
 }
 
+// Detect only near-zero, internally uniform zones. Requiring edge occupancy
+// below makes the crop follow presentation bars instead of dark objects inside
+// the picture; the whole-frame average guard avoids classifying a dark shot.
+bool matrix_zone_looks_like_border(uint index) {
+    float black_limit = min(
+        METERING_BORDER_BLACK_MAX,
+        robust_global_average * METERING_BORDER_BLACK_RELATIVE_SCALE
+    );
+    return robust_global_average > METERING_BORDER_GLOBAL_MIN &&
+           metered_zone_average[index] <= black_limit &&
+           metered_zone_spread[index] <= METERING_BORDER_SPREAD_MAX;
+}
+
+float matrix_column_black_fraction(uint x) {
+    uint count = 0u;
+    for (uint y = 0u; y < METERING_ZONE_ROWS; y++) {
+        uint index = y * METERING_ZONE_COLUMNS + x;
+        if (matrix_zone_looks_like_border(index))
+            count++;
+    }
+    return float(count) / float(METERING_ZONE_ROWS);
+}
+
+float matrix_row_black_fraction(uint y, uint left, uint right) {
+    uint count = 0u;
+    for (uint x = left; x < right; x++) {
+        uint index = y * METERING_ZONE_COLUMNS + x;
+        if (matrix_zone_looks_like_border(index))
+            count++;
+    }
+    return float(count) / float(max(right - left, 1u));
+}
+
+void prepare_matrix_active_region(uint tid) {
+    if (tid == 0u) {
+        uint left = 0u;
+        uint right = METERING_ZONE_COLUMNS;
+        uint top = 0u;
+        uint bottom = METERING_ZONE_ROWS;
+
+        if (metered_zone_valid > 0u) {
+            for (uint x = 0u; x < METERING_ZONE_COLUMNS; x++) {
+                if (matrix_column_black_fraction(x) <
+                    METERING_BORDER_OCCUPANCY_MIN) {
+                    break;
+                }
+                left = x + 1u;
+            }
+            for (int x = int(METERING_ZONE_COLUMNS) - 1; x >= 0; x--) {
+                if (matrix_column_black_fraction(uint(x)) <
+                    METERING_BORDER_OCCUPANCY_MIN) {
+                    break;
+                }
+                right = uint(x);
+            }
+
+            if (right > left &&
+                right - left >= METERING_ACTIVE_COLUMNS_MIN) {
+                for (uint y = 0u; y < METERING_ZONE_ROWS; y++) {
+                    if (matrix_row_black_fraction(y, left, right) <
+                        METERING_BORDER_OCCUPANCY_MIN) {
+                        break;
+                    }
+                    top = y + 1u;
+                }
+                for (int y = int(METERING_ZONE_ROWS) - 1; y >= 0; y--) {
+                    if (matrix_row_black_fraction(
+                            uint(y), left, right
+                        ) < METERING_BORDER_OCCUPANCY_MIN) {
+                        break;
+                    }
+                    bottom = uint(y);
+                }
+            }
+        }
+
+        bool valid_bounds = right > left && bottom > top &&
+                            right - left >= METERING_ACTIVE_COLUMNS_MIN &&
+                            bottom - top >= METERING_ACTIVE_ROWS_MIN;
+        if (!valid_bounds) {
+            left = 0u;
+            right = METERING_ZONE_COLUMNS;
+            top = 0u;
+            bottom = METERING_ZONE_ROWS;
+        }
+
+        matrix_active_bounds = uvec4(left, right, top, bottom);
+        float active_area = float((right - left) * (bottom - top));
+        float removed_fraction = 1.0 - active_area /
+                                 float(METERING_ZONE_COUNT);
+        matrix_border_confidence = valid_bounds
+            ? smoothstep(0.05, 0.30, removed_fraction)
+            : 0.0;
+    }
+    barrier();
+}
+
+bool matrix_zone_inside_active_region(uint x, uint y) {
+    return x >= matrix_active_bounds.x &&
+           x < matrix_active_bounds.y &&
+           y >= matrix_active_bounds.z &&
+           y < matrix_active_bounds.w;
+}
+
 float matrix_zone_neighbor_difference(uint index, float value) {
     uint x = index % METERING_ZONE_COLUMNS;
     uint y = index / METERING_ZONE_COLUMNS;
     float difference = 0.0;
     uint count = 0u;
 
-    if (x > 0u) {
+    if (x > matrix_active_bounds.x) {
         difference += abs(value - metered_zone_average[index - 1u]);
         count++;
     }
-    if (x + 1u < METERING_ZONE_COLUMNS) {
+    if (x + 1u < matrix_active_bounds.y) {
         difference += abs(value - metered_zone_average[index + 1u]);
         count++;
     }
-    if (y > 0u) {
+    if (y > matrix_active_bounds.z) {
         difference += abs(
             value - metered_zone_average[index - METERING_ZONE_COLUMNS]
         );
         count++;
     }
-    if (y + 1u < METERING_ZONE_ROWS) {
+    if (y + 1u < matrix_active_bounds.w) {
         difference += abs(
             value - metered_zone_average[index + METERING_ZONE_COLUMNS]
         );
@@ -1136,12 +1250,23 @@ vec2 matrix_zone_partial(uint index, float global_average) {
     if (metered_zone_valid == 0u || index >= METERING_ZONE_COUNT)
         return vec2(0.0);
 
-    float zone_average = metered_zone_average[index];
-    float zone_spread = metered_zone_spread[index];
     uint x = index % METERING_ZONE_COLUMNS;
     uint y = index / METERING_ZONE_COLUMNS;
-    vec2 position = (vec2(x, y) + 0.5) /
-                    vec2(METERING_ZONE_COLUMNS, METERING_ZONE_ROWS);
+    if (!matrix_zone_inside_active_region(x, y))
+        return vec2(0.0);
+
+    float zone_average = metered_zone_average[index];
+    float zone_spread = metered_zone_spread[index];
+    vec2 active_origin = vec2(
+        float(matrix_active_bounds.x),
+        float(matrix_active_bounds.z)
+    );
+    vec2 active_size = vec2(
+        float(matrix_active_bounds.y - matrix_active_bounds.x),
+        float(matrix_active_bounds.w - matrix_active_bounds.z)
+    );
+    vec2 position = (vec2(float(x), float(y)) + 0.5 - active_origin) /
+                    active_size;
     vec2 centered = 2.0 * position - vec2(1.0);
     float center_emphasis = exp2(-2.0 * dot(centered, centered));
     float difference = abs(zone_average - global_average);
@@ -1209,6 +1334,15 @@ void publish_matrix_average(uint tid) {
         METERING_MATRIX_WEIGHT_MIN,
         METERING_MATRIX_WEIGHT_MAX,
         matrix_confidence
+    );
+    // Edge-connected, uniform black bars are presentation geometry rather
+    // than scene content. When their evidence is strong, rely almost entirely
+    // on the active-region matrix average while retaining a small whole-frame
+    // contribution as a guard against false detection.
+    matrix_weight = mix(
+        matrix_weight,
+        METERING_MATRIX_BORDER_WEIGHT,
+        matrix_border_confidence
     );
     metered_avg_i = pq_to_uint(
         mix(robust_global_average, matrix_average, matrix_weight)
@@ -1319,6 +1453,8 @@ void reduce_metering_histogram() {
                                 float(max(global_retained, 1u));
     }
     barrier();
+
+    prepare_matrix_active_region(tid);
 
     reduce_matrix_partials(
         tid,
