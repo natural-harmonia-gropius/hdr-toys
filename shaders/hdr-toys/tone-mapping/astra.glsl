@@ -166,6 +166,7 @@
 
 //!BUFFER METERED
 //!VAR uint metered_max_i
+//!VAR uint metered_peak_i
 //!VAR uint metered_min_i
 //!VAR uint metered_avg_i
 //!VAR uint metered_histogram[1024]
@@ -264,8 +265,8 @@ vec4 hook() {
 // The metering map used to be reduced to 512x288 in a single step. At 4K that
 // is a factor of 7.5 per axis taken with one bilinear tap, i.e. point sampling
 // with aliasing: which pixels survive depends on the subpixel alignment, so a
-// small moving highlight makes metered_max_i jump while nothing in the scene
-// changes. Halving repeatedly instead averages exactly 2x2 per step before
+// small moving highlight makes the measured peak jump while nothing in the
+// scene changes. Halving repeatedly instead averages exactly 2x2 per step before
 // the fixed-size histogram and matrix analysis. The passes are conditional,
 // so only as many run as the source resolution needs: two at 4K, one at 1080p.
 // Testing both dimensions against both landscape thresholds makes the chain
@@ -990,7 +991,11 @@ const uint METERING_ZONE_COLUMNS = 16u;
 const uint METERING_ZONE_ROWS = 9u;
 const uint METERING_ZONE_COUNT = METERING_ZONE_COLUMNS * METERING_ZONE_ROWS;
 const float METERING_BLACK_PERCENTILE = 0.005;
+// A robust white point constrains automatic exposure without allowing one
+// unstable highlight sample to move the whole frame. The actual peak is
+// measured separately so the tone curve still contains every input pixel.
 const float METERING_WHITE_PERCENTILE = 0.995;
+const float METERING_PEAK_PERCENTILE = 1.0;
 const float METERING_AVERAGE_TRIM_PERCENTILE = 0.05;
 const float METERING_MATRIX_WEIGHT_MIN = 0.50;
 const float METERING_MATRIX_WEIGHT_MAX = 0.75;
@@ -1008,6 +1013,7 @@ shared vec2 matrix_partial[METERING_REDUCTION_SIZE];
 shared float robust_global_average;
 shared uint black_bin;
 shared uint white_bin;
+shared uint peak_bin;
 
 uvec4 load_histogram_block(uint first) {
     return uvec4(
@@ -1247,6 +1253,10 @@ void locate_percentiles(uint tid, uint first, uvec4 counts) {
         uint(ceil(float(METERING_SAMPLE_COUNT) * METERING_WHITE_PERCENTILE)),
         1u
     );
+    uint peak_target = max(
+        uint(ceil(float(METERING_SAMPLE_COUNT) * METERING_PEAK_PERCENTILE)),
+        1u
+    );
 
     if (cumulative_before < black_target && cumulative >= black_target) {
         black_bin = find_percentile_bin(
@@ -1264,6 +1274,14 @@ void locate_percentiles(uint tid, uint first, uvec4 counts) {
             white_target
         );
     }
+    if (cumulative_before < peak_target && cumulative >= peak_target) {
+        peak_bin = find_percentile_bin(
+            counts,
+            first,
+            cumulative_before,
+            peak_target
+        );
+    }
 }
 
 void reduce_metering_histogram() {
@@ -1274,6 +1292,7 @@ void reduce_metering_histogram() {
     if (tid == 0u) {
         black_bin = 0u;
         white_bin = METERING_HISTOGRAM_SIZE - 1u;
+        peak_bin = METERING_HISTOGRAM_SIZE - 1u;
     }
 
     scan_histogram_blocks(tid, sum_histogram_block(counts));
@@ -1309,6 +1328,7 @@ void reduce_metering_histogram() {
     if (tid == 0u) {
         metered_min_i = black_bin << 2u;
         metered_max_i = min((white_bin << 2u) + 3u, 4095u);
+        metered_peak_i = min((peak_bin << 2u) + 3u, 4095u);
     }
 
     publish_matrix_average(tid);
@@ -1651,7 +1671,10 @@ float to_float(uint x) {
 }
 
 struct MeteringMetrics {
+    // maximum is the robust white used by exposure constraints; peak is the
+    // true endpoint used by the tone curve.
     float maximum;
+    float peak;
     float minimum;
     float average;
 };
@@ -1679,6 +1702,11 @@ MeteringMetrics resolve_metering_metrics() {
         metrics.maximum = pq_eotf_inv(max_luma);
     else
         metrics.maximum = pq_eotf_inv(1000.0);
+
+    if (use_measured)
+        metrics.peak = to_float(metered_peak_i);
+    else
+        metrics.peak = metrics.maximum;
 
     if (use_measured)
         metrics.minimum = to_float(metered_min_i);
@@ -1836,6 +1864,7 @@ void apply_exposure_to_range(inout MeteringMetrics metrics, float scale) {
         return;
 
     metrics.maximum = pq_eotf_inv(pq_eotf(metrics.maximum) * scale);
+    metrics.peak = pq_eotf_inv(pq_eotf(metrics.peak) * scale);
     metrics.minimum = pq_eotf_inv(pq_eotf(metrics.minimum) * scale);
 }
 
@@ -1846,13 +1875,13 @@ bool automatic_exposure_enabled(MeteringMetrics metrics) {
 }
 
 void publish_metering_metadata(MeteringMetrics metrics) {
-    max_i = metrics.maximum;
+    max_i = metrics.peak;
     min_i = metrics.minimum;
     avg_i = metrics.average;
 }
 
 void publish_input_metering_metadata(MeteringMetrics metrics) {
-    input_max_i = metrics.maximum;
+    input_max_i = metrics.peak;
     input_min_i = metrics.minimum;
     input_avg_i = metrics.average;
 }
@@ -3088,7 +3117,7 @@ float to_float(uint x) {
 
 vec4 draw_highlights(float value) {
     vec3 metrics = vec3(
-        to_float(metered_max_i),
+        to_float(metered_peak_i),
         to_float(metered_avg_i),
         to_float(metered_min_i)
     );
