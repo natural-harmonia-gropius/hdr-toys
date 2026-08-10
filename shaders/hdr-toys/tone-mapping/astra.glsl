@@ -170,7 +170,7 @@
 //!VAR uint metered_avg_i
 //!VAR uint metered_histogram[1024]
 //!VAR uint metered_coarse_histogram[64]
-//!VAR float metered_average_groups[256]
+//!VAR uint metered_center_histogram[256]
 //!STORAGE
 
 //!BUFFER METERED_TEMPORAL
@@ -680,6 +680,8 @@ vec4 hook() {
 void clear_metering_histogram_bin(uint index) {
     if (index < 1024u)
         metered_histogram[index] = 0u;
+    if (index < 256u)
+        metered_center_histogram[index] = 0u;
 }
 
 void hook() {
@@ -761,6 +763,81 @@ void hook() {
 //!BIND METERED
 //!SAVE EMPTY
 //!WIDTH 256
+//!HEIGHT 144
+//!COMPUTE 16 16 16 16
+//!WHEN auto_exposure_anchor 0 > enable_metering 1 > * avg_pq_y 0 = * scene_avg 0 = * preview_metering enable_metering 1 > * +
+//!DESC metering (histogram, center-weighted)
+
+const uint CENTER_HISTOGRAM_SIZE = 256u;
+const vec2 CENTER_METERING_SIZE = vec2(256.0, 144.0);
+const float CENTER_METERING_WEIGHT_SCALE = 15.0;
+
+shared uint center_histogram[CENTER_HISTOGRAM_SIZE];
+
+uint center_histogram_bin(float value) {
+    return min(
+        uint(clamp(value, 0.0, 1.0) *
+             float(CENTER_HISTOGRAM_SIZE - 1u) + 0.5),
+        CENTER_HISTOGRAM_SIZE - 1u
+    );
+}
+
+float sample_center_metering(vec2 position) {
+    return (
+        METERING_mul * textureLod(METERING_raw, position, 0.0)
+    ).x;
+}
+
+uint center_metering_weight(vec2 position) {
+    // A smooth, inspectable center prior replaces the previous coordinate
+    // warp. The non-zero floor keeps every part of the frame represented;
+    // weights range from 16 at the center to 2 at the corners.
+    vec2 centered = 2.0 * position - vec2(1.0);
+    float emphasis = exp2(-2.0 * dot(centered, centered));
+    return 1u + uint(CENTER_METERING_WEIGHT_SCALE * emphasis + 0.5);
+}
+
+void clear_center_workgroup_histogram(uint tid) {
+    center_histogram[tid] = 0u;
+}
+
+void accumulate_center_workgroup_histogram(
+    float value,
+    uint weight
+) {
+    atomicAdd(center_histogram[center_histogram_bin(value)], weight);
+}
+
+void merge_center_workgroup_histogram(uint tid) {
+    uint count = center_histogram[tid];
+    if (count > 0u)
+        atomicAdd(metered_center_histogram[tid], count);
+}
+
+void build_center_weighted_histogram() {
+    uint tid = gl_LocalInvocationIndex;
+    vec2 position = (vec2(gl_GlobalInvocationID.xy) + 0.5) /
+                    CENTER_METERING_SIZE;
+
+    clear_center_workgroup_histogram(tid);
+    barrier();
+
+    accumulate_center_workgroup_histogram(
+        sample_center_metering(position),
+        center_metering_weight(position)
+    );
+    barrier();
+
+    merge_center_workgroup_histogram(tid);
+}
+
+void hook() { build_center_weighted_histogram(); }
+
+//!HOOK OUTPUT
+//!BIND METERING
+//!BIND METERED
+//!SAVE EMPTY
+//!WIDTH 256
 //!HEIGHT 1
 //!COMPUTE 256 1 256 1
 //!DESC metering (histogram, reduction)
@@ -771,10 +848,18 @@ const uint METERING_BINS_PER_THREAD = 4u;
 const uint METERING_COARSE_HISTOGRAM_SIZE = 64u;
 const uint METERING_BLOCKS_PER_COARSE_BIN = 4u;
 const uint METERING_SAMPLE_COUNT = 512u * 288u;
+const uint METERING_CENTER_HISTOGRAM_SIZE = 256u;
 const float METERING_BLACK_PERCENTILE = 0.005;
 const float METERING_WHITE_PERCENTILE = 0.995;
+const float METERING_AVERAGE_TRIM_PERCENTILE = 0.05;
+const float METERING_CENTER_WEIGHT_MIN = 0.50;
+const float METERING_CENTER_WEIGHT_MAX = 0.75;
+const float METERING_CENTER_DIFFERENCE_MIN = 0.05;
+const float METERING_CENTER_DIFFERENCE_MAX = 0.20;
 
 shared uint histogram_prefix[METERING_REDUCTION_SIZE];
+shared uint center_histogram_prefix[METERING_REDUCTION_SIZE];
+shared vec2 average_partial[METERING_REDUCTION_SIZE];
 shared uint black_bin;
 shared uint white_bin;
 
@@ -791,18 +876,135 @@ uint sum_histogram_block(uvec4 counts) {
     return counts.x + counts.y + counts.z + counts.w;
 }
 
-void scan_histogram_blocks(uint tid, uint block_count) {
+void scan_histogram_blocks(
+    uint tid,
+    uint block_count,
+    uint center_count
+) {
     histogram_prefix[tid] = block_count;
+    center_histogram_prefix[tid] = center_count;
     barrier();
 
     for (uint offset = 1u; offset < METERING_REDUCTION_SIZE; offset <<= 1u) {
         uint inclusive = histogram_prefix[tid];
+        uint center_inclusive = center_histogram_prefix[tid];
         if (tid >= offset)
             inclusive += histogram_prefix[tid - offset];
+        if (tid >= offset)
+            center_inclusive += center_histogram_prefix[tid - offset];
         barrier();
         histogram_prefix[tid] = inclusive;
+        center_histogram_prefix[tid] = center_inclusive;
         barrier();
     }
+}
+
+uint retained_histogram_count(
+    uint cumulative_before,
+    uint cumulative,
+    uint lower_target,
+    uint upper_target
+) {
+    uint first = max(cumulative_before, lower_target);
+    uint last = min(cumulative, upper_target);
+    return last > first ? last - first : 0u;
+}
+
+uvec2 average_trim_targets(uint total) {
+    uint trim = uint(
+        floor(float(total) * METERING_AVERAGE_TRIM_PERCENTILE)
+    );
+    return uvec2(trim, total - trim);
+}
+
+float global_histogram_average_partial(
+    uvec4 counts,
+    uint first,
+    uint cumulative_before,
+    uvec2 targets
+) {
+    float sum = 0.0;
+    uint cumulative = cumulative_before;
+
+    for (uint i = 0u; i < METERING_BINS_PER_THREAD; i++) {
+        uint next = cumulative + counts[i];
+        uint retained = retained_histogram_count(
+            cumulative,
+            next,
+            targets.x,
+            targets.y
+        );
+        float value = (float((first + i) << 2u) + 1.5) / 4095.0;
+        sum += value * float(retained);
+        cumulative = next;
+    }
+
+    return sum;
+}
+
+float center_histogram_average_partial(
+    uint tid,
+    uint count,
+    uint cumulative_before,
+    uvec2 targets
+) {
+    uint retained = retained_histogram_count(
+        cumulative_before,
+        cumulative_before + count,
+        targets.x,
+        targets.y
+    );
+    float value = float(tid) /
+                  float(METERING_CENTER_HISTOGRAM_SIZE - 1u);
+    return value * float(retained);
+}
+
+void reduce_average_partials(uint tid, vec2 partial) {
+    average_partial[tid] = partial;
+    barrier();
+
+    for (uint size = METERING_REDUCTION_SIZE >> 1u;
+         size > 0u;
+         size >>= 1u) {
+        if (tid < size)
+            average_partial[tid] += average_partial[tid + size];
+        barrier();
+    }
+}
+
+uint pq_to_uint(float value) {
+    return uint(clamp(value, 0.0, 1.0) * 4095.0 + 0.5);
+}
+
+void publish_robust_average(uint tid, uvec2 totals, uvec2 trims) {
+    if (tid != 0u)
+        return;
+
+    uint global_retained = totals.x - 2u * trims.x;
+    uint center_retained = totals.y - 2u * trims.y;
+    float global_average = average_partial[0].x /
+                           float(max(global_retained, 1u));
+    float center_average = center_retained > 0u
+        ? average_partial[0].y / float(center_retained)
+        : global_average;
+
+    // When the center and the whole frame disagree, the center is more likely
+    // to contain an intentionally framed or backlit subject. Increase its
+    // influence smoothly while retaining at least 25% global context.
+    float difference = abs(center_average - global_average);
+    float center_confidence = smoothstep(
+        METERING_CENTER_DIFFERENCE_MIN,
+        METERING_CENTER_DIFFERENCE_MAX,
+        difference
+    );
+    float center_weight = mix(
+        METERING_CENTER_WEIGHT_MIN,
+        METERING_CENTER_WEIGHT_MAX,
+        center_confidence
+    );
+    metered_avg_i = pq_to_uint(
+        mix(global_average, center_average, center_weight)
+    );
 }
 
 uint find_percentile_bin(
@@ -866,154 +1068,64 @@ void reduce_metering_histogram() {
     uint tid = gl_LocalInvocationIndex;
     uint first = tid * METERING_BINS_PER_THREAD;
     uvec4 counts = load_histogram_block(first);
+    uint center_count = metered_center_histogram[tid];
 
     if (tid == 0u) {
         black_bin = 0u;
         white_bin = METERING_HISTOGRAM_SIZE - 1u;
     }
 
-    scan_histogram_blocks(tid, sum_histogram_block(counts));
+    scan_histogram_blocks(
+        tid,
+        sum_histogram_block(counts),
+        center_count
+    );
     publish_coarse_histogram(tid);
     locate_percentiles(tid, first, counts);
+
+    uint global_total = histogram_prefix[METERING_REDUCTION_SIZE - 1u];
+    uint center_total = center_histogram_prefix[
+        METERING_REDUCTION_SIZE - 1u
+    ];
+    uvec2 global_targets = average_trim_targets(global_total);
+    uvec2 center_targets = average_trim_targets(center_total);
+    uint global_before = tid == 0u ? 0u : histogram_prefix[tid - 1u];
+    uint center_before = tid == 0u
+        ? 0u
+        : center_histogram_prefix[tid - 1u];
+
+    reduce_average_partials(
+        tid,
+        vec2(
+            global_histogram_average_partial(
+                counts,
+                first,
+                global_before,
+                global_targets
+            ),
+            center_histogram_average_partial(
+                tid,
+                center_count,
+                center_before,
+                center_targets
+            )
+        )
+    );
     barrier();
 
     if (tid == 0u) {
         metered_min_i = black_bin << 2u;
         metered_max_i = min((white_bin << 2u) + 3u, 4095u);
     }
+
+    publish_robust_average(
+        tid,
+        uvec2(global_total, center_total),
+        uvec2(global_targets.x, center_targets.x)
+    );
 }
 
 void hook() { reduce_metering_histogram(); }
-
-//!HOOK OUTPUT
-//!BIND METERING
-//!BIND METERED
-//!SAVE EMPTY
-//!WIDTH 256
-//!HEIGHT 256
-//!COMPUTE 16 16 16 16
-//!WHEN auto_exposure_anchor 0 > enable_metering 1 > * avg_pq_y 0 = * scene_avg 0 = * preview_metering enable_metering 1 > * +
-//!DESC metering (average, center-weighted partials)
-
-const uint METERING_AVERAGE_SIZE = 256u;
-const uint METERING_AVERAGE_GROUP_SIZE = 256u;
-const uint METERING_AVERAGE_GROUPS_PER_AXIS = 16u;
-
-shared float average_partial[METERING_AVERAGE_GROUP_SIZE];
-
-vec2 map_coords(vec2 uv, float strength) {
-    if (strength < 0.001) {
-        return uv;
-    }
-
-    vec2 centered_uv = uv - vec2(0.5);
-    float radius = length(centered_uv);
-
-    if (radius == 0.0) {
-        return vec2(0.5);
-    }
-
-    float distorted_radius  = tan(radius * strength) / strength;
-    vec2 distorted_centered_uv  = normalize(centered_uv ) * distorted_radius;
-
-    distorted_centered_uv = distorted_centered_uv / max(strength, 1.0);
-
-    vec2 distorted_uv = distorted_centered_uv + vec2(0.5);
-
-    vec2 kaleidoscope_uv = 1.0 - abs(fract(distorted_uv * 0.5) * 2.0 - 1.0);
-
-    return kaleidoscope_uv;
-}
-
-vec2 map_coords(vec2 uv) {
-    return map_coords(uv, 2.0);
-}
-
-float sample_center_weighted_metering() {
-    vec2 position = (vec2(gl_GlobalInvocationID.xy) + 0.5) /
-                    float(METERING_AVERAGE_SIZE);
-    return (
-        METERING_mul * textureLod(METERING_raw, map_coords(position), 0.0)
-    ).x;
-}
-
-void reduce_average_partial(uint tid, float value) {
-    average_partial[tid] = value;
-    barrier();
-
-    for (uint size = METERING_AVERAGE_GROUP_SIZE >> 1u;
-         size > 0u;
-         size >>= 1u) {
-        if (tid < size) {
-            average_partial[tid] += average_partial[tid + size];
-        }
-        barrier();
-    }
-}
-
-uint average_group_index() {
-    return gl_WorkGroupID.y * METERING_AVERAGE_GROUPS_PER_AXIS +
-           gl_WorkGroupID.x;
-}
-
-void publish_average_partial(uint tid) {
-    if (tid == 0u) {
-        metered_average_groups[average_group_index()] =
-            average_partial[0] / float(METERING_AVERAGE_GROUP_SIZE);
-    }
-}
-
-void calculate_center_weighted_average_partial() {
-    uint tid = gl_LocalInvocationIndex;
-    reduce_average_partial(tid, sample_center_weighted_metering());
-    publish_average_partial(tid);
-}
-
-void hook() { calculate_center_weighted_average_partial(); }
-
-//!HOOK OUTPUT
-//!BIND METERED
-//!SAVE EMPTY
-//!WIDTH 256
-//!HEIGHT 1
-//!COMPUTE 256 1 256 1
-//!WHEN auto_exposure_anchor 0 > enable_metering 1 > * avg_pq_y 0 = * scene_avg 0 = * preview_metering enable_metering 1 > * +
-//!DESC metering (average, reduction)
-
-const uint METERING_AVERAGE_GROUP_COUNT = 256u;
-
-shared float average_partial[METERING_AVERAGE_GROUP_COUNT];
-
-uint to_uint(float x) {
-    return uint(x * 4095.0 + 0.5);
-}
-
-void reduce_average_groups(uint tid) {
-    average_partial[tid] = metered_average_groups[tid];
-    barrier();
-
-    for (uint size = METERING_AVERAGE_GROUP_COUNT >> 1u;
-         size > 0u;
-         size >>= 1u) {
-        if (tid < size)
-            average_partial[tid] += average_partial[tid + size];
-        barrier();
-    }
-}
-
-void publish_center_weighted_average(uint tid) {
-    if (tid == 0u) {
-        float average = average_partial[0] /
-                        float(METERING_AVERAGE_GROUP_COUNT);
-        metered_avg_i = to_uint(average);
-    }
-}
-
-void hook() {
-    uint tid = gl_LocalInvocationIndex;
-    reduce_average_groups(tid);
-    publish_center_weighted_average(tid);
-}
 
 //!HOOK OUTPUT
 //!BIND METERING
