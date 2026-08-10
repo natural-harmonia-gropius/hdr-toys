@@ -266,13 +266,15 @@ vec4 hook() {
 // changes. Halving repeatedly instead averages exactly 2x2 per step, the same
 // way the average chain below already does it. The passes are conditional, so
 // only as many run as the source resolution needs: two at 4K, one at 1080p.
+// Testing both dimensions against both landscape thresholds makes the chain
+// orientation-independent before portrait analysis is rotated below.
 
 //!HOOK OUTPUT
 //!BIND METERING
 //!SAVE METERING
 //!WIDTH METERING.w 2 /
 //!HEIGHT METERING.h 2 /
-//!WHEN OUTPUT.w 1024 > OUTPUT.h 576 > +
+//!WHEN OUTPUT.w 1024 > OUTPUT.h 1024 > + OUTPUT.w 576 > OUTPUT.h 576 > * +
 //!DESC metering (spatial stabilization, halve 1)
 vec4 hook() { return METERING_tex(METERING_pos); }
 
@@ -281,7 +283,7 @@ vec4 hook() { return METERING_tex(METERING_pos); }
 //!SAVE METERING
 //!WIDTH METERING.w 2 /
 //!HEIGHT METERING.h 2 /
-//!WHEN OUTPUT.w 2048 > OUTPUT.h 1152 > +
+//!WHEN OUTPUT.w 2048 > OUTPUT.h 2048 > + OUTPUT.w 1152 > OUTPUT.h 1152 > * +
 //!DESC metering (spatial stabilization, halve 2)
 vec4 hook() { return METERING_tex(METERING_pos); }
 
@@ -290,7 +292,7 @@ vec4 hook() { return METERING_tex(METERING_pos); }
 //!SAVE METERING
 //!WIDTH METERING.w 2 /
 //!HEIGHT METERING.h 2 /
-//!WHEN OUTPUT.w 4096 > OUTPUT.h 2304 > +
+//!WHEN OUTPUT.w 4096 > OUTPUT.h 4096 > + OUTPUT.w 2304 > OUTPUT.h 2304 > * +
 //!DESC metering (spatial stabilization, halve 3)
 vec4 hook() { return METERING_tex(METERING_pos); }
 
@@ -299,7 +301,7 @@ vec4 hook() { return METERING_tex(METERING_pos); }
 //!SAVE METERING
 //!WIDTH METERING.w 2 /
 //!HEIGHT METERING.h 2 /
-//!WHEN OUTPUT.w 8192 > OUTPUT.h 4608 > +
+//!WHEN OUTPUT.w 8192 > OUTPUT.h 8192 > + OUTPUT.w 4608 > OUTPUT.h 4608 > * +
 //!DESC metering (spatial stabilization, halve 4)
 vec4 hook() { return METERING_tex(METERING_pos); }
 
@@ -310,21 +312,55 @@ vec4 hook() { return METERING_tex(METERING_pos); }
 //!HEIGHT 288
 //!DESC metering (spatial stabilization, downscaling)
 
+vec2 metering_source_position(vec2 position, bool portrait) {
+    // Rotate portrait analysis clockwise into the landscape metering layout.
+    return portrait
+        ? vec2(position.y, 1.0 - position.x)
+        : position;
+}
+
+vec4 sample_metering_oriented(vec2 position, bool portrait) {
+    return METERING_mul * textureLod(
+        METERING_raw,
+        metering_source_position(position, portrait),
+        0.0
+    );
+}
+
 vec4 sample_metering_downscaled() {
     const vec2 target_size = vec2(512.0, 288.0);
-    vec2 scale = METERING_size / target_size;
+    bool portrait = METERING_size.y > METERING_size.x;
+    vec2 oriented_size = portrait ? METERING_size.yx : METERING_size;
+    vec2 scale = oriented_size / target_size;
 
     if (all(lessThanEqual(scale, vec2(1.0)))) {
-        return METERING_tex(METERING_pos);
+        return sample_metering_oriented(METERING_pos, portrait);
     }
 
     // Extend the bilinear footprint to approximate an area average. At 2x
     // downscaling the four taps land at the centers of the source 2x2 block.
     vec2 offset = 0.5 * max(scale - vec2(1.0), vec2(0.0));
-    vec4 sum = METERING_texOff(vec2(-offset.x, -offset.y))
-             + METERING_texOff(vec2( offset.x, -offset.y))
-             + METERING_texOff(vec2(-offset.x,  offset.y))
-             + METERING_texOff(vec2( offset.x,  offset.y));
+    vec2 normalized_offset = offset / oriented_size;
+    vec4 sum = sample_metering_oriented(
+                   METERING_pos + vec2(-normalized_offset.x,
+                                       -normalized_offset.y),
+                   portrait
+               )
+             + sample_metering_oriented(
+                   METERING_pos + vec2( normalized_offset.x,
+                                       -normalized_offset.y),
+                   portrait
+               )
+             + sample_metering_oriented(
+                   METERING_pos + vec2(-normalized_offset.x,
+                                        normalized_offset.y),
+                   portrait
+               )
+             + sample_metering_oriented(
+                   METERING_pos + vec2( normalized_offset.x,
+                                        normalized_offset.y),
+                   portrait
+               );
     return sum * 0.25;
 }
 
@@ -3430,10 +3466,19 @@ vec3 composite_preview_layer(vec3 color, vec4 layer) {
     return mix(color, layer.rgb, layer.a);
 }
 
+vec2 preview_metering_position(vec2 position) {
+    // Undo the clockwise analysis rotation so overlays match portrait input.
+    return HOOKED_size.y > HOOKED_size.x
+        ? vec2(1.0 - position.y, position.x)
+        : position;
+}
+
 vec4 render_metering_preview() {
     vec4 color = HOOKED_tex(HOOKED_pos);
     vec2 px = HOOKED_pos * HOOKED_size;
-    float value = METERING_tex(METERING_pos).x;
+    float value = METERING_tex(
+        preview_metering_position(METERING_pos)
+    ).x;
 
     color.rgb = composite_preview_layer(color.rgb, draw_highlights(value));
     color.rgb = composite_preview_layer(color.rgb, draw_histogram(px));
