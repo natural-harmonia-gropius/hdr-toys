@@ -1572,7 +1572,7 @@ void hook() { update_metering_metadata(); }
 //!BIND CURVE_TEMPORAL
 //!SAVE LUTS
 //!WIDTH 4225
-//!HEIGHT 131
+//!HEIGHT 195
 //!COMPUTE 32 8
 //!DESC tone mapping (LUT generation, astra)
 
@@ -2010,12 +2010,20 @@ float curve(float x) {
     return clamp(y, ob, ow);
 }
 
-// LUT atlas layout: two flattened 65^3 LUTs followed by one 1024-point row.
-const int LUT_SIZE = 65;
-const int LUT_LAST = LUT_SIZE - 1;
+// LUT atlas layout: a flattened 65^3 RGB-to-Jab LUT, a 129x65x65
+// Jab-to-RGB LUT, and one 1024-point curve row. The reverse LUT stores its
+// higher-resolution J axis in atlas rows while a/b share the flattened axis,
+// keeping the atlas width at 65^2 texels.
+const int FORWARD_LUT_SIZE = 65;
+const int FORWARD_LUT_LAST = FORWARD_LUT_SIZE - 1;
+const int REVERSE_LIGHTNESS_LUT_SIZE = 129;
+const int REVERSE_LIGHTNESS_LUT_LAST = REVERSE_LIGHTNESS_LUT_SIZE - 1;
+const int REVERSE_CHROMA_LUT_SIZE = 65;
+const int REVERSE_CHROMA_LUT_LAST = REVERSE_CHROMA_LUT_SIZE - 1;
+const int LUT_ATLAS_WIDTH = FORWARD_LUT_SIZE * FORWARD_LUT_SIZE;
 const int RGB_TO_LAB_ROW = 0;
-const int LAB_TO_RGB_ROW = LUT_SIZE;
-const int CURVE_ROW = LUT_SIZE * 2;
+const int LAB_TO_RGB_ROW = RGB_TO_LAB_ROW + FORWARD_LUT_SIZE;
+const int CURVE_ROW = LAB_TO_RGB_ROW + REVERSE_LIGHTNESS_LUT_SIZE;
 const int CURVE_SIZE = 1024;
 
 // LAB chroma-coordinate shaper: the scale concentrates precision near neutral,
@@ -2044,13 +2052,26 @@ vec3 lut_coordinates_to_LAB(vec3 coordinates) {
     return vec3(L, a_ratio * L, b_ratio * L);
 }
 
-vec3 atlas_to_lut_coordinates(ivec2 atlas_position, int first_row) {
+vec3 atlas_to_RGB_lut_coordinates(ivec2 atlas_position) {
     ivec3 lut_texel = ivec3(
-        atlas_position.x % LUT_SIZE,
-        atlas_position.x / LUT_SIZE,
-        atlas_position.y - first_row
+        atlas_position.x % FORWARD_LUT_SIZE,
+        atlas_position.x / FORWARD_LUT_SIZE,
+        atlas_position.y - RGB_TO_LAB_ROW
     );
-    return vec3(lut_texel) / float(LUT_LAST);
+    return vec3(lut_texel) / float(FORWARD_LUT_LAST);
+}
+
+vec3 atlas_to_LAB_lut_coordinates(ivec2 atlas_position) {
+    ivec3 lut_texel = ivec3(
+        atlas_position.y - LAB_TO_RGB_ROW,
+        atlas_position.x % REVERSE_CHROMA_LUT_SIZE,
+        atlas_position.x / REVERSE_CHROMA_LUT_SIZE
+    );
+    return vec3(
+        float(lut_texel.x) / float(REVERSE_LIGHTNESS_LUT_LAST),
+        float(lut_texel.y) / float(REVERSE_CHROMA_LUT_LAST),
+        float(lut_texel.z) / float(REVERSE_CHROMA_LUT_LAST)
+    );
 }
 
 void store_atlas(ivec2 atlas_position, vec3 value) {
@@ -2058,19 +2079,13 @@ void store_atlas(ivec2 atlas_position, vec3 value) {
 }
 
 void generate_RGB_to_LAB_lut(ivec2 atlas_position) {
-    vec3 coordinates = atlas_to_lut_coordinates(
-        atlas_position,
-        RGB_TO_LAB_ROW
-    );
+    vec3 coordinates = atlas_to_RGB_lut_coordinates(atlas_position);
     vec3 rgb = lut_coordinates_to_RGB(coordinates);
     store_atlas(atlas_position, RGB_to_Jab(rgb));
 }
 
 void generate_LAB_to_RGB_lut(ivec2 atlas_position) {
-    vec3 coordinates = atlas_to_lut_coordinates(
-        atlas_position,
-        LAB_TO_RGB_ROW
-    );
+    vec3 coordinates = atlas_to_LAB_lut_coordinates(atlas_position);
     vec3 lab = lut_coordinates_to_LAB(coordinates);
     store_atlas(atlas_position, Jab_to_RGB(lab));
 }
@@ -2097,7 +2112,7 @@ void generate_curve_lut(ivec2 atlas_position) {
 }
 
 void generate_lut_atlas_texel(ivec2 atlas_position) {
-    if (atlas_position.x >= LUT_SIZE * LUT_SIZE ||
+    if (atlas_position.x >= LUT_ATLAS_WIDTH ||
         atlas_position.y > CURVE_ROW) {
         return;
     }
@@ -2299,13 +2314,20 @@ void hook() {
 //!BIND METADATA
 //!DESC tone mapping (LUT application)
 
-// LUT atlas layout: two flattened 65^3 LUTs followed by one 1024-point row.
-const int LUT_SIZE = 65;
-const int LUT_LAST = LUT_SIZE - 1;
+// LUT atlas layout: a flattened 65^3 RGB-to-Jab LUT, a 129x65x65
+// Jab-to-RGB LUT with J stored in rows, and one 1024-point curve row.
+const int FORWARD_LUT_SIZE = 65;
+const int FORWARD_LUT_LAST = FORWARD_LUT_SIZE - 1;
+const int REVERSE_LIGHTNESS_LUT_SIZE = 129;
+const int REVERSE_LIGHTNESS_LUT_LAST = REVERSE_LIGHTNESS_LUT_SIZE - 1;
+const int REVERSE_CHROMA_LUT_SIZE = 65;
+const int REVERSE_CHROMA_LUT_LAST = REVERSE_CHROMA_LUT_SIZE - 1;
 const int RGB_TO_LAB_ROW = 0;
-const int LAB_TO_RGB_ROW = LUT_SIZE;
-const int CURVE_ROW = LUT_SIZE * 2;
+const int LAB_TO_RGB_ROW = RGB_TO_LAB_ROW + FORWARD_LUT_SIZE;
+const int CURVE_ROW = LAB_TO_RGB_ROW + REVERSE_LIGHTNESS_LUT_SIZE;
 const int CURVE_SIZE = 1024;
+const int RGB_TO_LAB_LUT = 0;
+const int LAB_TO_RGB_LUT = 1;
 
 // LAB chroma-coordinate shaper: the scale concentrates precision near neutral,
 // while the limits define the representable ranges of the a/L and b/L ratios.
@@ -2330,11 +2352,19 @@ vec3 fetch_atlas_raw(ivec2 position) {
     return texelFetch(LUTS_raw, position, 0).rgb;
 }
 
-vec3 fetch_lut3d_raw(int first_row, ivec3 texel) {
-    ivec2 atlas_position = ivec2(
-        texel.x + texel.y * LUT_SIZE,
-        first_row + texel.z
-    );
+vec3 fetch_lut3d_raw(int lut, ivec3 texel) {
+    ivec2 atlas_position;
+    if (lut == RGB_TO_LAB_LUT) {
+        atlas_position = ivec2(
+            texel.x + texel.y * FORWARD_LUT_SIZE,
+            RGB_TO_LAB_ROW + texel.z
+        );
+    } else {
+        atlas_position = ivec2(
+            texel.y + texel.z * REVERSE_CHROMA_LUT_SIZE,
+            LAB_TO_RGB_ROW + texel.x
+        );
+    }
     return fetch_atlas_raw(atlas_position);
 }
 
@@ -2377,8 +2407,15 @@ void select_tetrahedron(
     }
 }
 
-vec3 sample_lut_tetrahedral(vec3 lut_coordinates, int first_row) {
-    vec3 position = clamp(lut_coordinates, 0.0, 1.0) * float(LUT_LAST);
+vec3 sample_lut_tetrahedral(vec3 lut_coordinates, int lut) {
+    ivec3 last_texel = lut == RGB_TO_LAB_LUT
+        ? ivec3(FORWARD_LUT_LAST)
+        : ivec3(
+            REVERSE_LIGHTNESS_LUT_LAST,
+            REVERSE_CHROMA_LUT_LAST,
+            REVERSE_CHROMA_LUT_LAST
+        );
+    vec3 position = clamp(lut_coordinates, 0.0, 1.0) * vec3(last_texel);
     ivec3 base_texel = ivec3(floor(position));
     vec3 fraction = fract(position);
 
@@ -2387,16 +2424,15 @@ vec3 sample_lut_tetrahedral(vec3 lut_coordinates, int first_row) {
     vec3 weights;
     select_tetrahedron(fraction, second_offset, third_offset, weights);
 
-    ivec3 last_texel = ivec3(LUT_LAST);
     ivec3 texel0 = base_texel;
     ivec3 texel1 = min(base_texel + second_offset, last_texel);
     ivec3 texel2 = min(base_texel + third_offset, last_texel);
     ivec3 texel3 = min(base_texel + ivec3(1), last_texel);
 
-    vec3 value0 = fetch_lut3d_raw(first_row, texel0);
-    vec3 value1 = fetch_lut3d_raw(first_row, texel1);
-    vec3 value2 = fetch_lut3d_raw(first_row, texel2);
-    vec3 value3 = fetch_lut3d_raw(first_row, texel3);
+    vec3 value0 = fetch_lut3d_raw(lut, texel0);
+    vec3 value1 = fetch_lut3d_raw(lut, texel1);
+    vec3 value2 = fetch_lut3d_raw(lut, texel2);
+    vec3 value3 = fetch_lut3d_raw(lut, texel3);
 
     vec3 interpolated = value0
                       + weights.x * (value1 - value0)
@@ -2435,7 +2471,7 @@ vec3 LAB_to_lut_coordinates(vec3 lab) {
 
 vec3 RGB_to_LAB(vec3 rgb) {
     vec3 coordinates = RGB_to_lut_coordinates(rgb);
-    return sample_lut_tetrahedral(coordinates, RGB_TO_LAB_ROW);
+    return sample_lut_tetrahedral(coordinates, RGB_TO_LAB_LUT);
 }
 
 vec3 apply_exposure(vec3 rgb) {
@@ -2444,7 +2480,7 @@ vec3 apply_exposure(vec3 rgb) {
 
 vec3 LAB_to_RGB(vec3 lab) {
     vec3 coordinates = LAB_to_lut_coordinates(lab);
-    return sample_lut_tetrahedral(coordinates, LAB_TO_RGB_ROW);
+    return sample_lut_tetrahedral(coordinates, LAB_TO_RGB_LUT);
 }
 
 float curve(float x) {
@@ -2558,7 +2594,7 @@ float pq_eotf_inv(float x) {
 const float m2_z = 1.7 * m2;
 const float d = -0.56;
 const float d0 = 1.6295499532821566e-11;
-const int PREVIEW_CURVE_ROW = 130;
+const int PREVIEW_CURVE_ROW = 194;
 const int PREVIEW_CURVE_SIZE = 1024;
 
 float iz_eotf_inv(float x) {
