@@ -209,6 +209,8 @@
 //!VAR float input_avg_i
 //!VAR float ev
 //!VAR float exposure_scale
+//!VAR float output_black_j
+//!VAR float output_white_j
 //!STORAGE
 
 //!BUFFER VECTORSCOPE
@@ -1855,8 +1857,16 @@ void publish_input_metering_metadata(MeteringMetrics metrics) {
     input_avg_i = metrics.average;
 }
 
+void publish_output_lightness_range() {
+    output_black_j = I_to_J(
+        iz_eotf_inv(reference_white / contrast_ratio)
+    );
+    output_white_j = I_to_J(iz_eotf_inv(reference_white));
+}
+
 void update_metering_metadata() {
     prepare_curve_temporal();
+    publish_output_lightness_range();
 
     MeteringMetrics metrics = resolve_metering_metrics();
     publish_input_metering_metadata(metrics);
@@ -2302,8 +2312,8 @@ float f(float x, float iw, float ib, float ow, float ob) {
 }
 
 float curve(float x) {
-    float ow = I_to_J(iz_eotf_inv(reference_white));
-    float ob = I_to_J(iz_eotf_inv(reference_white / contrast_ratio));
+    float ow = output_white_j;
+    float ob = output_black_j;
     float iw = I_to_J(iz_eotf_inv(pq_eotf(max_i)));
     float ib = I_to_J(iz_eotf_inv(pq_eotf(min_i)));
 
@@ -2317,8 +2327,8 @@ float curve(float x) {
 
 // LUT atlas layout: a flattened 65^3 RGB-to-Jab LUT, a 129x65x65
 // Jab-to-RGB LUT, and one 1024-point curve row. The reverse LUT stores its
-// higher-resolution J axis in atlas rows while a/b share the flattened axis,
-// keeping the atlas width at 65^2 texels.
+// higher-resolution J axis in atlas rows and spans the tone-mapped output
+// range, while a/b share the flattened axis to keep the atlas 65^2 texels wide.
 const int FORWARD_LUT_SIZE = 65;
 const int FORWARD_LUT_LAST = FORWARD_LUT_SIZE - 1;
 const int REVERSE_LIGHTNESS_LUT_SIZE = 129;
@@ -2351,7 +2361,11 @@ float decode_signed_coordinate(float coordinate, float limit) {
 }
 
 vec3 lut_coordinates_to_LAB(vec3 coordinates) {
-    float L = clamp(coordinates.x, 0.0, 1.0);
+    float L = mix(
+        output_black_j,
+        output_white_j,
+        clamp(coordinates.x, 0.0, 1.0)
+    );
     float a_ratio = decode_signed_coordinate(coordinates.y, A_RATIO_LIMIT);
     float b_ratio = decode_signed_coordinate(coordinates.z, B_RATIO_LIMIT);
     return vec3(L, a_ratio * L, b_ratio * L);
@@ -2625,7 +2639,8 @@ void hook() {
 //!DESC tone mapping (LUT application)
 
 // LUT atlas layout: a flattened 65^3 RGB-to-Jab LUT, a 129x65x65
-// Jab-to-RGB LUT with J stored in rows, and one 1024-point curve row.
+// Jab-to-RGB LUT with its tone-mapped J range stored in rows, and one
+// 1024-point curve row.
 const int FORWARD_LUT_SIZE = 65;
 const int FORWARD_LUT_LAST = FORWARD_LUT_SIZE - 1;
 const int REVERSE_LIGHTNESS_LUT_SIZE = 129;
@@ -2760,6 +2775,11 @@ float encode_signed_coordinate(float value, float limit) {
     return clamp(0.5 + 0.5 * signed_magnitude, 0.0, 1.0);
 }
 
+float encode_output_lightness(float lightness) {
+    float range = max(output_white_j - output_black_j, 1e-6);
+    return clamp((lightness - output_black_j) / range, 0.0, 1.0);
+}
+
 vec3 RGB_to_lut_coordinates(vec3 rgb) {
     vec3 absolute_rgb = clamp(
         max(rgb, vec3(0.0)) * max(reference_white, 0.0),
@@ -2773,7 +2793,7 @@ vec3 LAB_to_lut_coordinates(vec3 lab) {
     float L = max(lab.x, 0.0);
     vec2 chroma_ratio = lab.yz / max(L, 1e-6);
     return vec3(
-        clamp(L, 0.0, 1.0),
+        encode_output_lightness(L),
         encode_signed_coordinate(chroma_ratio.x, A_RATIO_LIMIT),
         encode_signed_coordinate(chroma_ratio.y, B_RATIO_LIMIT)
     );
