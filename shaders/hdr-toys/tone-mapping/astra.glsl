@@ -3691,17 +3691,28 @@ vec3 composite_preview_layer(vec3 color, vec4 layer) {
 }
 
 vec2 preview_metering_position(vec2 position) {
-    // Undo the clockwise analysis rotation so overlays match portrait input.
+    // Map the current output position back into the landscape analysis map.
+    // The caller must provide HOOKED_pos: METERING_pos is already local to
+    // the bound landscape texture and is not a portrait output coordinate.
     return HOOKED_size.y > HOOKED_size.x
         ? vec2(1.0 - position.y, position.x)
         : position;
 }
 
+vec2 preview_ui_position(vec2 position) {
+    // Landscape output already matches the preview layout. Portrait output
+    // needs only a vertical UI flip; its metering-map rotation is handled
+    // independently by preview_metering_position().
+    return HOOKED_size.y > HOOKED_size.x
+        ? vec2(position.x, 1.0 - position.y)
+        : position;
+}
+
 vec4 render_metering_preview() {
     vec4 color = HOOKED_tex(HOOKED_pos);
-    vec2 px = HOOKED_pos * HOOKED_size;
+    vec2 px = preview_ui_position(HOOKED_pos) * HOOKED_size;
     float value = METERING_tex(
-        preview_metering_position(METERING_pos)
+        preview_metering_position(HOOKED_pos)
     ).x;
 
     color.rgb = composite_preview_layer(color.rgb, draw_highlights(value));
