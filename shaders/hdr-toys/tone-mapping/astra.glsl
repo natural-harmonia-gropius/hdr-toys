@@ -757,7 +757,7 @@ void hook() {
 //!WIDTH 256
 //!HEIGHT 1
 //!COMPUTE 256 1 256 1
-//!DESC metering (histogram reduction)
+//!DESC metering (histogram, reduction)
 
 const uint METERING_HISTOGRAM_SIZE = 1024u;
 const uint METERING_REDUCTION_SIZE = 256u;
@@ -887,7 +887,7 @@ void hook() { reduce_metering_histogram(); }
 //!HEIGHT 256
 //!COMPUTE 16 16 16 16
 //!WHEN auto_exposure_anchor 0 > enable_metering 1 > * avg_pq_y 0 = * scene_avg 0 = *
-//!DESC metering (avg, center-weighted partials)
+//!DESC metering (average, center-weighted partials)
 
 const uint METERING_AVERAGE_SIZE = 256u;
 const uint METERING_AVERAGE_GROUP_SIZE = 256u;
@@ -972,7 +972,7 @@ void hook() { calculate_center_weighted_average_partial(); }
 //!HEIGHT 1
 //!COMPUTE 256 1 256 1
 //!WHEN auto_exposure_anchor 0 > enable_metering 1 > * avg_pq_y 0 = * scene_avg 0 = *
-//!DESC metering (avg, reduction)
+//!DESC metering (average, reduction)
 
 const uint METERING_AVERAGE_GROUP_COUNT = 256u;
 
@@ -2164,7 +2164,7 @@ void hook() {
 //!HEIGHT 144
 //!COMPUTE 16 16 16 16
 //!WHEN preview_metering
-//!DESC metering (vectorscope, Jab projection)
+//!DESC metering (vectorscope, ab projection)
 
 // Sample Astra's original linear-RGB input sparsely, convert it with the
 // generated RGB-to-Jab LUT, and scatter its a/b projection into a compact
