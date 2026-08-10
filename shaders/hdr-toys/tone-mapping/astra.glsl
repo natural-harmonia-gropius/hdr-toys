@@ -220,7 +220,7 @@
 //!BIND HOOKED
 //!SAVE METERING
 //!COMPONENTS 1
-//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = *
+//!WHEN enable_metering 0 > max_pq_y 0 = * scene_max_r 0 = * scene_max_g 0 = * scene_max_b 0 = * preview_metering +
 //!DESC metering (intensity map)
 
 const float m1 = 2610.0 / 4096.0 / 4.0;
@@ -886,7 +886,7 @@ void hook() { reduce_metering_histogram(); }
 //!WIDTH 256
 //!HEIGHT 256
 //!COMPUTE 16 16 16 16
-//!WHEN auto_exposure_anchor 0 > enable_metering 1 > * avg_pq_y 0 = * scene_avg 0 = *
+//!WHEN auto_exposure_anchor 0 > enable_metering 1 > * avg_pq_y 0 = * scene_avg 0 = * preview_metering enable_metering 1 > * +
 //!DESC metering (average, center-weighted partials)
 
 const uint METERING_AVERAGE_SIZE = 256u;
@@ -971,7 +971,7 @@ void hook() { calculate_center_weighted_average_partial(); }
 //!WIDTH 256
 //!HEIGHT 1
 //!COMPUTE 256 1 256 1
-//!WHEN auto_exposure_anchor 0 > enable_metering 1 > * avg_pq_y 0 = * scene_avg 0 = *
+//!WHEN auto_exposure_anchor 0 > enable_metering 1 > * avg_pq_y 0 = * scene_avg 0 = * preview_metering enable_metering 1 > * +
 //!DESC metering (average, reduction)
 
 const uint METERING_AVERAGE_GROUP_COUNT = 256u;
@@ -2296,8 +2296,13 @@ void hook() {
     vec3 rgb = HOOKED_tex(HOOKED_pos).rgb;
     vec3 jab = sample_vectorscope_rgb_to_jab(rgb);
     uint index = vectorscope_bin(jab.yz);
+    vec3 positive_rgb = max(rgb, vec3(0.0));
+    float encoding_peak = max(
+        max(max(positive_rgb.r, positive_rgb.g), positive_rgb.b),
+        1.0
+    );
     uvec3 encoded_rgb = uvec3(
-        clamp(rgb, 0.0, 1.0) * VECTORSCOPE_COLOR_SCALE + 0.5
+        positive_rgb / encoding_peak * VECTORSCOPE_COLOR_SCALE + 0.5
     );
 
     // At 256x144 samples, even a single fully occupied bin remains below the
