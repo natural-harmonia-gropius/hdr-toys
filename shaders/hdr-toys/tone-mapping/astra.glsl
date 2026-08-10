@@ -216,6 +216,12 @@
 //!VAR uint vectorscope_color_b[16384]
 //!STORAGE
 
+//!BUFFER PREVIEW_HISTOGRAM
+//!VAR float preview_histogram_current[64]
+//!VAR float preview_histogram_reference[64]
+//!VAR float preview_histogram_curve[256]
+//!STORAGE
+
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!SAVE METERING
@@ -2545,36 +2551,33 @@ vec4 hook() {
 
 
 //!HOOK OUTPUT
-//!BIND HOOKED
-//!BIND METERING
 //!BIND METERED
 //!BIND METERED_TEMPORAL
 //!BIND METADATA
 //!BIND LUTS
-//!BIND VECTORSCOPE
+//!BIND PREVIEW_HISTOGRAM
+//!SAVE EMPTY
+//!WIDTH 256
+//!HEIGHT 1
+//!COMPUTE 256 1 256 1
 //!WHEN preview_metering
-//!DESC metering (preview)
+//!DESC metering (preview, histogram preparation)
 
-const float JND = 1.0 / 720.0;
+// Histogram heights are constant across each four-pixel bin, while the tone
+// curve varies once per plot column. Compute both here instead of repeating
+// histogram integration and colour-space conversion along all 256 rows.
 
-float to_float(uint x) {
-    return float(x) / 4095.0;
-}
+const uint PREVIEW_HISTOGRAM_SIZE = 64u;
+const uint PREVIEW_HISTOGRAM_RAW_SIZE = 1024u;
+const uint PREVIEW_HISTOGRAM_COLUMN_COUNT = 256u;
+const uint PREVIEW_HISTOGRAM_SAMPLE_COUNT = 512u * 288u;
+const float PREVIEW_HISTOGRAM_PLOT_WIDTH = 254.0;
 
-vec4 draw_highlights(float value) {
-    vec3 metrics = vec3(
-        to_float(metered_max_i),
-        to_float(metered_avg_i),
-        to_float(metered_min_i)
-    );
-    vec3 matches = 1.0 - step(vec3(5.0 * JND), abs(metrics - value));
-
-    if (enable_metering <= 1)
-        matches.y = 0.0;
-
-    float opacity = 0.75 * max(max(matches.x, matches.y), matches.z);
-    return vec4(matches, opacity);
-}
+const int PREVIEW_FORWARD_LUT_SIZE = 65;
+const int PREVIEW_REVERSE_LIGHTNESS_LUT_SIZE = 129;
+const int PREVIEW_CURVE_ROW = PREVIEW_FORWARD_LUT_SIZE +
+                              PREVIEW_REVERSE_LIGHTNESS_LUT_SIZE;
+const int PREVIEW_CURVE_SIZE = 1024;
 
 const float m1 = 2610.0 / 4096.0 / 4.0;
 const float m2 = 2523.0 / 4096.0 * 128.0;
@@ -2582,6 +2585,9 @@ const float c1 = 3424.0 / 4096.0;
 const float c2 = 2413.0 / 4096.0 * 32.0;
 const float c3 = 2392.0 / 4096.0 * 32.0;
 const float pw = 10000.0;
+const float m2_z = 1.7 * m2;
+const float d = -0.56;
+const float d0 = 1.6295499532821566e-11;
 
 float pq_eotf(float x) {
     float t = pow(x, 1.0 / m2);
@@ -2592,15 +2598,6 @@ float pq_eotf_inv(float x) {
     float t = pow(max(x, 0.0) / pw, m1);
     return pow((c1 + c2 * t) / (1.0 + c3 * t), m2);
 }
-
-// The 1D LUT is stored in Astra's J domain. For a neutral stimulus the H-K
-// compensation is zero, so J <-> Iz <-> absolute luminance gives its PQ-domain
-// transfer curve for direct comparison with the metering histogram.
-const float m2_z = 1.7 * m2;
-const float d = -0.56;
-const float d0 = 1.6295499532821566e-11;
-const int PREVIEW_CURVE_ROW = 194;
-const int PREVIEW_CURVE_SIZE = 1024;
 
 float iz_eotf_inv(float x) {
     float t = pow(max(x, 0.0) / pw, m1);
@@ -2620,6 +2617,9 @@ float J_to_I(float J) {
     return (J + d0) / (1.0 + d - d * (J + d0));
 }
 
+// The 1D LUT is stored in Astra's J domain. For a neutral stimulus the H-K
+// compensation is zero, so J <-> Iz <-> absolute luminance gives its PQ-domain
+// transfer curve for direct comparison with the metering histogram.
 float sample_preview_curve_j(float coordinate) {
     float position = clamp(coordinate, 0.0, 1.0) *
                      float(PREVIEW_CURVE_SIZE - 1);
@@ -2646,37 +2646,6 @@ float preview_curve_pq(float pq_coordinate) {
     float absolute_output = iz_eotf(J_to_I(output_j));
     return clamp(pq_eotf_inv(absolute_output), 0.0, 1.0);
 }
-
-// 3x5 bitmap font rendering
-const float CHAR_W = 3.0;
-const float CHAR_H = 5.0;
-const float SPACING = 1.0;
-const float MARGIN = 8.0;
-const float PAD = 2.0;
-const float SCALE = 4.0;
-const float LINE_H = CHAR_H + 2.0;
-
-// The preview histogram uses the same 64-bin grouping as scene-change
-// detection. Cyan bars are the current frame, the orange trace is the
-// timestamp-smoothed reference, and the yellow curve is the J-domain LUT
-// transformed onto the same PQ horizontal and vertical axes.
-const uint PREVIEW_HISTOGRAM_SIZE = 64u;
-const uint PREVIEW_HISTOGRAM_RAW_SIZE = 1024u;
-const float PREVIEW_HISTOGRAM_BIN_WIDTH = 4.0;
-const float PREVIEW_HISTOGRAM_EXTENT = 256.0;
-const uint PREVIEW_VECTORSCOPE_SIZE = 128u;
-const float PREVIEW_VECTORSCOPE_EXTENT = 256.0;
-const float PREVIEW_VECTORSCOPE_AB_RANGE = 0.36;
-const float PREVIEW_PANEL_GAP = 6.0 * SCALE;
-const float PREVIEW_VECTORSCOPE_COLOR_SCALE = 65535.0;
-
-// ITU-R BT.2525-0 HLG reference for Fitzpatrick skin types 1-4. Saturation
-// is C / Cmax, where Cmax is the largest Jzazbz chroma of the Rec. 2020
-// primaries at the 1000-nit HLG nominal peak. The report's H-K-independent
-// a/b coordinates match this vectorscope even when J compensation is active.
-const vec2 BT2525_SKIN_HUE_RANGE = vec2(35.4, 70.6);
-const vec2 BT2525_SKIN_SATURATION_RANGE = vec2(0.085, 0.281);
-const float BT2525_HLG_MAX_PRIMARY_CHROMA = 0.34074623;
 
 float preview_unexposed_pq(float exposed_pq, float inverse_exposure) {
     float absolute_exposed = pq_eotf(clamp(exposed_pq, 0.0, 1.0));
@@ -2746,6 +2715,114 @@ float preview_reference_histogram_count(
 float preview_histogram_height(float count, float total) {
     return log2(1.0 + count) / max(log2(1.0 + total), 1e-6);
 }
+
+void prepare_preview_histogram_bin(uint index) {
+    float total = float(PREVIEW_HISTOGRAM_SAMPLE_COUNT);
+    vec2 source_interval = preview_histogram_source_interval(index);
+    float current_count = preview_histogram_count(source_interval);
+    float reference_count = metered_histogram_valid > 0u
+        ? preview_reference_histogram_count(source_interval, total)
+        : current_count;
+    preview_histogram_current[index] = preview_histogram_height(
+        current_count,
+        total
+    );
+    preview_histogram_reference[index] = preview_histogram_height(
+        reference_count,
+        total
+    );
+}
+
+void prepare_preview_curve_column(uint index) {
+    float local_x = float(index) + 0.5;
+    float pq_input = clamp(
+        (local_x - 1.0) / PREVIEW_HISTOGRAM_PLOT_WIDTH,
+        0.0,
+        1.0
+    );
+    preview_histogram_curve[index] = preview_curve_pq(pq_input);
+}
+
+void hook() {
+    uint index = gl_GlobalInvocationID.x;
+    if (index < PREVIEW_HISTOGRAM_SIZE)
+        prepare_preview_histogram_bin(index);
+    if (index < PREVIEW_HISTOGRAM_COLUMN_COUNT)
+        prepare_preview_curve_column(index);
+}
+
+//!HOOK OUTPUT
+//!BIND HOOKED
+//!BIND METERING
+//!BIND METERED
+//!BIND METADATA
+//!BIND VECTORSCOPE
+//!BIND PREVIEW_HISTOGRAM
+//!WHEN preview_metering
+//!DESC metering (preview)
+
+const float JND = 1.0 / 720.0;
+
+float to_float(uint x) {
+    return float(x) / 4095.0;
+}
+
+vec4 draw_highlights(float value) {
+    vec3 metrics = vec3(
+        to_float(metered_max_i),
+        to_float(metered_avg_i),
+        to_float(metered_min_i)
+    );
+    vec3 matches = 1.0 - step(vec3(5.0 * JND), abs(metrics - value));
+
+    if (enable_metering <= 1)
+        matches.y = 0.0;
+
+    float opacity = 0.75 * max(max(matches.x, matches.y), matches.z);
+    return vec4(matches, opacity);
+}
+
+const float m1 = 2610.0 / 4096.0 / 4.0;
+const float m2 = 2523.0 / 4096.0 * 128.0;
+const float c1 = 3424.0 / 4096.0;
+const float c2 = 2413.0 / 4096.0 * 32.0;
+const float c3 = 2392.0 / 4096.0 * 32.0;
+const float pw = 10000.0;
+
+float pq_eotf(float x) {
+    float t = pow(x, 1.0 / m2);
+    return pow(max(t - c1, 0.0) / (c2 - c3 * t), 1.0 / m1) * pw;
+}
+
+// 3x5 bitmap font rendering
+const float CHAR_W = 3.0;
+const float CHAR_H = 5.0;
+const float SPACING = 1.0;
+const float MARGIN = 8.0;
+const float PAD = 2.0;
+const float SCALE = 4.0;
+const float LINE_H = CHAR_H + 2.0;
+
+// The preview histogram uses the same 64-bin grouping as scene-change
+// detection. Cyan bars are the current frame, the orange trace is the
+// timestamp-smoothed reference, and the yellow curve is the J-domain LUT
+// transformed onto the same PQ horizontal and vertical axes.
+const uint PREVIEW_HISTOGRAM_SIZE = 64u;
+const float PREVIEW_HISTOGRAM_BIN_WIDTH = 4.0;
+const float PREVIEW_HISTOGRAM_EXTENT = 256.0;
+const uint PREVIEW_VECTORSCOPE_SIZE = 128u;
+const float PREVIEW_VECTORSCOPE_EXTENT = 256.0;
+const float PREVIEW_VECTORSCOPE_AB_RANGE = 0.36;
+const float PREVIEW_PANEL_GAP = 6.0 * SCALE;
+const float PREVIEW_VECTORSCOPE_COLOR_SCALE = 65535.0;
+
+// ITU-R BT.2525-0 HLG reference for Fitzpatrick skin types 1-4. Saturation
+// is C / Cmax, where Cmax is the largest Jzazbz chroma of the Rec. 2020
+// primaries at the 1000-nit HLG nominal peak. The report's H-K-independent
+// a/b coordinates match this vectorscope even when J compensation is active.
+const vec2 BT2525_SKIN_HUE_RANGE = vec2(35.4, 70.6);
+const vec2 BT2525_SKIN_SATURATION_RANGE = vec2(0.085, 0.281);
+const float BT2525_HLG_MAX_PRIMARY_CHROMA = 0.34074623;
 
 float cross_2d(vec2 a, vec2 b) {
     return a.x * b.y - a.y * b.x;
@@ -2824,18 +2901,16 @@ vec4 draw_histogram(vec2 px) {
         uint(local.x / PREVIEW_HISTOGRAM_BIN_WIDTH),
         PREVIEW_HISTOGRAM_SIZE - 1u
     );
-    float total = max(METERING_size.x * METERING_size.y, 1.0);
-    vec2 source_interval = preview_histogram_source_interval(index);
-    float current_count = preview_histogram_count(source_interval);
-    float current_height = preview_histogram_height(current_count, total);
-    float reference_count = metered_histogram_valid > 0u
-        ? preview_reference_histogram_count(source_interval, total)
-        : current_count;
-    float reference_height = preview_histogram_height(reference_count, total);
+    uint column = min(
+        uint(floor(local.x)),
+        uint(PREVIEW_HISTOGRAM_EXTENT) - 1u
+    );
+    float current_height = preview_histogram_current[index];
+    float reference_height = preview_histogram_reference[index];
     float plot_width = PREVIEW_HISTOGRAM_EXTENT - 2.0;
     float plot_height = PREVIEW_HISTOGRAM_EXTENT - 2.0;
     float pq_input = clamp((local.x - 1.0) / plot_width, 0.0, 1.0);
-    float pq_output = preview_curve_pq(pq_input);
+    float pq_output = preview_histogram_curve[column];
     float level = 1.0 - clamp((local.y - 1.0) / plot_height, 0.0, 1.0);
 
     vec3 tint = vec3(0.0);
