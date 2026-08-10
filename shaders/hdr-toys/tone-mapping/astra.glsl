@@ -2661,8 +2661,17 @@ const float PREVIEW_HISTOGRAM_BIN_WIDTH = 4.0;
 const float PREVIEW_HISTOGRAM_EXTENT = 256.0;
 const uint PREVIEW_VECTORSCOPE_SIZE = 128u;
 const float PREVIEW_VECTORSCOPE_EXTENT = 256.0;
+const float PREVIEW_VECTORSCOPE_AB_RANGE = 0.36;
 const float PREVIEW_PANEL_GAP = 6.0 * SCALE;
 const float PREVIEW_VECTORSCOPE_COLOR_SCALE = 65535.0;
+
+// ITU-R BT.2525-0 HLG reference for Fitzpatrick skin types 1-4. Saturation
+// is C / Cmax, where Cmax is the largest Jzazbz chroma of the Rec. 2020
+// primaries at the 1000-nit HLG nominal peak. The report's H-K-independent
+// a/b coordinates match this vectorscope even when J compensation is active.
+const vec2 BT2525_SKIN_HUE_RANGE = vec2(35.4, 70.6);
+const vec2 BT2525_SKIN_SATURATION_RANGE = vec2(0.085, 0.281);
+const float BT2525_HLG_MAX_PRIMARY_CHROMA = 0.34074623;
 
 float preview_unexposed_pq(float exposed_pq, float inverse_exposure) {
     float absolute_exposed = pq_eotf(clamp(exposed_pq, 0.0, 1.0));
@@ -2731,6 +2740,64 @@ float preview_reference_histogram_count(
 
 float preview_histogram_height(float count, float total) {
     return log2(1.0 + count) / max(log2(1.0 + total), 1e-6);
+}
+
+float cross_2d(vec2 a, vec2 b) {
+    return a.x * b.y - a.y * b.x;
+}
+
+float distance_to_ray(vec2 point, vec2 direction) {
+    if (dot(point, direction) < 0.0)
+        return 1e6;
+    return abs(cross_2d(direction, point));
+}
+
+vec3 draw_skin_tone_reference(vec2 plane, float line_width) {
+    vec2 hue_range = radians(BT2525_SKIN_HUE_RANGE);
+    vec2 radius_range = BT2525_SKIN_SATURATION_RANGE *
+                        BT2525_HLG_MAX_PRIMARY_CHROMA /
+                        PREVIEW_VECTORSCOPE_AB_RANGE;
+    float radius = length(plane);
+    vec2 minimum_hue_direction = vec2(
+        cos(hue_range.x),
+        sin(hue_range.x)
+    );
+    vec2 maximum_hue_direction = vec2(
+        cos(hue_range.y),
+        sin(hue_range.y)
+    );
+    bool inside_hue = cross_2d(minimum_hue_direction, plane) >= 0.0 &&
+                      cross_2d(maximum_hue_direction, plane) <= 0.0;
+    bool inside_radius = radius >= radius_range.x &&
+                         radius <= radius_range.y;
+    float hue_edge_distance = min(
+        distance_to_ray(plane, minimum_hue_direction),
+        distance_to_ray(plane, maximum_hue_direction)
+    );
+    float radius_edge_distance = min(
+        abs(radius - radius_range.x),
+        abs(radius - radius_range.y)
+    );
+
+    vec3 tint = inside_hue && inside_radius
+        ? vec3(0.10, 0.04, 0.01)
+        : vec3(0.0);
+    if ((inside_radius && hue_edge_distance < line_width) ||
+        (inside_hue && radius_edge_distance < line_width)) {
+        tint = max(tint, vec3(0.62, 0.28, 0.07));
+    }
+
+    float center_hue = 0.5 * (hue_range.x + hue_range.y);
+    vec2 center_direction = vec2(cos(center_hue), sin(center_hue));
+    float center_distance = distance_to_ray(plane, center_direction);
+    float pixel_radius = radius * 0.5 * PREVIEW_VECTORSCOPE_EXTENT;
+    bool center_dash = fract(pixel_radius / 8.0) < 0.5;
+    if (radius <= 1.0 && center_dash &&
+        center_distance < line_width) {
+        tint = max(tint, vec3(0.82, 0.46, 0.12));
+    }
+
+    return tint;
 }
 
 vec4 draw_histogram(vec2 px) {
@@ -2839,6 +2906,7 @@ vec4 draw_vectorscope(vec2 px) {
     if (axis_distance < line_width || ring_distance < line_width)
         tint = vec3(0.10);
 
+    tint = max(tint, draw_skin_tone_reference(plane, line_width));
     tint = max(tint, trace_color * sqrt(density));
     return vec4(tint, 1.0);
 }
