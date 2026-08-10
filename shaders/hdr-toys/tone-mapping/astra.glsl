@@ -46,7 +46,7 @@
 
 //!PARAM reference_white
 //!TYPE float
-//!MINIMUM 0.0
+//!MINIMUM 1.0
 //!MAXIMUM 1000.0
 203.0
 
@@ -265,9 +265,9 @@ vec4 hook() {
 // is a factor of 7.5 per axis taken with one bilinear tap, i.e. point sampling
 // with aliasing: which pixels survive depends on the subpixel alignment, so a
 // small moving highlight makes metered_max_i jump while nothing in the scene
-// changes. Halving repeatedly instead averages exactly 2x2 per step, the same
-// way the average chain below already does it. The passes are conditional, so
-// only as many run as the source resolution needs: two at 4K, one at 1080p.
+// changes. Halving repeatedly instead averages exactly 2x2 per step before
+// the fixed-size histogram and matrix analysis. The passes are conditional,
+// so only as many run as the source resolution needs: two at 4K, one at 1080p.
 // Testing both dimensions against both landscape thresholds makes the chain
 // orientation-independent before portrait analysis is rotated below.
 
@@ -846,22 +846,22 @@ uint matrix_zone_packed_sample(uint value_code) {
     return (value_code << MATRIX_ZONE_COUNT_BITS) + 1u;
 }
 
-uint matrix_zone_bin_count(uint packed) {
-    return packed & MATRIX_ZONE_COUNT_MASK;
+uint matrix_zone_bin_count(uint packed_value) {
+    return packed_value & MATRIX_ZONE_COUNT_MASK;
 }
 
 float matrix_zone_retained_sum(
-    uint packed,
-    uint count,
+    uint packed_value,
+    uint sample_count,
     uint retained
 ) {
-    if (retained == 0u || count == 0u)
+    if (retained == 0u || sample_count == 0u)
         return 0.0;
 
-    uint value_sum = packed >> MATRIX_ZONE_COUNT_BITS;
-    float retained_fraction = retained == count
+    uint value_sum = packed_value >> MATRIX_ZONE_COUNT_BITS;
+    float retained_fraction = retained == sample_count
         ? 1.0
-        : float(retained) / float(count);
+        : float(retained) / float(sample_count);
     return float(value_sum) / MATRIX_ZONE_VALUE_SCALE *
            retained_fraction;
 }
@@ -911,9 +911,9 @@ void publish_matrix_zone(uint zone_index) {
     float sum = 0.0;
 
     for (uint i = 0u; i < MATRIX_ZONE_HISTOGRAM_SIZE; i++) {
-        uint packed = zone_histogram[i];
-        uint count = matrix_zone_bin_count(packed);
-        uint next = cumulative + count;
+        uint packed_value = zone_histogram[i];
+        uint sample_count = matrix_zone_bin_count(packed_value);
+        uint next = cumulative + sample_count;
         uint retained = retained_zone_count(
             cumulative,
             next,
@@ -921,8 +921,8 @@ void publish_matrix_zone(uint zone_index) {
             upper_target
         );
         sum += matrix_zone_retained_sum(
-            packed,
-            count,
+            packed_value,
+            sample_count,
             retained
         );
 
