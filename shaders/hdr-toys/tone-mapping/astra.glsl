@@ -170,7 +170,9 @@
 //!VAR uint metered_avg_i
 //!VAR uint metered_histogram[1024]
 //!VAR uint metered_coarse_histogram[64]
-//!VAR uint metered_center_histogram[256]
+//!VAR float metered_zone_average[144]
+//!VAR float metered_zone_spread[144]
+//!VAR uint metered_zone_valid
 //!STORAGE
 
 //!BUFFER METERED_TEMPORAL
@@ -680,8 +682,8 @@ vec4 hook() {
 void clear_metering_histogram_bin(uint index) {
     if (index < 1024u)
         metered_histogram[index] = 0u;
-    if (index < 256u)
-        metered_center_histogram[index] = 0u;
+    if (index == 0u)
+        metered_zone_valid = 0u;
 }
 
 void hook() {
@@ -766,72 +768,131 @@ void hook() {
 //!HEIGHT 144
 //!COMPUTE 16 16 16 16
 //!WHEN auto_exposure_anchor 0 > enable_metering 1 > * avg_pq_y 0 = * scene_avg 0 = * preview_metering enable_metering 1 > * +
-//!DESC metering (histogram, center-weighted)
+//!DESC metering (matrix zones)
 
-const uint CENTER_HISTOGRAM_SIZE = 256u;
-const vec2 CENTER_METERING_SIZE = vec2(256.0, 144.0);
-const float CENTER_METERING_WEIGHT_SCALE = 15.0;
+// A 256x144 analysis grid maps exactly to 16x9 workgroups. Each workgroup
+// builds a compact histogram for one image zone, then publishes a robust mean
+// and its P10-P90 spread for the matrix reduction below.
+const uint MATRIX_ZONE_COLUMNS = 16u;
+const uint MATRIX_ZONE_ROWS = 9u;
+const uint MATRIX_ZONE_COUNT = MATRIX_ZONE_COLUMNS * MATRIX_ZONE_ROWS;
+const uint MATRIX_ZONE_SAMPLE_COUNT = 16u * 16u;
+const uint MATRIX_ZONE_HISTOGRAM_SIZE = 64u;
+const float MATRIX_ZONE_TRIM_PERCENTILE = 0.05;
+const float MATRIX_ZONE_LOW_PERCENTILE = 0.10;
+const float MATRIX_ZONE_HIGH_PERCENTILE = 0.90;
+const vec2 MATRIX_METERING_SIZE = vec2(256.0, 144.0);
 
-shared uint center_histogram[CENTER_HISTOGRAM_SIZE];
+shared uint zone_histogram[MATRIX_ZONE_HISTOGRAM_SIZE];
 
-uint center_histogram_bin(float value) {
+uint matrix_zone_histogram_bin(float value) {
     return min(
         uint(clamp(value, 0.0, 1.0) *
-             float(CENTER_HISTOGRAM_SIZE - 1u) + 0.5),
-        CENTER_HISTOGRAM_SIZE - 1u
+             float(MATRIX_ZONE_HISTOGRAM_SIZE - 1u) + 0.5),
+        MATRIX_ZONE_HISTOGRAM_SIZE - 1u
     );
 }
 
-float sample_center_metering(vec2 position) {
+float sample_matrix_metering(vec2 position) {
     return (
         METERING_mul * textureLod(METERING_raw, position, 0.0)
     ).x;
 }
 
-uint center_metering_weight(vec2 position) {
-    // A smooth, inspectable center prior replaces the previous coordinate
-    // warp. The non-zero floor keeps every part of the frame represented;
-    // weights range from 16 at the center to 2 at the corners.
-    vec2 centered = 2.0 * position - vec2(1.0);
-    float emphasis = exp2(-2.0 * dot(centered, centered));
-    return 1u + uint(CENTER_METERING_WEIGHT_SCALE * emphasis + 0.5);
+void clear_zone_histogram(uint tid) {
+    if (tid < MATRIX_ZONE_HISTOGRAM_SIZE)
+        zone_histogram[tid] = 0u;
 }
 
-void clear_center_workgroup_histogram(uint tid) {
-    center_histogram[tid] = 0u;
-}
-
-void accumulate_center_workgroup_histogram(
-    float value,
-    uint weight
+uint retained_zone_count(
+    uint cumulative_before,
+    uint cumulative,
+    uint lower_target,
+    uint upper_target
 ) {
-    atomicAdd(center_histogram[center_histogram_bin(value)], weight);
+    uint first = max(cumulative_before, lower_target);
+    uint last = min(cumulative, upper_target);
+    return last > first ? last - first : 0u;
 }
 
-void merge_center_workgroup_histogram(uint tid) {
-    uint count = center_histogram[tid];
-    if (count > 0u)
-        atomicAdd(metered_center_histogram[tid], count);
+void publish_matrix_zone(uint zone_index) {
+    uint trim = uint(floor(
+        float(MATRIX_ZONE_SAMPLE_COUNT) * MATRIX_ZONE_TRIM_PERCENTILE
+    ));
+    uint lower_target = trim;
+    uint upper_target = MATRIX_ZONE_SAMPLE_COUNT - trim;
+    uint low_target = max(
+        uint(ceil(float(MATRIX_ZONE_SAMPLE_COUNT) *
+                  MATRIX_ZONE_LOW_PERCENTILE)),
+        1u
+    );
+    uint high_target = max(
+        uint(ceil(float(MATRIX_ZONE_SAMPLE_COUNT) *
+                  MATRIX_ZONE_HIGH_PERCENTILE)),
+        1u
+    );
+
+    uint cumulative = 0u;
+    uint low_bin = 0u;
+    uint high_bin = MATRIX_ZONE_HISTOGRAM_SIZE - 1u;
+    float sum = 0.0;
+
+    for (uint i = 0u; i < MATRIX_ZONE_HISTOGRAM_SIZE; i++) {
+        uint next = cumulative + zone_histogram[i];
+        uint retained = retained_zone_count(
+            cumulative,
+            next,
+            lower_target,
+            upper_target
+        );
+        float value = float(i) /
+                      float(MATRIX_ZONE_HISTOGRAM_SIZE - 1u);
+        sum += value * float(retained);
+
+        if (cumulative < low_target && next >= low_target)
+            low_bin = i;
+        if (cumulative < high_target && next >= high_target)
+            high_bin = i;
+
+        cumulative = next;
+    }
+
+    uint retained_total = MATRIX_ZONE_SAMPLE_COUNT - 2u * trim;
+    metered_zone_average[zone_index] = sum /
+                                       float(max(retained_total, 1u));
+    metered_zone_spread[zone_index] =
+        float(high_bin - low_bin) /
+        float(MATRIX_ZONE_HISTOGRAM_SIZE - 1u);
 }
 
-void build_center_weighted_histogram() {
+void analyze_matrix_zone() {
     uint tid = gl_LocalInvocationIndex;
     vec2 position = (vec2(gl_GlobalInvocationID.xy) + 0.5) /
-                    CENTER_METERING_SIZE;
+                    MATRIX_METERING_SIZE;
 
-    clear_center_workgroup_histogram(tid);
+    clear_zone_histogram(tid);
     barrier();
 
-    accumulate_center_workgroup_histogram(
-        sample_center_metering(position),
-        center_metering_weight(position)
+    atomicAdd(
+        zone_histogram[matrix_zone_histogram_bin(
+            sample_matrix_metering(position)
+        )],
+        1u
     );
     barrier();
 
-    merge_center_workgroup_histogram(tid);
+    if (tid == 0u) {
+        uint zone_index = gl_WorkGroupID.y * MATRIX_ZONE_COLUMNS +
+                          gl_WorkGroupID.x;
+        if (zone_index < MATRIX_ZONE_COUNT) {
+            publish_matrix_zone(zone_index);
+            if (zone_index == 0u)
+                metered_zone_valid = 1u;
+        }
+    }
 }
 
-void hook() { build_center_weighted_histogram(); }
+void hook() { analyze_matrix_zone(); }
 
 //!HOOK OUTPUT
 //!BIND METERING
@@ -848,18 +909,26 @@ const uint METERING_BINS_PER_THREAD = 4u;
 const uint METERING_COARSE_HISTOGRAM_SIZE = 64u;
 const uint METERING_BLOCKS_PER_COARSE_BIN = 4u;
 const uint METERING_SAMPLE_COUNT = 512u * 288u;
-const uint METERING_CENTER_HISTOGRAM_SIZE = 256u;
+const uint METERING_ZONE_COLUMNS = 16u;
+const uint METERING_ZONE_ROWS = 9u;
+const uint METERING_ZONE_COUNT = METERING_ZONE_COLUMNS * METERING_ZONE_ROWS;
 const float METERING_BLACK_PERCENTILE = 0.005;
 const float METERING_WHITE_PERCENTILE = 0.995;
 const float METERING_AVERAGE_TRIM_PERCENTILE = 0.05;
-const float METERING_CENTER_WEIGHT_MIN = 0.50;
-const float METERING_CENTER_WEIGHT_MAX = 0.75;
-const float METERING_CENTER_DIFFERENCE_MIN = 0.05;
-const float METERING_CENTER_DIFFERENCE_MAX = 0.20;
+const float METERING_MATRIX_WEIGHT_MIN = 0.50;
+const float METERING_MATRIX_WEIGHT_MAX = 0.75;
+const float METERING_MATRIX_DIFFERENCE_MIN = 0.05;
+const float METERING_MATRIX_DIFFERENCE_MAX = 0.20;
+const float METERING_MATRIX_SPATIAL_SCALE = 3.0;
+const float METERING_MATRIX_SPREAD_MIN = 0.06;
+const float METERING_MATRIX_SPREAD_MAX = 0.30;
+const float METERING_MATRIX_COHERENCE_MIN = 0.03;
+const float METERING_MATRIX_COHERENCE_MAX = 0.18;
 
 shared uint histogram_prefix[METERING_REDUCTION_SIZE];
-shared uint center_histogram_prefix[METERING_REDUCTION_SIZE];
-shared vec2 average_partial[METERING_REDUCTION_SIZE];
+shared float average_partial[METERING_REDUCTION_SIZE];
+shared vec2 matrix_partial[METERING_REDUCTION_SIZE];
+shared float robust_global_average;
 shared uint black_bin;
 shared uint white_bin;
 
@@ -876,25 +945,16 @@ uint sum_histogram_block(uvec4 counts) {
     return counts.x + counts.y + counts.z + counts.w;
 }
 
-void scan_histogram_blocks(
-    uint tid,
-    uint block_count,
-    uint center_count
-) {
+void scan_histogram_blocks(uint tid, uint block_count) {
     histogram_prefix[tid] = block_count;
-    center_histogram_prefix[tid] = center_count;
     barrier();
 
     for (uint offset = 1u; offset < METERING_REDUCTION_SIZE; offset <<= 1u) {
         uint inclusive = histogram_prefix[tid];
-        uint center_inclusive = center_histogram_prefix[tid];
         if (tid >= offset)
             inclusive += histogram_prefix[tid - offset];
-        if (tid >= offset)
-            center_inclusive += center_histogram_prefix[tid - offset];
         barrier();
         histogram_prefix[tid] = inclusive;
-        center_histogram_prefix[tid] = center_inclusive;
         barrier();
     }
 }
@@ -942,24 +1002,7 @@ float global_histogram_average_partial(
     return sum;
 }
 
-float center_histogram_average_partial(
-    uint tid,
-    uint count,
-    uint cumulative_before,
-    uvec2 targets
-) {
-    uint retained = retained_histogram_count(
-        cumulative_before,
-        cumulative_before + count,
-        targets.x,
-        targets.y
-    );
-    float value = float(tid) /
-                  float(METERING_CENTER_HISTOGRAM_SIZE - 1u);
-    return value * float(retained);
-}
-
-void reduce_average_partials(uint tid, vec2 partial) {
+void reduce_average_partials(uint tid, float partial) {
     average_partial[tid] = partial;
     barrier();
 
@@ -976,34 +1019,116 @@ uint pq_to_uint(float value) {
     return uint(clamp(value, 0.0, 1.0) * 4095.0 + 0.5);
 }
 
-void publish_robust_average(uint tid, uvec2 totals, uvec2 trims) {
+float matrix_zone_neighbor_difference(uint index, float value) {
+    uint x = index % METERING_ZONE_COLUMNS;
+    uint y = index / METERING_ZONE_COLUMNS;
+    float difference = 0.0;
+    uint count = 0u;
+
+    if (x > 0u) {
+        difference += abs(value - metered_zone_average[index - 1u]);
+        count++;
+    }
+    if (x + 1u < METERING_ZONE_COLUMNS) {
+        difference += abs(value - metered_zone_average[index + 1u]);
+        count++;
+    }
+    if (y > 0u) {
+        difference += abs(
+            value - metered_zone_average[index - METERING_ZONE_COLUMNS]
+        );
+        count++;
+    }
+    if (y + 1u < METERING_ZONE_ROWS) {
+        difference += abs(
+            value - metered_zone_average[index + METERING_ZONE_COLUMNS]
+        );
+        count++;
+    }
+
+    return difference / float(max(count, 1u));
+}
+
+vec2 matrix_zone_partial(uint index, float global_average) {
+    if (metered_zone_valid == 0u || index >= METERING_ZONE_COUNT)
+        return vec2(0.0);
+
+    float zone_average = metered_zone_average[index];
+    float zone_spread = metered_zone_spread[index];
+    uint x = index % METERING_ZONE_COLUMNS;
+    uint y = index / METERING_ZONE_COLUMNS;
+    vec2 position = (vec2(x, y) + 0.5) /
+                    vec2(METERING_ZONE_COLUMNS, METERING_ZONE_ROWS);
+    vec2 centered = 2.0 * position - vec2(1.0);
+    float center_emphasis = exp2(-2.0 * dot(centered, centered));
+    float difference = abs(zone_average - global_average);
+    float subject_evidence = smoothstep(
+        METERING_MATRIX_DIFFERENCE_MIN,
+        METERING_MATRIX_DIFFERENCE_MAX,
+        difference
+    );
+    float spatial_weight = 1.0 + METERING_MATRIX_SPATIAL_SCALE *
+                           center_emphasis *
+                           mix(0.5, 1.0, subject_evidence);
+
+    // Mixed zones and isolated outliers are less reliable than coherent image
+    // regions, but neither can be discarded completely.
+    float spread_reliability = 1.0 - 0.5 * smoothstep(
+        METERING_MATRIX_SPREAD_MIN,
+        METERING_MATRIX_SPREAD_MAX,
+        zone_spread
+    );
+    float neighbor_difference = matrix_zone_neighbor_difference(
+        index,
+        zone_average
+    );
+    float coherence_reliability = 1.0 - 0.5 * smoothstep(
+        METERING_MATRIX_COHERENCE_MIN,
+        METERING_MATRIX_COHERENCE_MAX,
+        neighbor_difference
+    );
+    float weight = spatial_weight * spread_reliability *
+                   coherence_reliability;
+    return vec2(zone_average * weight, weight);
+}
+
+void reduce_matrix_partials(uint tid, vec2 partial) {
+    matrix_partial[tid] = partial;
+    barrier();
+
+    for (uint size = METERING_REDUCTION_SIZE >> 1u;
+         size > 0u;
+         size >>= 1u) {
+        if (tid < size)
+            matrix_partial[tid] += matrix_partial[tid + size];
+        barrier();
+    }
+}
+
+void publish_matrix_average(uint tid) {
     if (tid != 0u)
         return;
 
-    uint global_retained = totals.x - 2u * trims.x;
-    uint center_retained = totals.y - 2u * trims.y;
-    float global_average = average_partial[0].x /
-                           float(max(global_retained, 1u));
-    float center_average = center_retained > 0u
-        ? average_partial[0].y / float(center_retained)
-        : global_average;
+    float matrix_average = matrix_partial[0].y > 0.0
+        ? matrix_partial[0].x / matrix_partial[0].y
+        : robust_global_average;
 
-    // When the center and the whole frame disagree, the center is more likely
-    // to contain an intentionally framed or backlit subject. Increase its
-    // influence smoothly while retaining at least 25% global context.
-    float difference = abs(center_average - global_average);
-    float center_confidence = smoothstep(
-        METERING_CENTER_DIFFERENCE_MIN,
-        METERING_CENTER_DIFFERENCE_MAX,
+    // A stronger matrix/global disagreement suggests an intentionally framed
+    // or backlit subject. Keep at least 25% of the whole-frame estimate so the
+    // decision cannot collapse onto a small central region.
+    float difference = abs(matrix_average - robust_global_average);
+    float matrix_confidence = smoothstep(
+        METERING_MATRIX_DIFFERENCE_MIN,
+        METERING_MATRIX_DIFFERENCE_MAX,
         difference
     );
-    float center_weight = mix(
-        METERING_CENTER_WEIGHT_MIN,
-        METERING_CENTER_WEIGHT_MAX,
-        center_confidence
+    float matrix_weight = mix(
+        METERING_MATRIX_WEIGHT_MIN,
+        METERING_MATRIX_WEIGHT_MAX,
+        matrix_confidence
     );
     metered_avg_i = pq_to_uint(
-        mix(global_average, center_average, center_weight)
+        mix(robust_global_average, matrix_average, matrix_weight)
     );
 }
 
@@ -1068,61 +1193,48 @@ void reduce_metering_histogram() {
     uint tid = gl_LocalInvocationIndex;
     uint first = tid * METERING_BINS_PER_THREAD;
     uvec4 counts = load_histogram_block(first);
-    uint center_count = metered_center_histogram[tid];
 
     if (tid == 0u) {
         black_bin = 0u;
         white_bin = METERING_HISTOGRAM_SIZE - 1u;
     }
 
-    scan_histogram_blocks(
-        tid,
-        sum_histogram_block(counts),
-        center_count
-    );
+    scan_histogram_blocks(tid, sum_histogram_block(counts));
     publish_coarse_histogram(tid);
     locate_percentiles(tid, first, counts);
 
     uint global_total = histogram_prefix[METERING_REDUCTION_SIZE - 1u];
-    uint center_total = center_histogram_prefix[
-        METERING_REDUCTION_SIZE - 1u
-    ];
     uvec2 global_targets = average_trim_targets(global_total);
-    uvec2 center_targets = average_trim_targets(center_total);
     uint global_before = tid == 0u ? 0u : histogram_prefix[tid - 1u];
-    uint center_before = tid == 0u
-        ? 0u
-        : center_histogram_prefix[tid - 1u];
 
     reduce_average_partials(
         tid,
-        vec2(
-            global_histogram_average_partial(
-                counts,
-                first,
-                global_before,
-                global_targets
-            ),
-            center_histogram_average_partial(
-                tid,
-                center_count,
-                center_before,
-                center_targets
-            )
+        global_histogram_average_partial(
+            counts,
+            first,
+            global_before,
+            global_targets
         )
     );
+
+    if (tid == 0u) {
+        uint global_retained = global_total - 2u * global_targets.x;
+        robust_global_average = average_partial[0] /
+                                float(max(global_retained, 1u));
+    }
     barrier();
+
+    reduce_matrix_partials(
+        tid,
+        matrix_zone_partial(tid, robust_global_average)
+    );
 
     if (tid == 0u) {
         metered_min_i = black_bin << 2u;
         metered_max_i = min((white_bin << 2u) + 3u, 4095u);
     }
 
-    publish_robust_average(
-        tid,
-        uvec2(global_total, center_total),
-        uvec2(global_targets.x, center_targets.x)
-    );
+    publish_matrix_average(tid);
 }
 
 void hook() { reduce_metering_histogram(); }
