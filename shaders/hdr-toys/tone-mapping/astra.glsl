@@ -2409,18 +2409,44 @@ float f_shoulder_hable(float x, float slope, float x0, float y0, float x1, float
 // (x1 + overshoot * dx, y1 + overshoot * dy), so the curve still has
 // non-zero slope at x1.  Accepts a slight slope discontinuity at x0.
 // overshoot = 0 recovers f_shoulder_hable.
-float f_shoulder_hable_overshoot(float x, float slope, float x0, float y0, float x1, float y1, float overshoot) {
+float f_shoulder_hable_overshoot(
+    float x, float slope,
+    float x0, float y0, float x1, float y1,
+    float overshoot
+) {
     float dx = x1 - x0;
     float dy = y1 - y0;
     float vx = x1 + overshoot * dx;
     float vy = y1 + overshoot * dy;
 
-    float y  = f_shoulder_hable(x,  slope, x0, y0, vx, vy);
+    float y = f_shoulder_hable(x, slope, x0, y0, vx, vy);
     float yw = f_shoulder_hable(x1, slope, x0, y0, vx, vy);
-
     float t = (y - y0) / (yw - y0);
-
     return mix(y0, y1, t);
+}
+
+// Generalized rational shoulder. In normalized coordinates t and g(t):
+//
+//   g(t) = 1 - (1 - t) / (1 + a*t)^p
+//
+// It passes through both anchors, matches the incoming slope at t = 0,
+// remains increasing beyond t = 1, and has a monotonically decreasing slope.
+// overshoot = 0 gives the Suzuki rational shoulder exactly; larger values
+// retain more slope beyond the white point without adding a separate tail.
+float f_shoulder_rational(
+    float x, float slope,
+    float x0, float y0, float x1, float y1,
+    float overshoot
+) {
+    float dx = x1 - x0;
+    float dy = y1 - y0;
+    float t = (x - x0) / dx;
+    float normalized_slope = slope * dx / dy;
+    float power = 1.0 / (1.0 + max(overshoot, 0.0));
+    float curvature = (normalized_slope - 1.0) / power;
+    float denominator = pow(1.0 + curvature * t, power);
+    float mapped = 1.0 - (1.0 - t) / denominator;
+    return y0 + dy * mapped;
 }
 
 float f(
@@ -2463,7 +2489,11 @@ float f(
             return f_linear(x, slope, intercept);
         }
 
-        return f_shoulder_hable_overshoot(x, slope, x2, y2, x3, y3, highlight_overshoot);
+        return f_shoulder_rational(
+            x, slope,
+            x2, y2, x3, y3,
+            highlight_overshoot
+        );
     }
 
     return x;
@@ -2487,7 +2517,7 @@ float curve(float x) {
 
     float y = f(x, iw, ib, ow, ob);
 
-    return clamp(y, ob, ow);
+    return y;
 }
 
 // LUT atlas layout: a flattened 65^3 RGB-to-Jab LUT, a 129x65x65
