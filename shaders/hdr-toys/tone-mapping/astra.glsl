@@ -1009,23 +1009,26 @@ void hook() { analyze_matrix_zone(); }
 //!WIDTH 256
 //!HEIGHT 1
 //!COMPUTE 256 1 256 1
-//!DESC metering (histogram, reduction)
+//!DESC metering (statistics reduction)
 
+// Histogram statistics.
 const uint METERING_HISTOGRAM_SIZE = 1024u;
 const uint METERING_REDUCTION_SIZE = 256u;
 const uint METERING_BINS_PER_THREAD = 4u;
 const uint METERING_COARSE_HISTOGRAM_SIZE = 64u;
 const uint METERING_BLOCKS_PER_COARSE_BIN = 4u;
 const uint METERING_SAMPLE_COUNT = 512u * 288u;
-const uint METERING_ZONE_COLUMNS = 16u;
-const uint METERING_ZONE_ROWS = 9u;
-const uint METERING_ZONE_COUNT = METERING_ZONE_COLUMNS * METERING_ZONE_ROWS;
 const float METERING_BLACK_PERCENTILE = 0.005;
 // A robust white point constrains automatic exposure without allowing one
 // unstable highlight sample to move the whole frame. The maximum RGB channel
 // is measured separately to define the tone-curve endpoint.
 const float METERING_WHITE_PERCENTILE = 0.995;
 const float METERING_AVERAGE_TRIM_PERCENTILE = 0.05;
+
+// Matrix refinement of the histogram-derived average.
+const uint METERING_ZONE_COLUMNS = 16u;
+const uint METERING_ZONE_ROWS = 9u;
+const uint METERING_ZONE_COUNT = METERING_ZONE_COLUMNS * METERING_ZONE_ROWS;
 const float METERING_MATRIX_WEIGHT_MIN = 0.50;
 const float METERING_MATRIX_WEIGHT_MAX = 0.75;
 const float METERING_MATRIX_DIFFERENCE_MIN = 0.05;
@@ -1046,10 +1049,11 @@ const float METERING_MATRIX_BORDER_WEIGHT = 0.95;
 
 shared uint histogram_prefix[METERING_REDUCTION_SIZE];
 shared float average_partial[METERING_REDUCTION_SIZE];
-shared vec2 matrix_partial[METERING_REDUCTION_SIZE];
-shared float robust_global_average;
+shared float histogram_average;
 shared uint black_bin;
 shared uint white_bin;
+
+shared vec2 matrix_partial[METERING_REDUCTION_SIZE];
 shared uvec4 matrix_active_bounds;
 shared float matrix_border_confidence;
 
@@ -1146,9 +1150,9 @@ uint pq_to_uint(float value) {
 bool matrix_zone_looks_like_border(uint index) {
     float black_limit = min(
         METERING_BORDER_BLACK_MAX,
-        robust_global_average * METERING_BORDER_BLACK_RELATIVE_SCALE
+        histogram_average * METERING_BORDER_BLACK_RELATIVE_SCALE
     );
-    return robust_global_average > METERING_BORDER_GLOBAL_MIN &&
+    return histogram_average > METERING_BORDER_GLOBAL_MIN &&
            metered_zone_average[index] <= black_limit &&
            metered_zone_spread[index] <= METERING_BORDER_SPREAD_MAX;
 }
@@ -1274,7 +1278,7 @@ float matrix_zone_neighbor_difference(uint index, float value) {
     return difference / float(max(count, 1u));
 }
 
-vec2 matrix_zone_partial(uint index, float global_average) {
+vec2 matrix_zone_partial(uint index, float reference_average) {
     if (metered_zone_valid == 0u || index >= METERING_ZONE_COUNT)
         return vec2(0.0);
 
@@ -1297,7 +1301,7 @@ vec2 matrix_zone_partial(uint index, float global_average) {
                     active_size;
     vec2 centered = 2.0 * position - vec2(1.0);
     float center_emphasis = exp2(-2.0 * dot(centered, centered));
-    float difference = abs(zone_average - global_average);
+    float difference = abs(zone_average - reference_average);
     float subject_evidence = smoothstep(
         METERING_MATRIX_DIFFERENCE_MIN,
         METERING_MATRIX_DIFFERENCE_MAX,
@@ -1347,12 +1351,12 @@ void publish_matrix_average(uint tid) {
 
     float matrix_average = matrix_partial[0].y > 0.0
         ? matrix_partial[0].x / matrix_partial[0].y
-        : robust_global_average;
+        : histogram_average;
 
     // A stronger matrix/global disagreement suggests an intentionally framed
     // or backlit subject. Keep at least 25% of the whole-frame estimate so the
     // decision cannot collapse onto a small central region.
-    float difference = abs(matrix_average - robust_global_average);
+    float difference = abs(matrix_average - histogram_average);
     float matrix_confidence = smoothstep(
         METERING_MATRIX_DIFFERENCE_MIN,
         METERING_MATRIX_DIFFERENCE_MAX,
@@ -1373,7 +1377,7 @@ void publish_matrix_average(uint tid) {
         matrix_border_confidence
     );
     metered_avg_i = pq_to_uint(
-        mix(robust_global_average, matrix_average, matrix_weight)
+        mix(histogram_average, matrix_average, matrix_weight)
     );
 }
 
@@ -1433,11 +1437,11 @@ void locate_percentiles(uint tid, uint first, uvec4 counts) {
     }
 }
 
-void reduce_metering_histogram() {
-    uint tid = gl_LocalInvocationIndex;
-    uint first = tid * METERING_BINS_PER_THREAD;
-    uvec4 counts = load_histogram_block(first);
-
+void reduce_histogram_statistics(
+    uint tid,
+    uint first,
+    uvec4 counts
+) {
     if (tid == 0u) {
         black_bin = 0u;
         white_bin = METERING_HISTOGRAM_SIZE - 1u;
@@ -1463,27 +1467,38 @@ void reduce_metering_histogram() {
 
     if (tid == 0u) {
         uint global_retained = global_total - 2u * global_targets.x;
-        robust_global_average = average_partial[0] /
-                                float(max(global_retained, 1u));
+        histogram_average = average_partial[0] /
+                            float(max(global_retained, 1u));
+        metered_min_i = black_bin << 2u;
+        metered_max_i = min((white_bin << 2u) + 3u, 4095u);
     }
     barrier();
+}
 
+void refine_average_with_matrix(uint tid) {
+    // Keep synchronization unconditional. D3DCompile cannot prove that an
+    // SSBO-backed validity flag is uniform across the workgroup and rejects
+    // barriers placed after an early return controlled by that flag.
     prepare_matrix_active_region(tid);
 
     reduce_matrix_partials(
         tid,
-        matrix_zone_partial(tid, robust_global_average)
+        matrix_zone_partial(tid, histogram_average)
     );
-
-    if (tid == 0u) {
-        metered_min_i = black_bin << 2u;
-        metered_max_i = min((white_bin << 2u) + 3u, 4095u);
-    }
 
     publish_matrix_average(tid);
 }
 
-void hook() { reduce_metering_histogram(); }
+void reduce_metering_statistics() {
+    uint tid = gl_LocalInvocationIndex;
+    uint first = tid * METERING_BINS_PER_THREAD;
+    uvec4 counts = load_histogram_block(first);
+
+    reduce_histogram_statistics(tid, first, counts);
+    refine_average_with_matrix(tid);
+}
+
+void hook() { reduce_metering_statistics(); }
 
 //!HOOK OUTPUT
 //!BIND METERING
