@@ -2087,7 +2087,7 @@ void hook() { update_metering_metadata(); }
 //!WIDTH 4225
 //!HEIGHT 195
 //!COMPUTE 32 8
-//!DESC tone mapping (LUT generation, astra)
+//!DESC tone mapping (astra, lut generation)
 
 const float m1 = 2610.0 / 4096.0 / 4.0;
 const float m2 = 2523.0 / 4096.0 * 128.0;
@@ -2864,7 +2864,7 @@ void hook() {
 //!BIND HOOKED
 //!BIND LUTS
 //!BIND METADATA
-//!DESC tone mapping (LUT application)
+//!DESC tone mapping (astra)
 
 // LUT atlas layout: a flattened 65^3 RGB-to-Jab LUT, a 129x65x65
 // Jab-to-RGB LUT with its tone-mapped J range stored in rows, and one
