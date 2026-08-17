@@ -173,6 +173,10 @@
 //!VAR uint metered_coarse_histogram[64]
 //!VAR float metered_zone_average[144]
 //!VAR float metered_zone_spread[144]
+//!VAR float metered_zone_weight[144]
+//!VAR float metered_histogram_average
+//!VAR float metered_matrix_average
+//!VAR float metered_matrix_blend
 //!VAR uint metered_zone_valid
 //!STORAGE
 
@@ -1376,6 +1380,11 @@ void publish_matrix_average(uint tid) {
         METERING_MATRIX_BORDER_WEIGHT,
         matrix_border_confidence
     );
+    if (preview_metering > 0u) {
+        metered_histogram_average = histogram_average;
+        metered_matrix_average = matrix_average;
+        metered_matrix_blend = matrix_weight;
+    }
     metered_avg_i = pq_to_uint(
         mix(histogram_average, matrix_average, matrix_weight)
     );
@@ -1481,10 +1490,11 @@ void refine_average_with_matrix(uint tid) {
     // barriers placed after an early return controlled by that flag.
     prepare_matrix_active_region(tid);
 
-    reduce_matrix_partials(
-        tid,
-        matrix_zone_partial(tid, histogram_average)
-    );
+    vec2 partial = matrix_zone_partial(tid, histogram_average);
+    if (preview_metering > 0u && tid < METERING_ZONE_COUNT)
+        metered_zone_weight[tid] = partial.y;
+
+    reduce_matrix_partials(tid, partial);
 
     publish_matrix_average(tid);
 }
@@ -3362,6 +3372,79 @@ const float PREVIEW_VECTORSCOPE_EXTENT = 256.0;
 const float PREVIEW_VECTORSCOPE_AB_RANGE = 0.36;
 const float PREVIEW_PANEL_GAP = 6.0 * SCALE;
 const float PREVIEW_VECTORSCOPE_COLOR_SCALE = 65535.0;
+const uvec2 PREVIEW_MATRIX_SIZE = uvec2(16u, 9u);
+const float PREVIEW_MATRIX_DIFFERENCE_RANGE = 0.20;
+const float PREVIEW_MATRIX_WEIGHT_MAX = 4.0;
+
+// Overlay the actual matrix inputs and weights on their source regions. Blue
+// zones pull the matrix estimate below the histogram average, orange zones
+// pull it above, and opacity follows their raw reduction weight. Cross-hatched
+// cells have been excluded as presentation borders.
+vec4 draw_matrix_metering(vec2 position) {
+    if (metered_zone_valid == 0u)
+        return vec4(0.0);
+
+    vec2 matrix_size = vec2(PREVIEW_MATRIX_SIZE);
+    vec2 clamped_position = clamp(
+        position,
+        vec2(0.0),
+        vec2(1.0 - 1e-6)
+    );
+    uvec2 zone = min(
+        uvec2(clamped_position * matrix_size),
+        PREVIEW_MATRIX_SIZE - uvec2(1u)
+    );
+    uint index = zone.y * PREVIEW_MATRIX_SIZE.x + zone.x;
+    float zone_average = metered_zone_average[index];
+    float zone_weight = metered_zone_weight[index];
+
+    vec2 oriented_size = HOOKED_size.y > HOOKED_size.x
+        ? HOOKED_size.yx
+        : HOOKED_size;
+    vec2 cell_position = fract(clamped_position * matrix_size);
+    vec2 cell_size = oriented_size / matrix_size;
+    vec2 edge_distance = min(cell_position, 1.0 - cell_position) *
+                         cell_size;
+    if (min(edge_distance.x, edge_distance.y) < 1.0)
+        return vec4(vec3(0.82), 0.55);
+
+    if (zone_weight <= 0.0) {
+        vec2 oriented_px = clamped_position * oriented_size;
+        float hatch = step(
+            0.5,
+            fract((oriented_px.x + oriented_px.y) / 12.0)
+        );
+        return vec4(mix(vec3(0.04), vec3(0.18), hatch), 0.32);
+    }
+
+    float signed_difference = clamp(
+        (zone_average - metered_histogram_average) /
+        PREVIEW_MATRIX_DIFFERENCE_RANGE,
+        -1.0,
+        1.0
+    );
+    vec3 neutral = vec3(0.24);
+    vec3 low = vec3(0.05, 0.30, 1.0);
+    vec3 high = vec3(1.0, 0.28, 0.04);
+    vec3 tint = mix(
+        neutral,
+        signed_difference < 0.0 ? low : high,
+        abs(signed_difference)
+    );
+    float relative_weight = clamp(
+        zone_weight / PREVIEW_MATRIX_WEIGHT_MAX,
+        0.0,
+        1.0
+    );
+    float blend_visibility = mix(
+        0.90,
+        1.0,
+        metered_matrix_blend
+    );
+    float opacity = mix(0.40, 0.72, relative_weight) *
+                    blend_visibility;
+    return vec4(tint, opacity);
+}
 
 // ITU-R BT.2525-0 HLG reference for Fitzpatrick skin types 1-4. Saturation
 // is C / Cmax, where Cmax is the largest Jzazbz chroma of the Rec. 2020
@@ -3563,9 +3646,12 @@ const int CH_COLON = 58;
 const int CH_A = 65;
 const int CH_E = 69;
 const int CH_G = 71;
+const int CH_H = 72;
 const int CH_I = 73;
 const int CH_M = 77;
 const int CH_N = 78;
+const int CH_S = 83;
+const int CH_T = 84;
 const int CH_V = 86;
 const int CH_X = 88;
 const int CH_Z = 90;
@@ -3689,11 +3775,68 @@ vec4 draw_row(float value, vec2 origin, vec2 px, int c0, int c1, int c2) {
     return r;
 }
 
+const int METRICS_ROW_COUNT = 7;
+
+float metrics_row_width(int row, float label_width) {
+    if (row == 0)
+        return label_width + pq_number_width(input_max_i);
+    if (row == 1)
+        return label_width + pq_number_width(input_min_i);
+    if (row == 2)
+        return label_width + pq_number_width(input_avg_i);
+    if (row == 3)
+        return label_width + pq_number_width(metered_histogram_average);
+    if (row == 4)
+        return label_width + pq_number_width(metered_matrix_average);
+    if (row == 5)
+        return label_width + number_width(metered_matrix_blend);
+    return label_width + number_width(ev);
+}
+
+vec4 draw_metrics_row(int row, vec2 origin, vec2 px) {
+    if (row == 0)
+        return draw_row(
+            pq_eotf(input_max_i), origin, px, CH_M, CH_A, CH_X
+        );
+    if (row == 1)
+        return draw_row(
+            pq_eotf(input_min_i), origin, px, CH_M, CH_I, CH_N
+        );
+    if (row == 2)
+        return draw_row(
+            pq_eotf(input_avg_i), origin, px, CH_A, CH_V, CH_G
+        );
+    if (row == 3)
+        return draw_row(
+            pq_eotf(metered_histogram_average),
+            origin,
+            px,
+            CH_H,
+            CH_S,
+            CH_T
+        );
+    if (row == 4)
+        return draw_row(
+            pq_eotf(metered_matrix_average),
+            origin,
+            px,
+            CH_M,
+            CH_A,
+            CH_T
+        );
+    if (row == 5)
+        return draw_row(
+            metered_matrix_blend, origin, px, CH_M, CH_I, CH_X
+        );
+    return draw_row(ev, origin, px, CH_E, CH_V, CH_SPACE);
+}
+
 vec4 draw_metrics_panel(vec2 px) {
     // The longest row contains four label characters and a signed 5.2 number.
     const float MAX_ROW_WIDTH = 13.0 * (CHAR_W + SPACING);
     float metrics_bottom = HOOKED_size.y - MARGIN * SCALE - CHAR_H * SCALE;
-    float metrics_top = metrics_bottom - 3.0 * LINE_H * SCALE;
+    float metrics_top = metrics_bottom -
+                        float(METRICS_ROW_COUNT - 1) * LINE_H * SCALE;
     float chart_stack_bottom = MARGIN * SCALE +
                                PREVIEW_HISTOGRAM_EXTENT +
                                PREVIEW_PANEL_GAP +
@@ -3701,26 +3844,24 @@ vec4 draw_metrics_panel(vec2 px) {
     float metrics_x = metrics_top - PAD * SCALE < chart_stack_bottom
         ? MARGIN * SCALE + PREVIEW_VECTORSCOPE_EXTENT + PREVIEW_PANEL_GAP
         : MARGIN * SCALE;
-    vec2 o3 = vec2(metrics_x, metrics_bottom);
-    vec2 o0 = o3 - vec2(0.0, 3.0 * LINE_H * SCALE);
+    vec2 last_origin = vec2(metrics_x, metrics_bottom);
+    vec2 o0 = last_origin - vec2(
+        0.0,
+        float(METRICS_ROW_COUNT - 1) * LINE_H * SCALE
+    );
     vec2 panel_min = o0 - vec2(PAD * SCALE);
     vec2 panel_max = vec2(
         o0.x + (MAX_ROW_WIDTH + PAD) * SCALE,
-        o3.y + (CHAR_H + PAD) * SCALE
+        last_origin.y + (CHAR_H + PAD) * SCALE
     );
 
     if (any(lessThan(px, panel_min)) || any(greaterThan(px, panel_max)))
         return vec4(0.0);
 
     float label_width = 4.0 * (CHAR_W + SPACING);
-    vec4 row_widths = label_width + vec4(
-        pq_number_width(input_max_i),
-        pq_number_width(input_min_i),
-        pq_number_width(input_avg_i),
-        number_width(ev)
-    );
-    float max_w = max(max(row_widths.x, row_widths.y),
-                      max(row_widths.z, row_widths.w));
+    float max_w = 0.0;
+    for (int i = 0; i < METRICS_ROW_COUNT; i++)
+        max_w = max(max_w, metrics_row_width(i, label_width));
 
     if (px.x > o0.x + (max_w + PAD) * SCALE)
         return vec4(0.0);
@@ -3729,20 +3870,14 @@ vec4 draw_metrics_panel(vec2 px) {
     float row_stride = LINE_H * SCALE;
     int row = int(floor((px.y - o0.y) / row_stride));
 
-    if (row >= 0 && row < 4) {
+    if (row >= 0 && row < METRICS_ROW_COUNT) {
         vec2 origin = o0 + vec2(0.0, float(row) * row_stride);
         vec2 local = px - origin;
+        float row_width = metrics_row_width(row, label_width);
 
-        if (local.x >= 0.0 && local.x < row_widths[row] * SCALE &&
+        if (local.x >= 0.0 && local.x < row_width * SCALE &&
             local.y >= 0.0 && local.y < CHAR_H * SCALE) {
-            if (row == 0)
-                r = max(r, draw_row(pq_eotf(input_max_i), origin, px, CH_M, CH_A, CH_X));
-            else if (row == 1)
-                r = max(r, draw_row(pq_eotf(input_min_i), origin, px, CH_M, CH_I, CH_N));
-            else if (row == 2)
-                r = max(r, draw_row(pq_eotf(input_avg_i), origin, px, CH_A, CH_V, CH_G));
-            else
-                r = max(r, draw_row(ev, origin, px, CH_E, CH_V, CH_SPACE));
+            r = max(r, draw_metrics_row(row, origin, px));
         }
     }
 
@@ -3774,10 +3909,13 @@ vec2 preview_ui_position(vec2 position) {
 vec4 render_metering_preview() {
     vec4 color = HOOKED_tex(HOOKED_pos);
     vec2 px = preview_ui_position(HOOKED_pos) * HOOKED_size;
-    float value = METERING_tex(
-        preview_metering_position(HOOKED_pos)
-    ).x;
+    vec2 metering_position = preview_metering_position(HOOKED_pos);
+    float value = METERING_tex(metering_position).x;
 
+    color.rgb = composite_preview_layer(
+        color.rgb,
+        draw_matrix_metering(metering_position)
+    );
     color.rgb = composite_preview_layer(color.rgb, draw_highlights(value));
     color.rgb = composite_preview_layer(color.rgb, draw_histogram(px));
     color.rgb = composite_preview_layer(color.rgb, draw_vectorscope(px));
