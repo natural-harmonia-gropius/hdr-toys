@@ -173,7 +173,6 @@
 //!VAR uint metered_coarse_histogram[64]
 //!VAR float metered_zone_average[144]
 //!VAR float metered_zone_spread[144]
-//!VAR float metered_zone_weight[144]
 //!VAR float metered_histogram_average
 //!VAR float metered_matrix_average
 //!VAR float metered_matrix_blend
@@ -1491,8 +1490,13 @@ void refine_average_with_matrix(uint tid) {
     prepare_matrix_active_region(tid);
 
     vec2 partial = matrix_zone_partial(tid, histogram_average);
-    if (preview_metering > 0u && tid < METERING_ZONE_COUNT)
-        metered_zone_weight[tid] = partial.y;
+    if (preview_metering > 0u && tid < METERING_ZONE_COUNT) {
+        // matrix_zone_partial() has already consumed every zone's spread, so
+        // the preview weight can safely reuse its storage without another
+        // buffer, binding, or synchronization point. The next frame's matrix
+        // pass writes fresh spread values before reduction reads them again.
+        metered_zone_spread[tid] = partial.y;
+    }
 
     reduce_matrix_partials(tid, partial);
 
@@ -3396,7 +3400,9 @@ vec4 draw_matrix_metering(vec2 position) {
     );
     uint index = zone.y * PREVIEW_MATRIX_SIZE.x + zone.x;
     float zone_average = metered_zone_average[index];
-    float zone_weight = metered_zone_weight[index];
+    // In preview mode the statistics pass repurposes the spread slot as the
+    // resolved zone weight after all spread-dependent calculations finish.
+    float zone_weight = metered_zone_spread[index];
 
     vec2 oriented_size = HOOKED_size.y > HOOKED_size.x
         ? HOOKED_size.yx
