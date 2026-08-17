@@ -219,10 +219,7 @@
 //!STORAGE
 
 //!BUFFER VECTORSCOPE
-//!VAR uint vectorscope_histogram[16384]
-//!VAR uint vectorscope_color_r[16384]
-//!VAR uint vectorscope_color_g[16384]
-//!VAR uint vectorscope_color_b[16384]
+//!VAR uint vectorscope_histogram[9216]
 //!STORAGE
 
 //!BUFFER PREVIEW_HISTOGRAM
@@ -2695,13 +2692,13 @@ void hook() {
 //!BIND VECTORSCOPE
 //!SAVE EMPTY
 //!COMPONENTS 1
-//!WIDTH 128
-//!HEIGHT 128
+//!WIDTH 96
+//!HEIGHT 96
 //!COMPUTE 16 16 16 16
 //!WHEN preview_metering
 //!DESC metering (vectorscope, init)
 
-const uint VECTORSCOPE_SIZE = 128u;
+const uint VECTORSCOPE_SIZE = 96u;
 
 void hook() {
     uvec2 position = gl_GlobalInvocationID.xy;
@@ -2710,9 +2707,6 @@ void hook() {
 
     uint index = position.y * VECTORSCOPE_SIZE + position.x;
     vectorscope_histogram[index] = 0u;
-    vectorscope_color_r[index] = 0u;
-    vectorscope_color_g[index] = 0u;
-    vectorscope_color_b[index] = 0u;
 }
 
 //!HOOK OUTPUT
@@ -2734,9 +2728,8 @@ void hook() {
 const int VECTORSCOPE_LUT_SIZE = 65;
 const int VECTORSCOPE_LUT_LAST = VECTORSCOPE_LUT_SIZE - 1;
 const int VECTORSCOPE_RGB_TO_LAB_ROW = 0;
-const uint VECTORSCOPE_SIZE = 128u;
+const uint VECTORSCOPE_SIZE = 96u;
 const float VECTORSCOPE_AB_RANGE = 0.36;
-const float VECTORSCOPE_COLOR_SCALE = 65535.0;
 
 const float m1 = 2610.0 / 4096.0 / 4.0;
 const float m2 = 2523.0 / 4096.0 * 128.0;
@@ -2857,21 +2850,9 @@ void hook() {
     vec3 rgb = HOOKED_tex(HOOKED_pos).rgb;
     vec3 jab = sample_vectorscope_rgb_to_jab(rgb);
     uint index = vectorscope_bin(jab.yz);
-    vec3 positive_rgb = max(rgb, vec3(0.0));
-    float encoding_peak = max(
-        max(max(positive_rgb.r, positive_rgb.g), positive_rgb.b),
-        1.0
-    );
-    uvec3 encoded_rgb = uvec3(
-        positive_rgb / encoding_peak * VECTORSCOPE_COLOR_SCALE + 0.5
-    );
-
-    // At 256x144 samples, even a single fully occupied bin remains below the
-    // uint limit with 16-bit channel sums.
+    // Keep only density. The preview derives a stable display hue from each
+    // bin's a/b position, avoiding three full-size channel-sum arrays.
     atomicAdd(vectorscope_histogram[index], 1u);
-    atomicAdd(vectorscope_color_r[index], encoded_rgb.r);
-    atomicAdd(vectorscope_color_g[index], encoded_rgb.g);
-    atomicAdd(vectorscope_color_b[index], encoded_rgb.b);
 }
 
 //!HOOK OUTPUT
@@ -3371,11 +3352,10 @@ const float LINE_H = CHAR_H + 2.0;
 const uint PREVIEW_HISTOGRAM_SIZE = 64u;
 const float PREVIEW_HISTOGRAM_BIN_WIDTH = 4.0;
 const float PREVIEW_HISTOGRAM_EXTENT = 256.0;
-const uint PREVIEW_VECTORSCOPE_SIZE = 128u;
+const uint PREVIEW_VECTORSCOPE_SIZE = 96u;
 const float PREVIEW_VECTORSCOPE_EXTENT = 256.0;
 const float PREVIEW_VECTORSCOPE_AB_RANGE = 0.36;
 const float PREVIEW_PANEL_GAP = 6.0 * SCALE;
-const float PREVIEW_VECTORSCOPE_COLOR_SCALE = 65535.0;
 const uvec2 PREVIEW_MATRIX_SIZE = uvec2(16u, 9u);
 const float PREVIEW_MATRIX_DIFFERENCE_RANGE = 0.20;
 const float PREVIEW_MATRIX_WEIGHT_MAX = 4.0;
@@ -3570,6 +3550,27 @@ vec4 draw_histogram(vec2 px) {
     return vec4(tint, 1.0);
 }
 
+vec3 vectorscope_trace_color(vec2 plane) {
+    float radius = length(plane);
+    if (radius < 1e-4)
+        return vec3(1.0);
+
+    // Interpolate four perceptual opponent-axis colours. This is deliberately
+    // derived from the bin position instead of accumulated source RGB, keeping
+    // the density buffer single-channel while retaining an intuitive hue cue.
+    vec2 direction = plane / radius;
+    vec4 axis_weight = max(
+        vec4(direction.x, direction.y, -direction.x, -direction.y),
+        vec4(0.0)
+    );
+    vec3 color = axis_weight.x * vec3(1.00, 0.10, 0.04)
+               + axis_weight.y * vec3(1.00, 0.72, 0.04)
+               + axis_weight.z * vec3(0.04, 0.82, 0.48)
+               + axis_weight.w * vec3(0.08, 0.24, 1.00);
+    float peak = max(max(color.r, color.g), color.b);
+    return color / max(peak, 1e-4);
+}
+
 vec4 draw_vectorscope(vec2 px) {
     vec2 origin = vec2(
         MARGIN * SCALE,
@@ -3595,24 +3596,9 @@ vec4 draw_vectorscope(vec2 px) {
     uint index = bin.y * PREVIEW_VECTORSCOPE_SIZE + bin.x;
     float count = float(vectorscope_histogram[index]);
     float density = clamp(log2(1.0 + count) / 8.0, 0.0, 1.0);
-    vec3 color_sum = vec3(
-        vectorscope_color_r[index],
-        vectorscope_color_g[index],
-        vectorscope_color_b[index]
-    );
-    vec3 average_color = color_sum / max(
-        count * PREVIEW_VECTORSCOPE_COLOR_SCALE,
-        1.0
-    );
-    float color_peak = max(
-        max(average_color.r, average_color.g),
-        average_color.b
-    );
-    vec3 trace_color = color_peak > 1e-4
-        ? average_color / color_peak
-        : vec3(1.0);
 
     vec2 plane = vec2(2.0 * unit.x - 1.0, 1.0 - 2.0 * unit.y);
+    vec3 trace_color = vectorscope_trace_color(plane);
     float radius = length(plane);
     float line_width = 2.0 / PREVIEW_VECTORSCOPE_EXTENT;
     float axis_distance = min(abs(plane.x), abs(plane.y));
