@@ -793,10 +793,16 @@ void accumulate_workgroup_metering(vec4 intensities, vec4 maxima) {
     atomicAdd(shistogram[to_histogram_bin(intensities.y)], 1u);
     atomicAdd(shistogram[to_histogram_bin(intensities.z)], 1u);
     atomicAdd(shistogram[to_histogram_bin(intensities.w)], 1u);
+    float maximum = clamp(
+        max(max(maxima.x, maxima.y), max(maxima.z, maxima.w)),
+        0.0,
+        1.0
+    );
+    // Positive IEEE-754 floats have the same ordering as their uint bit
+    // patterns, so atomicMax retains full float precision across workgroups.
     atomicMax(
         smax_rgb,
-        max(max(to_uint(maxima.x), to_uint(maxima.y)),
-            max(to_uint(maxima.z), to_uint(maxima.w)))
+        floatBitsToUint(maximum)
     );
 }
 
@@ -1883,7 +1889,7 @@ MeteringMetrics resolve_metering_metrics() {
             max(max(scene_max_rgb.r, scene_max_rgb.g), scene_max_rgb.b)
         );
     else if (use_measured)
-        metrics.max_rgb = to_float(metered_max_rgb);
+        metrics.max_rgb = uintBitsToFloat(metered_max_rgb);
     else
         metrics.max_rgb = metrics.maximum;
 
