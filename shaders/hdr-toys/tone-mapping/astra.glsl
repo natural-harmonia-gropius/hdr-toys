@@ -3675,25 +3675,19 @@ bool glyph_pixel(uint glyph, vec2 p) {
     return (glyph & (1u << bit)) != 0u;
 }
 
-vec4 draw_char(int ch, vec2 local, inout float cx) {
-    vec2 cp = local - vec2(cx, 0.0);
-    cx += CHAR_W + SPACING;
-    if (cp.x >= 0.0 && cp.x < CHAR_W && cp.y >= 0.0 && cp.y < CHAR_H) {
-        if (glyph_pixel(get_glyph(ch), cp))
-            return vec4(1.0, 1.0, 1.0, 1.0);
-    }
-    return vec4(0.0);
-}
-
-float number_width(float value) {
-    float abs_val = min(abs(value), 99999.99);
-    uint int_part = uint(abs_val * 100.0 + 0.5) / 100u;
-
+uint integer_digit_count(uint int_part) {
     uint digits = 1u;
     if      (int_part >= 10000u) digits = 5u;
     else if (int_part >= 1000u)  digits = 4u;
     else if (int_part >= 100u)   digits = 3u;
     else if (int_part >= 10u)    digits = 2u;
+    return digits;
+}
+
+float number_width(float value) {
+    float abs_val = min(abs(value), 99999.99);
+    uint int_part = uint(abs_val * 100.0 + 0.5) / 100u;
+    uint digits = integer_digit_count(int_part);
 
     float characters = float(digits + 3u) + (value < 0.0 ? 1.0 : 0.0);
     return characters * (CHAR_W + SPACING);
@@ -3712,46 +3706,48 @@ float pq_number_width(float value) {
     return (digits + 3.0) * (CHAR_W + SPACING);
 }
 
-vec4 draw_number(float value, vec2 local, inout float cx) {
+uint decimal_divisor(uint position_from_right) {
+    if (position_from_right == 4u) return 10000u;
+    if (position_from_right == 3u) return 1000u;
+    if (position_from_right == 2u) return 100u;
+    if (position_from_right == 1u) return 10u;
+    return 1u;
+}
+
+// Resolve only the character covered by this fragment. Drawing every
+// character and compositing the results produced equivalent pixels, but its
+// repeated glyph lookups caused D3DCompiler's inliner to grow exponentially.
+int number_character(float value, int index) {
     bool negative = value < 0.0;
     float abs_val = min(abs(value), 99999.99);
-
     uint fixed_value = uint(abs_val * 100.0 + 0.5);
     uint int_part = fixed_value / 100u;
     uint dec_part = fixed_value - int_part * 100u;
+    uint digits = integer_digit_count(int_part);
 
-    uint d0 = (int_part / 10000u) % 10u;
-    uint d1 = (int_part / 1000u) % 10u;
-    uint d2 = (int_part / 100u) % 10u;
-    uint d3 = (int_part / 10u) % 10u;
-    uint d4 = int_part % 10u;
-    uint d5 = dec_part / 10u;
-    uint d6 = dec_part % 10u;
+    if (negative) {
+        if (index == 0)
+            return CH_MINUS;
+        index--;
+    }
 
-    uint first = 4u;
-    if (d0 > 0u) first = 0u;
-    else if (d1 > 0u) first = 1u;
-    else if (d2 > 0u) first = 2u;
-    else if (d3 > 0u) first = 3u;
+    if (index < int(digits)) {
+        uint position_from_right = digits - 1u - uint(index);
+        uint digit = (int_part / decimal_divisor(position_from_right)) % 10u;
+        return CH_0 + int(digit);
+    }
 
-    vec4 r = vec4(0.0);
-
-    if (negative)    r = max(r, draw_char(CH_MINUS, local, cx));
-    if (first <= 0u) r = max(r, draw_char(int(d0) + CH_0, local, cx));
-    if (first <= 1u) r = max(r, draw_char(int(d1) + CH_0, local, cx));
-    if (first <= 2u) r = max(r, draw_char(int(d2) + CH_0, local, cx));
-    if (first <= 3u) r = max(r, draw_char(int(d3) + CH_0, local, cx));
-    r = max(r, draw_char(int(d4) + CH_0, local, cx));
-    r = max(r, draw_char(CH_DOT, local, cx));
-    r = max(r, draw_char(int(d5) + CH_0, local, cx));
-    r = max(r, draw_char(int(d6) + CH_0, local, cx));
-
-    return r;
+    index -= int(digits);
+    if (index == 0) return CH_DOT;
+    if (index == 1) return CH_0 + int(dec_part / 10u);
+    if (index == 2) return CH_0 + int(dec_part % 10u);
+    return CH_SPACE;
 }
 
 // Draw a labeled row: "LABEL:value".
 vec4 draw_row(float value, vec2 origin, vec2 px, int c0, int c1, int c2) {
-    float label_width = 4.0 * (CHAR_W + SPACING);
+    float advance = CHAR_W + SPACING;
+    float label_width = 4.0 * advance;
     float width = label_width + number_width(value);
     vec2 local = (px - origin) / SCALE;
 
@@ -3759,39 +3755,26 @@ vec4 draw_row(float value, vec2 origin, vec2 px, int c0, int c1, int c2) {
         local.y < 0.0 || local.y >= CHAR_H)
         return vec4(0.0);
 
-    vec4 r = vec4(0.0);
-    float cx = 0.0;
+    int character_index = int(floor(local.x / advance));
+    int character;
+    if (character_index == 0)
+        character = c0;
+    else if (character_index == 1)
+        character = c1;
+    else if (character_index == 2)
+        character = c2;
+    else if (character_index == 3)
+        character = CH_COLON;
+    else
+        character = number_character(value, character_index - 4);
 
-    if (local.x < label_width) {
-        r = max(r, draw_char(c0, local, cx));
-        r = max(r, draw_char(c1, local, cx));
-        r = max(r, draw_char(c2, local, cx));
-        r = max(r, draw_char(CH_COLON, local, cx));
-    } else {
-        cx = label_width;
-        r = max(r, draw_number(value, local, cx));
-    }
-
-    return r;
+    vec2 character_position = vec2(mod(local.x, advance), local.y);
+    return glyph_pixel(get_glyph(character), character_position)
+        ? vec4(1.0)
+        : vec4(0.0);
 }
 
 const int METRICS_ROW_COUNT = 7;
-
-float metrics_row_width(int row, float label_width) {
-    if (row == 0)
-        return label_width + pq_number_width(input_max_i);
-    if (row == 1)
-        return label_width + pq_number_width(input_min_i);
-    if (row == 2)
-        return label_width + pq_number_width(input_avg_i);
-    if (row == 3)
-        return label_width + pq_number_width(metered_histogram_average);
-    if (row == 4)
-        return label_width + pq_number_width(metered_matrix_average);
-    if (row == 5)
-        return label_width + number_width(metered_matrix_blend);
-    return label_width + number_width(ev);
-}
 
 vec4 draw_metrics_row(int row, vec2 origin, vec2 px) {
     if (row == 0)
@@ -3859,10 +3842,24 @@ vec4 draw_metrics_panel(vec2 px) {
         return vec4(0.0);
 
     float label_width = 4.0 * (CHAR_W + SPACING);
-    float max_w = 0.0;
-    for (int i = 0; i < METRICS_ROW_COUNT; i++)
-        max_w = max(max_w, metrics_row_width(i, label_width));
-
+    float pq_width = max(
+        max(
+            pq_number_width(input_max_i),
+            pq_number_width(input_min_i)
+        ),
+        max(
+            pq_number_width(input_avg_i),
+            max(
+                pq_number_width(metered_histogram_average),
+                pq_number_width(metered_matrix_average)
+            )
+        )
+    );
+    float scalar_width = max(
+        number_width(metered_matrix_blend),
+        number_width(ev)
+    );
+    float max_w = label_width + max(pq_width, scalar_width);
     if (px.x > o0.x + (max_w + PAD) * SCALE)
         return vec4(0.0);
 
@@ -3872,13 +3869,7 @@ vec4 draw_metrics_panel(vec2 px) {
 
     if (row >= 0 && row < METRICS_ROW_COUNT) {
         vec2 origin = o0 + vec2(0.0, float(row) * row_stride);
-        vec2 local = px - origin;
-        float row_width = metrics_row_width(row, label_width);
-
-        if (local.x >= 0.0 && local.x < row_width * SCALE &&
-            local.y >= 0.0 && local.y < CHAR_H * SCALE) {
-            r = max(r, draw_metrics_row(row, origin, px));
-        }
+        r = max(r, draw_metrics_row(row, origin, px));
     }
 
     return r;
