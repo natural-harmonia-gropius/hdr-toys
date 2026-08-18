@@ -2410,14 +2410,20 @@ float f_linear(float x, float slope, float intercept) {
     return slope * x + intercept;
 }
 
-// Linear relationship between angle and parameter c
-// c = 0: angle = 45° (slope = 1)
-// c = ±N: angle = 45° ± k*N
+// Contrast pivots the linear segment around the mid-gray anchor
+// (midgray, midgray) by moving the y-positions of the shadow and
+// highlight anchors; their x-positions stay fixed, so the toe and
+// shoulder segments always have positive x-extent. The middle slope
+// is 2^c, so equal and opposite settings produce reciprocal mid-tone
+// slopes: the two middle segments are exact inverse lines (applying
+// -c then +c restores the whole mid-range exactly; the toe and
+// shoulder anchors move with c, so no fixed-endpoint curve family
+// can be globally invertible). Equal steps of c are equal perceived
+// contrast steps (Weber's law applies to the slope ratio, even in a
+// perceptually uniform domain). The previous tan(45° ± 40°·c) mapping
+// inverted the middle segment below c = -0.5.
 float f_contrast(float c) {
-    float range = 40.0; // 40° per unit of c
-    float angle = radians(45.0 + range * c);
-    float slope = tan(angle);
-    return 1.0 - 1.0 / slope;
+    return 1.0 - exp2(c);
 }
 
 // Hyperbola tone mapping
@@ -2531,12 +2537,24 @@ float f(
 
     float x0 = ib;
     float y0 = ob;
-    float x1 = mix(shadow, midgray, contrast);
+    float x1 = shadow;
     float y1 = shadow;
-    float x2 = mix(highlight, midgray, contrast);
+    float x2 = highlight;
     float y2 = highlight;
     float x3 = iw;
     float y3 = ow;
+
+    // Contrast pivots the junction positions toward the mid-gray anchor
+    // (midgray, midgray); the x-positions stay fixed.
+    y1 = mix(y1, midgray, contrast);
+    y2 = mix(y2, midgray, contrast);
+
+    // High contrast dips the shadow junction below the black floor and
+    // lifts the highlight junction past the white point. Clamp the
+    // y-extents so no segment can ever have negative length in either
+    // dimension (the x-extents are positive by construction).
+    y1 = max(y1, y0);
+    y2 = min(y2, y3);
 
     float slope = f_slope(x1, y1, x2, y2);
     float intercept = f_intercept(slope, x1, y1);
@@ -2547,7 +2565,11 @@ float f(
 
     if (x < x1) {
         float slope_toe = f_slope(x0, y0, x1, y1);
-        if (slope_toe >= slope) {
+        // y1 <= y0 is equivalent to slope_toe <= 0 when x1 > x0, but it
+        // also covers x1 == x0 (sw = 1 with lifted blacks), where
+        // f_slope's degenerate-dx guard returns 1.0 and a clamped
+        // junction would otherwise feed the toe a zero-length segment.
+        if (slope_toe >= slope || y1 <= y0) {
             return f_linear(x, slope, intercept);
         }
 
@@ -2556,7 +2578,12 @@ float f(
 
     if (x > x2) {
         float slope_shoulder = f_slope(x2, y2, x3, y3);
-        if (slope_shoulder >= slope) {
+        // y2 >= y3 is equivalent to slope_shoulder <= 0 when x3 > x2,
+        // but it also covers x2 == x3 (hw = 1 with the content peak at
+        // or below the white point), where f_slope's degenerate-dx
+        // guard returns 1.0 and a clamped junction would otherwise
+        // feed the shoulder a zero-length segment.
+        if (slope_shoulder >= slope || y2 >= y3) {
             return f_linear(x, slope, intercept);
         }
 
