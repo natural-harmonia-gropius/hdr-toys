@@ -3952,18 +3952,9 @@ vec2 preview_metering_position(vec2 position) {
         : position;
 }
 
-vec2 preview_ui_position(vec2 position) {
-    // Landscape output already matches the preview layout. Portrait output
-    // needs only a vertical UI flip; its metering-map rotation is handled
-    // independently by preview_metering_position().
-    return HOOKED_size.y > HOOKED_size.x
-        ? vec2(position.x, 1.0 - position.y)
-        : position;
-}
-
 vec4 render_metering_preview() {
     vec4 color = HOOKED_tex(HOOKED_pos);
-    vec2 px = preview_ui_position(HOOKED_pos) * HOOKED_size;
+    vec2 px = HOOKED_pos * HOOKED_size;
     vec2 metering_position = preview_metering_position(HOOKED_pos);
     float value = METERING_tex(metering_position).x;
 
