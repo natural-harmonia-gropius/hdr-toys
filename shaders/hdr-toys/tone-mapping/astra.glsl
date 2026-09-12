@@ -235,6 +235,7 @@
 //!VAR float exposed_min_i
 //!VAR float output_max_j
 //!VAR float output_min_j
+//!VAR float output_reverse_max_jhk
 //!STORAGE
 
 //!BUFFER VECTORSCOPE
@@ -2414,6 +2415,17 @@ void publish_input_metering_metadata(MeteringMetrics metrics) {
     input_avg_i = metrics.average;
 }
 
+// The reverse LUT's lightness axis spans the tone curve's output envelope,
+// which H-K compensation lifts above the neutral white point that output_max_j
+// names: the most chromatic in-gamut colour at the reference white, the
+// Rec.2020 yellow corner, reaches 0.00903 J past it at its worst over the
+// declared 1-1000 nit range. That lift is linear in
+// hk_effect_compensate_scaling, so one slope covers the whole 0-1 range; the
+// remainder pays for LUT sampling and FP16 rounding. tests/test_lut_domain.py
+// recomputes the worst case from this shader's own constants and fails if the
+// margin stops covering it.
+const float REVERSE_LUT_HK_LIGHTNESS_MARGIN = 0.0096;
+
 void publish_output_lightness_range() {
     output_max_j = I_to_J(iz_eotf_inv(reference_white));
     output_min_j = I_to_J(
@@ -2421,6 +2433,8 @@ void publish_output_lightness_range() {
             contrast_ratio > 0.0 ? reference_white / contrast_ratio : 0.0
         )
     );
+    output_reverse_max_jhk = output_max_j +
+        hk_effect_compensate_scaling * REVERSE_LUT_HK_LIGHTNESS_MARGIN;
 }
 
 void update_metering_metadata() {
@@ -2955,8 +2969,9 @@ float evaluate_tone_curve(float x) {
 
 // LUT atlas layout: a flattened 65^3 RGB-to-Jab LUT, a 129x65x65
 // Jab-to-RGB LUT, and one 1024-point curve row. The reverse LUT stores its
-// higher-resolution J axis in atlas rows and spans the tone-mapped output
-// range, while a/b share the flattened axis to keep the atlas 65^2 texels wide.
+// higher-resolution Jhk axis in atlas rows and spans the output Rec.2020 cube,
+// while a/b share the flattened axis to keep the atlas 65^2 texels wide. The
+// neutral tone curve retains its narrower J range.
 const int FORWARD_LUT_SIZE = 65;
 const int FORWARD_LUT_LAST = FORWARD_LUT_SIZE - 1;
 const int REVERSE_LIGHTNESS_LUT_SIZE = 129;
@@ -2991,7 +3006,7 @@ float decode_signed_coordinate(float coordinate, float limit) {
 vec3 lut_coordinates_to_LAB(vec3 coordinates) {
     float L = mix(
         output_min_j,
-        output_max_j,
+        output_reverse_max_jhk,
         clamp(coordinates.x, 0.0, 1.0)
     );
     float a_ratio = decode_signed_coordinate(coordinates.y, A_RATIO_LIMIT);
@@ -3336,8 +3351,8 @@ void hook() {
 //!DESC tone mapping (astra)
 
 // LUT atlas layout: a flattened 65^3 RGB-to-Jab LUT, a 129x65x65
-// Jab-to-RGB LUT with its tone-mapped J range stored in rows, and one
-// 1024-point curve row.
+// Jab-to-RGB LUT with its output-cube Jhk range stored in rows, and one
+// 1024-point neutral-J curve row.
 const int FORWARD_LUT_SIZE = 65;
 const int FORWARD_LUT_LAST = FORWARD_LUT_SIZE - 1;
 const int REVERSE_LIGHTNESS_LUT_SIZE = 129;
@@ -3505,7 +3520,7 @@ float encode_signed_coordinate(float value, float limit) {
 }
 
 float encode_output_lightness(float lightness) {
-    float range = max(output_max_j - output_min_j, 1e-6);
+    float range = max(output_reverse_max_jhk - output_min_j, 1e-6);
     return clamp((lightness - output_min_j) / range, 0.0, 1.0);
 }
 
