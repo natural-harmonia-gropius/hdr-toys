@@ -323,7 +323,7 @@ float metering_max_rgb(vec3 rgb) {
 
 // METERING is a 2-component texture: .x carries the metering intensity,
 // .y the maximum RGB channel in PQ. Downstream passes read only .xy; the
-// .zw written here and by the blur chain are dropped by the format.
+// .zw written here and by the blur pair are dropped by the format.
 vec4 hook() {
     vec3 rgb = HOOKED_tex(HOOKED_pos).rgb;
     return vec4(
@@ -455,16 +455,9 @@ vec4 hook() { return vec4(sample_metering_downscaled(), 0.0, 1.0); }
 //!WHEN spatial_stable_level 0 >
 //!DESC metering (spatial stabilization, blur, horizontal)
 
-// One pass per direction, sized by spatial_stable_level, replaces the former
-// spatial_stable_iterations pairs.
-//
-// That chain ran one 9-tap linear-sampled Gaussian per iteration because a
-// parameter could only select a pass through WHEN, never size a kernel inside
-// one. It can: a parameter is an ordinary variable in a hook body, as
-// reference_white and enable_metering already are. Convolution adds variance,
-// so the chain's iterated kernels composed into a kernel of variance
-// N * sigma^2, and one Gaussian of that sigma stands in for the composition,
-// to the residual measured below.
+// One pass per direction, sized by spatial_stable_level. The kernel is sized
+// here rather than selected by WHEN: a parameter is an ordinary variable in a
+// hook body, as reference_white and enable_metering already are.
 //
 // The levels are spaced by ratio, not by difference. Perceived blur tracks the
 // ratio of the radius, which is why mip levels and image-processing octaves
@@ -474,19 +467,9 @@ vec4 hook() { return vec4(sample_metering_downscaled(), 0.0, 1.0); }
 // metering map and every further level multiplies that by 1.25, so the scale
 // runs from 1.0 to 2.441 texels and the default of 3 sits at 1.562.
 //
-// The chain this replaced spanned 1.689 to 4.778 texels, so almost all of that
-// scale is new range the chain could not reach: only level 5, at 2.441 texels,
-// has a counterpart, the chain's own default of 2.389, and it lands within
-// 0.8% of the transfer function the chain produced there. That counterpart is
-// a deliberate re-conventioning of the metering map, so peaks and exposures
-// captured before it hold only to that tolerance, and the chain's heavy end
-// has no level at all.
-//
 // Three sigma caps the reach at 8 texels and nine bilinear fetches per
-// direction at the maximum, against forty for the chain at its own maximum,
-// and five at the lightest level. The pairing reproduces the discrete kernel
-// exactly, so the residual against the chain is all in sampling that Gaussian
-// at integer taps rather than integrating over them.
+// direction at the maximum, five at the lightest level, and the pairing below
+// reproduces the discrete kernel exactly rather than approximating it.
 //
 // The directions stay separate passes, and the result must still be
 // materialised as METERING: the matrix zones and statistics passes read the
@@ -542,10 +525,10 @@ vec4 hook() {
         weight_sum += 2.0 * pair_weight;
     }
 
-    // Dividing by the accumulated weight preserves the mean of the map, which
-    // the replaced kernel got from weights that summed to exactly one. texOff
-    // clamps at the borders, so an edge texel is counted once per tap that
-    // reaches it and the ratio still cannot leave the input range.
+    // Dividing by the accumulated weight preserves the mean of the map; the
+    // unnormalised Gaussian weights sum to more than one. texOff clamps at the
+    // borders, so an edge texel is counted once per tap that reaches it and
+    // the ratio still cannot leave the input range.
     return vec4(sum / weight_sum, 0.0, 1.0);
 }
 
@@ -603,10 +586,10 @@ vec4 hook() {
         weight_sum += 2.0 * pair_weight;
     }
 
-    // Dividing by the accumulated weight preserves the mean of the map, which
-    // the replaced kernel got from weights that summed to exactly one. texOff
-    // clamps at the borders, so an edge texel is counted once per tap that
-    // reaches it and the ratio still cannot leave the input range.
+    // Dividing by the accumulated weight preserves the mean of the map; the
+    // unnormalised Gaussian weights sum to more than one. texOff clamps at the
+    // borders, so an edge texel is counted once per tap that reaches it and
+    // the ratio still cannot leave the input range.
     return vec4(sum / weight_sum, 0.0, 1.0);
 }
 
