@@ -455,26 +455,91 @@ vec4 hook() { return vec4(sample_metering_downscaled(), 0.0, 1.0); }
 //!WHEN spatial_stable_iterations 0 >
 //!DESC metering (spatial stabilization, blur, horizontal)
 
-// [Efficient Gaussian blur with linear sampling](https://www.rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/)
+// One pass per direction, sized by spatial_stable_iterations, replaces the
+// former spatial_stable_iterations pairs.
 //
-// The 16 blocks below (spatial_stable_iterations 0-7, horizontal+vertical)
-// are deliberate copies: each pass is a separate compilation unit, so the
-// kernel cannot be shared. Their WHEN thresholds must ascend by exactly one
-// and the offset/weight/direction constants must stay identical across all
-// blocks - a divergent edit silently changes the effective blur radius at
-// one iteration count and shifts the measured peak and exposure.
+// The replaced chain ran one 9-tap linear-sampled Gaussian per iteration
+// because a parameter could only select a pass through WHEN, never size a
+// kernel inside one. It can: a parameter is an ordinary variable in a hook
+// body, as reference_white and enable_metering already are. What that chain
+// computed is a kernel of variance spatial_stable_iterations * sigma^2,
+// because convolution adds variance, and a single Gaussian of that sigma
+// reproduces its transfer function to within 1.7% at the default of two
+// iterations and 0.4% at the maximum of eight.
+//
+// Reproduces, not matches: this is a deliberate re-conventioning of the
+// metering map, so the measured peak and the exposure derived from it move
+// with it. Peak and exposure references captured before this change stay
+// valid only to the tolerance above.
+//
+// The per-iteration sigma is recovered from the replaced kernel's own weights
+// rather than read off the table it came from. Its five bilinear taps expand
+// to the discrete weights 0.2270270270, 0.1945946, 0.1216216, 0.0540541 and
+// 0.0162162 at d = 0..4, whose variance of 2.854054 gives 1.6894 texels. The
+// table's nominal sigma of 2.0 belongs to a differently scaled kernel and
+// would widen every strength by 18%.
+//
+// Three sigma caps the reach at 14.3 texels and seventeen bilinear fetches per
+// direction at the maximum, against forty for the iteration chain; only the
+// weakest setting samples more, seven against five. The pairing reproduces the
+// discrete kernel exactly, so the residual against the iterated chain is all
+// in sampling that Gaussian at integer taps rather than integrating over them.
+//
+// The directions stay separate passes, and the result must still be
+// materialised as METERING: the matrix zones and statistics passes read the
+// same map the histogram does, so folding the vertical half into the histogram
+// pass would leave them reading an unblurred one.
+//
+// The kernel below is duplicated in the vertical pass. Each pass is a separate
+// compilation unit, so it cannot be shared; offset, weight and direction must
+// stay identical across the two or the blur stops being separable and the
+// measured peak starts depending on orientation.
+//
+// [Efficient Gaussian blur with linear sampling](https://www.rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/)
 
-const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
-const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
+const float spatial_stable_sigma = 1.6894;
+const float spatial_stable_reach = 3.0;
 const vec2 direction = vec2(1.0, 0.0);
 
+float spatial_stable_weight(float tap, float variance) {
+    return exp(-0.5 * tap * tap / variance);
+}
+
 vec4 hook() {
-    vec2 c = METERING_tex(METERING_pos).xy * weight[0];
-    for (uint i = 1; i < 3; i++) {
-        c += METERING_texOff( direction * offset[i]).xy * weight[i];
-        c += METERING_texOff(-direction * offset[i]).xy * weight[i];
+    // WHEN gates this pass off at zero, so the root and the division below
+    // never see a degenerate kernel.
+    float sigma = spatial_stable_sigma * sqrt(float(spatial_stable_iterations));
+    float variance = sigma * sigma;
+    float last_tap = ceil(spatial_stable_reach * sigma);
+
+    // A bilinear fetch at a fractional offset reproduces the two discrete taps
+    // it straddles, so one fetch carries a pair and the loop runs at half the
+    // tap count. The pair's offset is its centre of mass and its weight the
+    // pair sum, which is what makes the substitution exact.
+    vec2 sum = METERING_tex(METERING_pos).xy;
+    float weight_sum = 1.0;
+    for (uint pair = 1u; 2.0 * float(pair) <= last_tap + 1.0; pair++) {
+        float near_tap = 2.0 * float(pair) - 1.0;
+        float far_tap = near_tap + 1.0;
+        float near_weight = spatial_stable_weight(near_tap, variance);
+        float far_weight = far_tap <= last_tap
+            ? spatial_stable_weight(far_tap, variance)
+            : 0.0;
+
+        float pair_weight = near_weight + far_weight;
+        float pair_offset =
+            (near_tap * near_weight + far_tap * far_weight) / pair_weight;
+
+        sum += METERING_texOff( direction * pair_offset).xy * pair_weight;
+        sum += METERING_texOff(-direction * pair_offset).xy * pair_weight;
+        weight_sum += 2.0 * pair_weight;
     }
-    return vec4(c, 0.0, 1.0);
+
+    // Dividing by the accumulated weight preserves the mean of the map, which
+    // the replaced kernel got from weights that summed to exactly one. texOff
+    // clamps at the borders, so an edge texel is counted once per tap that
+    // reaches it and the ratio still cannot leave the input range.
+    return vec4(sum / weight_sum, 0.0, 1.0);
 }
 
 //!HOOK OUTPUT
@@ -486,325 +551,52 @@ vec4 hook() {
 //!WHEN spatial_stable_iterations 0 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
-const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
-const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
+// Same kernel as the horizontal pass above, with direction swapped. Only these
+// two blocks exist now, but they are still a copy: see the note above.
+
+const float spatial_stable_sigma = 1.6894;
+const float spatial_stable_reach = 3.0;
 const vec2 direction = vec2(0.0, 1.0);
 
-vec4 hook() {
-    vec2 c = METERING_tex(METERING_pos).xy * weight[0];
-    for (uint i = 1; i < 3; i++) {
-        c += METERING_texOff( direction * offset[i]).xy * weight[i];
-        c += METERING_texOff(-direction * offset[i]).xy * weight[i];
-    }
-    return vec4(c, 0.0, 1.0);
+float spatial_stable_weight(float tap, float variance) {
+    return exp(-0.5 * tap * tap / variance);
 }
 
-//!HOOK OUTPUT
-//!BIND METERING
-//!SAVE METERING
-//!COMPONENTS 2
-//!WIDTH METERING.w
-//!HEIGHT METERING.h
-//!WHEN spatial_stable_iterations 1 >
-//!DESC metering (spatial stabilization, blur, horizontal)
-
-const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
-const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
-const vec2 direction = vec2(1.0, 0.0);
-
 vec4 hook() {
-    vec2 c = METERING_tex(METERING_pos).xy * weight[0];
-    for (uint i = 1; i < 3; i++) {
-        c += METERING_texOff( direction * offset[i]).xy * weight[i];
-        c += METERING_texOff(-direction * offset[i]).xy * weight[i];
+    // WHEN gates this pass off at zero, so the root and the division below
+    // never see a degenerate kernel.
+    float sigma = spatial_stable_sigma * sqrt(float(spatial_stable_iterations));
+    float variance = sigma * sigma;
+    float last_tap = ceil(spatial_stable_reach * sigma);
+
+    // A bilinear fetch at a fractional offset reproduces the two discrete taps
+    // it straddles, so one fetch carries a pair and the loop runs at half the
+    // tap count. The pair's offset is its centre of mass and its weight the
+    // pair sum, which is what makes the substitution exact.
+    vec2 sum = METERING_tex(METERING_pos).xy;
+    float weight_sum = 1.0;
+    for (uint pair = 1u; 2.0 * float(pair) <= last_tap + 1.0; pair++) {
+        float near_tap = 2.0 * float(pair) - 1.0;
+        float far_tap = near_tap + 1.0;
+        float near_weight = spatial_stable_weight(near_tap, variance);
+        float far_weight = far_tap <= last_tap
+            ? spatial_stable_weight(far_tap, variance)
+            : 0.0;
+
+        float pair_weight = near_weight + far_weight;
+        float pair_offset =
+            (near_tap * near_weight + far_tap * far_weight) / pair_weight;
+
+        sum += METERING_texOff( direction * pair_offset).xy * pair_weight;
+        sum += METERING_texOff(-direction * pair_offset).xy * pair_weight;
+        weight_sum += 2.0 * pair_weight;
     }
-    return vec4(c, 0.0, 1.0);
-}
 
-//!HOOK OUTPUT
-//!BIND METERING
-//!SAVE METERING
-//!COMPONENTS 2
-//!WIDTH METERING.w
-//!HEIGHT METERING.h
-//!WHEN spatial_stable_iterations 1 >
-//!DESC metering (spatial stabilization, blur, vertical)
-
-const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
-const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
-const vec2 direction = vec2(0.0, 1.0);
-
-vec4 hook() {
-    vec2 c = METERING_tex(METERING_pos).xy * weight[0];
-    for (uint i = 1; i < 3; i++) {
-        c += METERING_texOff( direction * offset[i]).xy * weight[i];
-        c += METERING_texOff(-direction * offset[i]).xy * weight[i];
-    }
-    return vec4(c, 0.0, 1.0);
-}
-
-//!HOOK OUTPUT
-//!BIND METERING
-//!SAVE METERING
-//!COMPONENTS 2
-//!WIDTH METERING.w
-//!HEIGHT METERING.h
-//!WHEN spatial_stable_iterations 2 >
-//!DESC metering (spatial stabilization, blur, horizontal)
-
-const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
-const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
-const vec2 direction = vec2(1.0, 0.0);
-
-vec4 hook() {
-    vec2 c = METERING_tex(METERING_pos).xy * weight[0];
-    for (uint i = 1; i < 3; i++) {
-        c += METERING_texOff( direction * offset[i]).xy * weight[i];
-        c += METERING_texOff(-direction * offset[i]).xy * weight[i];
-    }
-    return vec4(c, 0.0, 1.0);
-}
-
-//!HOOK OUTPUT
-//!BIND METERING
-//!SAVE METERING
-//!COMPONENTS 2
-//!WIDTH METERING.w
-//!HEIGHT METERING.h
-//!WHEN spatial_stable_iterations 2 >
-//!DESC metering (spatial stabilization, blur, vertical)
-
-const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
-const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
-const vec2 direction = vec2(0.0, 1.0);
-
-vec4 hook() {
-    vec2 c = METERING_tex(METERING_pos).xy * weight[0];
-    for (uint i = 1; i < 3; i++) {
-        c += METERING_texOff( direction * offset[i]).xy * weight[i];
-        c += METERING_texOff(-direction * offset[i]).xy * weight[i];
-    }
-    return vec4(c, 0.0, 1.0);
-}
-
-//!HOOK OUTPUT
-//!BIND METERING
-//!SAVE METERING
-//!COMPONENTS 2
-//!WIDTH METERING.w
-//!HEIGHT METERING.h
-//!WHEN spatial_stable_iterations 3 >
-//!DESC metering (spatial stabilization, blur, horizontal)
-
-const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
-const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
-const vec2 direction = vec2(1.0, 0.0);
-
-vec4 hook() {
-    vec2 c = METERING_tex(METERING_pos).xy * weight[0];
-    for (uint i = 1; i < 3; i++) {
-        c += METERING_texOff( direction * offset[i]).xy * weight[i];
-        c += METERING_texOff(-direction * offset[i]).xy * weight[i];
-    }
-    return vec4(c, 0.0, 1.0);
-}
-
-//!HOOK OUTPUT
-//!BIND METERING
-//!SAVE METERING
-//!COMPONENTS 2
-//!WIDTH METERING.w
-//!HEIGHT METERING.h
-//!WHEN spatial_stable_iterations 3 >
-//!DESC metering (spatial stabilization, blur, vertical)
-
-const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
-const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
-const vec2 direction = vec2(0.0, 1.0);
-
-vec4 hook() {
-    vec2 c = METERING_tex(METERING_pos).xy * weight[0];
-    for (uint i = 1; i < 3; i++) {
-        c += METERING_texOff( direction * offset[i]).xy * weight[i];
-        c += METERING_texOff(-direction * offset[i]).xy * weight[i];
-    }
-    return vec4(c, 0.0, 1.0);
-}
-
-//!HOOK OUTPUT
-//!BIND METERING
-//!SAVE METERING
-//!COMPONENTS 2
-//!WIDTH METERING.w
-//!HEIGHT METERING.h
-//!WHEN spatial_stable_iterations 4 >
-//!DESC metering (spatial stabilization, blur, horizontal)
-
-const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
-const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
-const vec2 direction = vec2(1.0, 0.0);
-
-vec4 hook() {
-    vec2 c = METERING_tex(METERING_pos).xy * weight[0];
-    for (uint i = 1; i < 3; i++) {
-        c += METERING_texOff( direction * offset[i]).xy * weight[i];
-        c += METERING_texOff(-direction * offset[i]).xy * weight[i];
-    }
-    return vec4(c, 0.0, 1.0);
-}
-
-//!HOOK OUTPUT
-//!BIND METERING
-//!SAVE METERING
-//!COMPONENTS 2
-//!WIDTH METERING.w
-//!HEIGHT METERING.h
-//!WHEN spatial_stable_iterations 4 >
-//!DESC metering (spatial stabilization, blur, vertical)
-
-const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
-const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
-const vec2 direction = vec2(0.0, 1.0);
-
-vec4 hook() {
-    vec2 c = METERING_tex(METERING_pos).xy * weight[0];
-    for (uint i = 1; i < 3; i++) {
-        c += METERING_texOff( direction * offset[i]).xy * weight[i];
-        c += METERING_texOff(-direction * offset[i]).xy * weight[i];
-    }
-    return vec4(c, 0.0, 1.0);
-}
-
-//!HOOK OUTPUT
-//!BIND METERING
-//!SAVE METERING
-//!COMPONENTS 2
-//!WIDTH METERING.w
-//!HEIGHT METERING.h
-//!WHEN spatial_stable_iterations 5 >
-//!DESC metering (spatial stabilization, blur, horizontal)
-
-const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
-const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
-const vec2 direction = vec2(1.0, 0.0);
-
-vec4 hook() {
-    vec2 c = METERING_tex(METERING_pos).xy * weight[0];
-    for (uint i = 1; i < 3; i++) {
-        c += METERING_texOff( direction * offset[i]).xy * weight[i];
-        c += METERING_texOff(-direction * offset[i]).xy * weight[i];
-    }
-    return vec4(c, 0.0, 1.0);
-}
-
-//!HOOK OUTPUT
-//!BIND METERING
-//!SAVE METERING
-//!COMPONENTS 2
-//!WIDTH METERING.w
-//!HEIGHT METERING.h
-//!WHEN spatial_stable_iterations 5 >
-//!DESC metering (spatial stabilization, blur, vertical)
-
-const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
-const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
-const vec2 direction = vec2(0.0, 1.0);
-
-vec4 hook() {
-    vec2 c = METERING_tex(METERING_pos).xy * weight[0];
-    for (uint i = 1; i < 3; i++) {
-        c += METERING_texOff( direction * offset[i]).xy * weight[i];
-        c += METERING_texOff(-direction * offset[i]).xy * weight[i];
-    }
-    return vec4(c, 0.0, 1.0);
-}
-
-//!HOOK OUTPUT
-//!BIND METERING
-//!SAVE METERING
-//!COMPONENTS 2
-//!WIDTH METERING.w
-//!HEIGHT METERING.h
-//!WHEN spatial_stable_iterations 6 >
-//!DESC metering (spatial stabilization, blur, horizontal)
-
-const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
-const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
-const vec2 direction = vec2(1.0, 0.0);
-
-vec4 hook() {
-    vec2 c = METERING_tex(METERING_pos).xy * weight[0];
-    for (uint i = 1; i < 3; i++) {
-        c += METERING_texOff( direction * offset[i]).xy * weight[i];
-        c += METERING_texOff(-direction * offset[i]).xy * weight[i];
-    }
-    return vec4(c, 0.0, 1.0);
-}
-
-//!HOOK OUTPUT
-//!BIND METERING
-//!SAVE METERING
-//!COMPONENTS 2
-//!WIDTH METERING.w
-//!HEIGHT METERING.h
-//!WHEN spatial_stable_iterations 6 >
-//!DESC metering (spatial stabilization, blur, vertical)
-
-const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
-const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
-const vec2 direction = vec2(0.0, 1.0);
-
-vec4 hook() {
-    vec2 c = METERING_tex(METERING_pos).xy * weight[0];
-    for (uint i = 1; i < 3; i++) {
-        c += METERING_texOff( direction * offset[i]).xy * weight[i];
-        c += METERING_texOff(-direction * offset[i]).xy * weight[i];
-    }
-    return vec4(c, 0.0, 1.0);
-}
-
-//!HOOK OUTPUT
-//!BIND METERING
-//!SAVE METERING
-//!COMPONENTS 2
-//!WIDTH METERING.w
-//!HEIGHT METERING.h
-//!WHEN spatial_stable_iterations 7 >
-//!DESC metering (spatial stabilization, blur, horizontal)
-
-const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
-const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
-const vec2 direction = vec2(1.0, 0.0);
-
-vec4 hook() {
-    vec2 c = METERING_tex(METERING_pos).xy * weight[0];
-    for (uint i = 1; i < 3; i++) {
-        c += METERING_texOff( direction * offset[i]).xy * weight[i];
-        c += METERING_texOff(-direction * offset[i]).xy * weight[i];
-    }
-    return vec4(c, 0.0, 1.0);
-}
-
-//!HOOK OUTPUT
-//!BIND METERING
-//!SAVE METERING
-//!COMPONENTS 2
-//!WIDTH METERING.w
-//!HEIGHT METERING.h
-//!WHEN spatial_stable_iterations 7 >
-//!DESC metering (spatial stabilization, blur, vertical)
-
-const vec3 offset = vec3(0.0000000000, 1.3846153846, 3.2307692308);
-const vec3 weight = vec3(0.2270270270, 0.3162162162, 0.0702702703);
-const vec2 direction = vec2(0.0, 1.0);
-
-vec4 hook() {
-    vec2 c = METERING_tex(METERING_pos).xy * weight[0];
-    for (uint i = 1; i < 3; i++) {
-        c += METERING_texOff( direction * offset[i]).xy * weight[i];
-        c += METERING_texOff(-direction * offset[i]).xy * weight[i];
-    }
-    return vec4(c, 0.0, 1.0);
+    // Dividing by the accumulated weight preserves the mean of the map, which
+    // the replaced kernel got from weights that summed to exactly one. texOff
+    // clamps at the borders, so an edge texel is counted once per tap that
+    // reaches it and the ratio still cannot leave the input range.
+    return vec4(sum / weight_sum, 0.0, 1.0);
 }
 
 //!HOOK OUTPUT
