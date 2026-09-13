@@ -629,16 +629,21 @@ void hook() {
 shared uint shistogram[1024];
 shared uint smax_rgb;
 
+float sanitize_bounded(float value, float lower_bound, float upper_bound) {
+    return value > lower_bound ? min(value, upper_bound) : lower_bound;
+}
+
+// The sanitizer is part of the conversion rather than a precondition checked at
+// the call site: NaN and out-of-range values must not reach the float-to-uint
+// conversion, whose result is undefined there and differs by backend (D3D
+// converts NaN to zero, Vulkan leaves it to the driver). Same shape as
+// pq_to_uint, matrix_zone_value_code and histogram_interval_bounds.
 uint to_uint(float x) {
-    return uint(x * 4095.0 + 0.5);
+    return uint(sanitize_bounded(x, 0.0, 1.0) * 4095.0 + 0.5);
 }
 
 uint to_histogram_bin(float x) {
     return min(to_uint(x) >> 2u, 1023u);
-}
-
-float sanitize_bounded(float value, float lower_bound, float upper_bound) {
-    return value > lower_bound ? min(value, upper_bound) : lower_bound;
 }
 
 vec2 fetch_metering(ivec2 position) {
