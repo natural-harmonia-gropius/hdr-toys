@@ -146,11 +146,11 @@
 //!MAXIMUM 1.0
 0.0
 
-//!PARAM spatial_stable_iterations
+//!PARAM spatial_stable_level
 //!TYPE uint
 //!MINIMUM 0
-//!MAXIMUM 8
-2
+//!MAXIMUM 5
+3
 
 //!PARAM temporal_stable_duration
 //!TYPE float
@@ -452,38 +452,41 @@ vec4 hook() { return vec4(sample_metering_downscaled(), 0.0, 1.0); }
 //!COMPONENTS 2
 //!WIDTH METERING.w
 //!HEIGHT METERING.h
-//!WHEN spatial_stable_iterations 0 >
+//!WHEN spatial_stable_level 0 >
 //!DESC metering (spatial stabilization, blur, horizontal)
 
-// One pass per direction, sized by spatial_stable_iterations, replaces the
-// former spatial_stable_iterations pairs.
+// One pass per direction, sized by spatial_stable_level, replaces the former
+// spatial_stable_iterations pairs.
 //
-// The replaced chain ran one 9-tap linear-sampled Gaussian per iteration
-// because a parameter could only select a pass through WHEN, never size a
-// kernel inside one. It can: a parameter is an ordinary variable in a hook
-// body, as reference_white and enable_metering already are. What that chain
-// computed is a kernel of variance spatial_stable_iterations * sigma^2,
-// because convolution adds variance, and a single Gaussian of that sigma
-// reproduces its transfer function to within 1.7% at the default of two
-// iterations and 0.4% at the maximum of eight.
+// That chain ran one 9-tap linear-sampled Gaussian per iteration because a
+// parameter could only select a pass through WHEN, never size a kernel inside
+// one. It can: a parameter is an ordinary variable in a hook body, as
+// reference_white and enable_metering already are. Convolution adds variance,
+// so the chain's iterated kernels composed into a kernel of variance
+// N * sigma^2, and one Gaussian of that sigma stands in for the composition,
+// to the residual measured below.
 //
-// Reproduces, not matches: this is a deliberate re-conventioning of the
-// metering map, so the measured peak and the exposure derived from it move
-// with it. Peak and exposure references captured before this change stay
-// valid only to the tolerance above.
+// The levels are spaced by ratio, not by difference. Perceived blur tracks the
+// ratio of the radius, which is why mip levels and image-processing octaves
+// are geometric. Equal differences over this range would double the radius on
+// the first step and add 25% on the last, which is the opposite of what a
+// strength control should do. Level 1 is one texel of the fixed 512x288
+// metering map and every further level multiplies that by 1.25, so the scale
+// runs from 1.0 to 2.441 texels and the default of 3 sits at 1.562.
 //
-// The per-iteration sigma is recovered from the replaced kernel's own weights
-// rather than read off the table it came from. Its five bilinear taps expand
-// to the discrete weights 0.2270270270, 0.1945946, 0.1216216, 0.0540541 and
-// 0.0162162 at d = 0..4, whose variance of 2.854054 gives 1.6894 texels. The
-// table's nominal sigma of 2.0 belongs to a differently scaled kernel and
-// would widen every strength by 18%.
+// The chain this replaced spanned 1.689 to 4.778 texels, so almost all of that
+// scale is new range the chain could not reach: only level 5, at 2.441 texels,
+// has a counterpart, the chain's own default of 2.389, and it lands within
+// 0.8% of the transfer function the chain produced there. That counterpart is
+// a deliberate re-conventioning of the metering map, so peaks and exposures
+// captured before it hold only to that tolerance, and the chain's heavy end
+// has no level at all.
 //
-// Three sigma caps the reach at 14.3 texels and seventeen bilinear fetches per
-// direction at the maximum, against forty for the iteration chain; only the
-// weakest setting samples more, seven against five. The pairing reproduces the
-// discrete kernel exactly, so the residual against the iterated chain is all
-// in sampling that Gaussian at integer taps rather than integrating over them.
+// Three sigma caps the reach at 8 texels and nine bilinear fetches per
+// direction at the maximum, against forty for the chain at its own maximum,
+// and five at the lightest level. The pairing reproduces the discrete kernel
+// exactly, so the residual against the chain is all in sampling that Gaussian
+// at integer taps rather than integrating over them.
 //
 // The directions stay separate passes, and the result must still be
 // materialised as METERING: the matrix zones and statistics passes read the
@@ -497,7 +500,8 @@ vec4 hook() { return vec4(sample_metering_downscaled(), 0.0, 1.0); }
 //
 // [Efficient Gaussian blur with linear sampling](https://www.rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/)
 
-const float spatial_stable_sigma = 1.6894;
+const float spatial_stable_sigma_base = 1.0;
+const float spatial_stable_sigma_ratio = 1.25;
 const float spatial_stable_reach = 3.0;
 const vec2 direction = vec2(1.0, 0.0);
 
@@ -506,9 +510,12 @@ float spatial_stable_weight(float tap, float variance) {
 }
 
 vec4 hook() {
-    // WHEN gates this pass off at zero, so the root and the division below
-    // never see a degenerate kernel.
-    float sigma = spatial_stable_sigma * sqrt(float(spatial_stable_iterations));
+    // WHEN gates this pass off at zero, so the exponent below never leaves the
+    // level range the header documents.
+    float sigma = spatial_stable_sigma_base * pow(
+        spatial_stable_sigma_ratio,
+        float(spatial_stable_level) - 1.0
+    );
     float variance = sigma * sigma;
     float last_tap = ceil(spatial_stable_reach * sigma);
 
@@ -548,13 +555,14 @@ vec4 hook() {
 //!COMPONENTS 2
 //!WIDTH METERING.w
 //!HEIGHT METERING.h
-//!WHEN spatial_stable_iterations 0 >
+//!WHEN spatial_stable_level 0 >
 //!DESC metering (spatial stabilization, blur, vertical)
 
 // Same kernel as the horizontal pass above, with direction swapped. Only these
 // two blocks exist now, but they are still a copy: see the note above.
 
-const float spatial_stable_sigma = 1.6894;
+const float spatial_stable_sigma_base = 1.0;
+const float spatial_stable_sigma_ratio = 1.25;
 const float spatial_stable_reach = 3.0;
 const vec2 direction = vec2(0.0, 1.0);
 
@@ -563,9 +571,12 @@ float spatial_stable_weight(float tap, float variance) {
 }
 
 vec4 hook() {
-    // WHEN gates this pass off at zero, so the root and the division below
-    // never see a degenerate kernel.
-    float sigma = spatial_stable_sigma * sqrt(float(spatial_stable_iterations));
+    // WHEN gates this pass off at zero, so the exponent below never leaves the
+    // level range the header documents.
+    float sigma = spatial_stable_sigma_base * pow(
+        spatial_stable_sigma_ratio,
+        float(spatial_stable_level) - 1.0
+    );
     float variance = sigma * sigma;
     float last_tap = ceil(spatial_stable_reach * sigma);
 
