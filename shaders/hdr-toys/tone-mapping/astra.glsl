@@ -646,8 +646,22 @@ uint to_histogram_bin(float x) {
     return min(to_uint(x) >> 2u, 1023u);
 }
 
-vec2 fetch_metering(ivec2 position) {
-    return (METERING_mul * texelFetch(METERING_raw, position, 0)).xy;
+// texelFetch is not a sampler read, so nothing clamps it: outside the image it
+// is undefined in SPIR-V and reads as zero under D3D, which would land those
+// samples in the black bin without saying so. The 32x32 block below only tiles
+// the metering map exactly while the downscaling pass pins it to 512x288, and
+// this keeps that coincidence from being load-bearing. Clamping to the edge is
+// what the sampler does for every other read of this map.
+//
+// The extent is queried once per invocation and passed in. glslang keeps one
+// OpImageQuerySizeLod for it; SPIRV-Cross copies it back out per fetch site,
+// because an HLSL GetDimensions has no expression form.
+vec2 fetch_metering(ivec2 position, ivec2 last) {
+    return (METERING_mul * texelFetch(
+        METERING_raw,
+        clamp(position, ivec2(0), last),
+        0
+    )).xy;
 }
 
 void fetch_metering_quad(
@@ -655,10 +669,11 @@ void fetch_metering_quad(
     out vec4 intensities,
     out vec4 maxima
 ) {
-    vec2 sample0 = fetch_metering(position);
-    vec2 sample1 = fetch_metering(position + ivec2(1, 0));
-    vec2 sample2 = fetch_metering(position + ivec2(0, 1));
-    vec2 sample3 = fetch_metering(position + ivec2(1, 1));
+    ivec2 last = ivec2(METERING_size) - 1;
+    vec2 sample0 = fetch_metering(position, last);
+    vec2 sample1 = fetch_metering(position + ivec2(1, 0), last);
+    vec2 sample2 = fetch_metering(position + ivec2(0, 1), last);
+    vec2 sample3 = fetch_metering(position + ivec2(1, 1), last);
     intensities = vec4(sample0.x, sample1.x, sample2.x, sample3.x);
     maxima = vec4(sample0.y, sample1.y, sample2.y, sample3.y);
 }
