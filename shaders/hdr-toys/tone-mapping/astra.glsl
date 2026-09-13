@@ -1752,11 +1752,17 @@ void temporal_initialize_histogram(uint index, float current) {
 
 void temporal_update_reference_bin(uint index, float current) {
     if (temporal_reference_operation == TEMPORAL_REFERENCE_BLEND) {
-        metered_reference_histogram[index] = mix(
-            metered_reference_histogram[index],
-            current,
-            temporal_reference_alpha
-        );
+        // A non-finite sample has to be replaced rather than blended: mix()
+        // propagates NaN forever, and a NaN reference makes every distance
+        // comparison false, which would also keep the REPLACE path below out
+        // of reach. Every other piece of temporal state either sits behind a
+        // validity flag or a timestamp window, or converges on a value derived
+        // from the current frame - that is what lets the state go undeclared,
+        // and this is the one writer that needed help holding it up.
+        float reference = metered_reference_histogram[index];
+        metered_reference_histogram[index] = finite_float(reference)
+            ? mix(reference, current, temporal_reference_alpha)
+            : current;
     } else if (
         temporal_reference_operation == TEMPORAL_REFERENCE_REPLACE
     ) {
