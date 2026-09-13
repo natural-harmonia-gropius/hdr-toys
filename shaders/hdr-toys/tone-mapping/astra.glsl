@@ -343,13 +343,13 @@ vec4 hook() {
 //!WHEN OUTPUT.w 1024 > OUTPUT.h 1024 > + OUTPUT.w 576 > OUTPUT.h 576 > * +
 //!DESC metering (spatial stabilization, halve 1)
 
-// The metering map used to be reduced to 512x288 in a single step. At 4K that
-// is a factor of 7.5 per axis taken with one bilinear tap, i.e. point sampling
-// with aliasing: which pixels survive depends on the subpixel alignment, so a
-// small moving highlight makes the measured peak jump while nothing in the
-// scene changes. Halving repeatedly instead averages exactly 2×2 per step before
-// the fixed-size histogram and matrix analysis. The passes are conditional,
-// so only as many run as the source resolution needs: two at 4K, one at 1080p.
+// The metering map is reduced to 512x288 by halving rather than in one step: at
+// 4K a single step is a factor of 7.5 per axis taken with one bilinear tap, i.e.
+// point sampling with aliasing. Which pixels survive then depends on the
+// subpixel alignment, so a small moving highlight makes the measured peak jump
+// while nothing in the scene changes. Each halving averages exactly 2×2 before
+// the fixed-size histogram and matrix analysis. The passes are conditional, so
+// only as many run as the source resolution needs: two at 4K, one at 1080p.
 // Testing both dimensions against both landscape thresholds makes the chain
 // orientation-independent before portrait analysis is rotated below.
 vec4 hook() { return METERING_tex(METERING_pos); }
@@ -2369,10 +2369,10 @@ void prepare_curve_temporal() {
 }
 
 float apply_exposure_to_pq(float value, float scale) {
-    // Compose with metadata_nits_to_pq instead of repeating the
-    // sanitize-then-convert chain: the two copies had already drifted (the
-    // helper guards non-positive input with 0.0, the old inline form leaked
-    // pq_eotf_inv(0) = 7.3e-7 into the published black point).
+    // Compose with metadata_nits_to_pq rather than repeating the
+    // sanitize-then-convert chain: the helper guards non-positive input with
+    // 0.0, where an inline form would leak pq_eotf_inv(0) = 7.3e-7 into the
+    // published black point.
     //
     // The sanitize deliberately caps the curve white point at 10000 nits
     // even under positive exposure: content at the mastering peak maps to
@@ -2852,7 +2852,7 @@ float f(
     // junction lands exactly on the endpoint, so the toe/shoulder region
     // between it and x_0/x_3 collapses to a flat clip at that endpoint: the
     // steep middle line starts at the moved x instead of extending past the
-    // output range (the pre-refactor behavior). A high contrast_bias can
+    // output range. A high contrast_bias can
     // therefore override the configured junction positions, e.g. with
     // shadow_weight 1 and cb = 1 at contrast_ratio 1000 the junction moves
     // to (mid-gray + ob) / 2. At the default reference white this is
@@ -3900,13 +3900,11 @@ const uint PREVIEW_HISTOGRAM_SIZE = 64u;
 const float PREVIEW_HISTOGRAM_BIN_WIDTH = 4.0;
 const float PREVIEW_HISTOGRAM_EXTENT = 256.0;
 
-// The density reference is the fixed 128-bin display scale from the
-// historical calibration (the preview grid was 128 bins until it was
-// retuned to 96). Normalizing by (grid / 128)^2 keeps the trace
-// resolution-invariant, so the grid size can be retuned without dimming
-// or brightening the trace. Deriving the reference from the current grid
-// size would cancel the grid out of the ratio and silently defeat that
-// invariance.
+// The density reference is a fixed 128-bin display scale, deliberately not the
+// current grid size: normalizing by (grid / 128)^2 keeps the trace
+// resolution-invariant, so the grid can be retuned without dimming or
+// brightening it. Deriving the reference from the current grid would cancel the
+// grid out of the ratio and silently defeat that invariance.
 const uint PREVIEW_VECTORSCOPE_SIZE = 96u;
 const uint PREVIEW_VECTORSCOPE_CHANNEL_COUNT = 4u;
 const float PREVIEW_VECTORSCOPE_DENSITY_REFERENCE_SIZE = 128.0;
@@ -4161,9 +4159,8 @@ vec4 draw_vectorscope(vec2 px) {
     uint index = bin.y * PREVIEW_VECTORSCOPE_SIZE + bin.x;
     uint base = index * PREVIEW_VECTORSCOPE_CHANNEL_COUNT;
     float count = float(vectorscope_bins[base + 0u]);
-    // The density reference is the calibrated 128-bin display scale from
-    // the last preview grid retune. The (grid / 128)^2 normalization keeps
-    // the rendered density at the historical 128-bin appearance: retuning
+    // The density reference is the same fixed 128-bin scale: the (grid / 128)^2
+    // normalization keeps the rendered density at that appearance, so retuning
     // the grid changes resolution only, never trace brightness.
     float resolution_scale = float(PREVIEW_VECTORSCOPE_SIZE) /
                              PREVIEW_VECTORSCOPE_DENSITY_REFERENCE_SIZE;
@@ -4325,11 +4322,10 @@ uint decimal_divisor(uint position_from_right) {
     return 1u;
 }
 
-// Resolve only the character covered by this fragment: each fragment pays
-// for one glyph lookup instead of a whole row, so the width estimation
-// cannot force per-pixel character loops. (Drawing every character and
-// compositing the results produced equivalent pixels, but its repeated
-// glyph lookups also caused D3DCompiler's inliner to grow exponentially.)
+// Resolve only the character covered by this fragment: each fragment pays for
+// one glyph lookup instead of a whole row, so the width estimation cannot force
+// per-pixel character loops. Drawing the row per fragment would repeat those
+// lookups, which grows D3DCompiler's inliner exponentially.
 int number_character(float value, int index) {
     bool negative = value < 0.0;
     uint fixed_value = number_fixed_value(value);
@@ -4423,8 +4419,8 @@ vec4 draw_metrics_row(
         value = exposure_ev;
     } else {
         // The EV row is always last. Any other unhandled row draws nothing,
-        // so a future row insertion cannot silently relabel EV or duplicate
-        // a row through the old fall-through.
+        // so a future row insertion cannot silently relabel EV or duplicate a
+        // row by falling through to the next branch.
         return vec4(0.0);
     }
 
@@ -4467,9 +4463,9 @@ vec4 draw_metrics_panel(vec2 px) {
     if (outside_panel_bounds(px, panel_min, panel_max))
         return vec4(0.0);
 
-    // Read the frame-uniform zone flag only for fragments inside the panel:
-    // row_count does not depend on it, so loading it before the bounds
-    // check was a whole-frame per-fragment SSBO read for nothing.
+    // Read the frame-uniform zone flag only for fragments inside the panel: it
+    // does not affect row_count, and an unguarded read would cost a per-fragment
+    // SSBO load across the whole frame.
     bool show_matrix_metrics = show_histogram_metrics &&
                                metered_zone_valid > 0u;
 
