@@ -3887,30 +3887,6 @@ float to_float(uint x) {
     return float(x) / 4095.0;
 }
 
-vec4 draw_highlights(float value) {
-    vec3 metrics = vec3(
-        to_float(metered_max_i),
-        to_float(metered_avg_i),
-        to_float(metered_min_i)
-    );
-    // The extrema tints use directional bounds - the maximum marks every
-    // pixel at or above it, the minimum every pixel at or below - and
-    // carry a 5-JND approximation toward the midtones: the extrema metrics
-    // are percentile-bin edge codes, not per-pixel values, so a strict
-    // bound left the minimum side permanently empty.
-    vec3 matches = vec3(
-        step(metrics.x - 5.0 * JND, value),
-        1.0 - step(5.0 * JND, abs(metrics.y - value)),
-        step(value, metrics.z + 5.0 * JND)
-    );
-
-    if (!(enable_metering > 1))
-        matches.y = 0.0;
-
-    float opacity = 0.75 * max(max(matches.x, matches.y), matches.z);
-    return vec4(matches, opacity);
-}
-
 const float m1 = 2610.0 / 4096.0 / 4.0;
 const float m2 = 2523.0 / 4096.0 * 128.0;
 const float c1 = 3424.0 / 4096.0;
@@ -3956,6 +3932,31 @@ const float PREVIEW_VECTORSCOPE_COLOR_SCALE = 65535.0;
 const uvec2 PREVIEW_MATRIX_SIZE = uvec2(16u, 9u);
 const float PREVIEW_MATRIX_DIFFERENCE_RANGE = 144 * JND;
 const float PREVIEW_ZONE_WEIGHT_MAX = 4.0;
+
+// The panel overlays, in the order render_metering_preview composites them.
+vec4 draw_highlights(float value) {
+    vec3 metrics = vec3(
+        to_float(metered_max_i),
+        to_float(metered_avg_i),
+        to_float(metered_min_i)
+    );
+    // The extrema tints use directional bounds - the maximum marks every
+    // pixel at or above it, the minimum every pixel at or below - and
+    // carry a 5-JND approximation toward the midtones: the extrema metrics
+    // are percentile-bin edge codes, not per-pixel values, so a strict
+    // bound left the minimum side permanently empty.
+    vec3 matches = vec3(
+        step(metrics.x - 5.0 * JND, value),
+        1.0 - step(5.0 * JND, abs(metrics.y - value)),
+        step(value, metrics.z + 5.0 * JND)
+    );
+
+    if (!(enable_metering > 1))
+        matches.y = 0.0;
+
+    float opacity = 0.75 * max(max(matches.x, matches.y), matches.z);
+    return vec4(matches, opacity);
+}
 
 // Overlay the actual matrix inputs and weights on their source regions. Blue
 // zones pull the matrix estimate below the histogram average, orange zones
