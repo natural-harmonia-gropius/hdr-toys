@@ -4447,7 +4447,7 @@ const int VAL_EXPOSURE_EV = 6;
 const int VAL_EXPOSED_MAX = 7;
 
 // Table order is panel order.
-const MetricsRow METRICS_ROWS[8] = MetricsRow[8](
+const MetricsRow METRICS_ROWS[] = MetricsRow[](
     MetricsRow(ivec3(CH_M, CH_A, CH_X), VAL_INPUT_MAX, METERING_NONE),
     MetricsRow(ivec3(CH_M, CH_I, CH_N), VAL_INPUT_MIN, METERING_NONE),
     MetricsRow(ivec3(CH_A, CH_V, CH_G), VAL_INPUT_AVG, METERING_NONE),
