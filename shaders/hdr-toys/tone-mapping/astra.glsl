@@ -4468,6 +4468,23 @@ const MetricsRow METRICS_ROWS[] = MetricsRow[](
 
 const int METRICS_ROW_SLOTS = METRICS_ROWS.length();
 
+// A row's number in display units. A PQ row converts its code here rather than
+// carrying a format flag out to the callers, so the glyphs and the width
+// estimate both measure the number that is actually drawn. Together with the
+// table and the VAL tags above, this is everything adding a row needs.
+float metrics_row_value(int value) {
+    if (value == VAL_INPUT_MAX) return pq_eotf(input_max_i);
+    if (value == VAL_INPUT_MIN) return pq_eotf(input_min_i);
+    if (value == VAL_INPUT_AVG) return pq_eotf(input_avg_i);
+    if (value == VAL_HISTOGRAM_AVG) return pq_eotf(metered_histogram_average);
+    if (value == VAL_MATRIX_AVG) return pq_eotf(metered_matrix_average);
+    if (value == VAL_MATRIX_MIX) return metered_matrix_blend;
+    if (value == VAL_EXPOSURE_EV) return exposure_ev;
+    if (value == VAL_EXPOSED_MAX) return pq_eotf(exposed_max_i);
+    return 0.0;
+}
+
+// The rest is machinery over the table: which rows are on screen, and where.
 bool metrics_row_visible(int slot, int metering) {
     return metering >= METRICS_ROWS[slot].metering;
 }
@@ -4496,21 +4513,6 @@ int metrics_row_slot(int position, int metering) {
         visible++;
     }
     return 0;
-}
-
-// A row's number in display units. A PQ row converts its code here rather than
-// carrying a format flag out to the callers, so the glyphs and the width
-// estimate both measure the number that is actually drawn.
-float metrics_row_value(int value) {
-    if (value == VAL_INPUT_MAX) return pq_eotf(input_max_i);
-    if (value == VAL_INPUT_MIN) return pq_eotf(input_min_i);
-    if (value == VAL_INPUT_AVG) return pq_eotf(input_avg_i);
-    if (value == VAL_HISTOGRAM_AVG) return pq_eotf(metered_histogram_average);
-    if (value == VAL_MATRIX_AVG) return pq_eotf(metered_matrix_average);
-    if (value == VAL_MATRIX_MIX) return metered_matrix_blend;
-    if (value == VAL_EXPOSURE_EV) return exposure_ev;
-    if (value == VAL_EXPOSED_MAX) return pq_eotf(exposed_max_i);
-    return 0.0;
 }
 
 // Draw one panel row, or nothing when its level has not been reached.
