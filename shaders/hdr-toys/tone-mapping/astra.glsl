@@ -4051,6 +4051,63 @@ vec4 draw_matrix_metering(vec2 position) {
     return vec4(tint, opacity);
 }
 
+bool outside_panel_bounds(vec2 position, vec2 lower_bound, vec2 upper_bound) {
+    return any(lessThan(position, lower_bound)) ||
+           any(greaterThan(position, upper_bound));
+}
+
+vec4 draw_histogram(vec2 px) {
+    vec2 origin = vec2(MARGIN * SCALE);
+    vec2 padding = vec2(PAD * SCALE);
+    vec2 panel_min = origin - padding;
+    vec2 panel_max = origin + vec2(PREVIEW_HISTOGRAM_EXTENT) + padding;
+
+    if (outside_panel_bounds(px, panel_min, panel_max))
+        return vec4(0.0);
+
+    vec2 local = px - origin;
+
+    if (local.x < 0.0 || local.x >= PREVIEW_HISTOGRAM_EXTENT ||
+        local.y < 0.0 || local.y >= PREVIEW_HISTOGRAM_EXTENT)
+        return vec4(0.0, 0.0, 0.0, 1.0);
+
+    uint index = min(
+        uint(local.x / PREVIEW_HISTOGRAM_BIN_WIDTH),
+        PREVIEW_HISTOGRAM_SIZE - 1u
+    );
+    uint column = min(
+        uint(floor(local.x)),
+        uint(PREVIEW_HISTOGRAM_EXTENT) - 1u
+    );
+    float current_height = preview_histogram_current[index];
+    float reference_height = preview_histogram_reference[index];
+    float plot_width = PREVIEW_HISTOGRAM_EXTENT - 2.0;
+    float plot_height = PREVIEW_HISTOGRAM_EXTENT - 2.0;
+    float pq_input = clamp((local.x - 1.0) / plot_width, 0.0, 1.0);
+    float pq_output = preview_histogram_curve[column];
+    float level = 1.0 - clamp((local.y - 1.0) / plot_height, 0.0, 1.0);
+
+    vec3 tint = vec3(0.0);
+
+    float grid_distance = abs(fract(level * 4.0 + 0.5) - 0.5);
+    if (grid_distance < 0.012)
+        tint = vec3(0.10);
+
+    if (level <= current_height)
+        tint = vec3(0.12, 0.72, 0.92);
+
+    if (abs(level - reference_height) <= 1.5 / plot_height)
+        tint = vec3(1.0, 0.55, 0.12);
+
+    if (abs(level - pq_input) <= 0.75 / plot_height)
+        tint = vec3(0.48);
+
+    if (abs(level - pq_output) <= 1.5 / plot_height)
+        tint = vec3(1.0, 0.78, 0.12);
+
+    return vec4(tint, 1.0);
+}
+
 // ITU-R BT.2525-0 HLG reference for Fitzpatrick skin types 1-4. Saturation
 // is C / C_{max}, where C_{max} is the largest Jzazbz chroma of the Rec. 2020
 // primaries at the 1000-nit HLG nominal peak. The report's H-K-independent
@@ -4116,63 +4173,6 @@ vec3 draw_skin_tone_reference(vec2 plane, float line_width) {
     }
 
     return tint;
-}
-
-bool outside_panel_bounds(vec2 position, vec2 lower_bound, vec2 upper_bound) {
-    return any(lessThan(position, lower_bound)) ||
-           any(greaterThan(position, upper_bound));
-}
-
-vec4 draw_histogram(vec2 px) {
-    vec2 origin = vec2(MARGIN * SCALE);
-    vec2 padding = vec2(PAD * SCALE);
-    vec2 panel_min = origin - padding;
-    vec2 panel_max = origin + vec2(PREVIEW_HISTOGRAM_EXTENT) + padding;
-
-    if (outside_panel_bounds(px, panel_min, panel_max))
-        return vec4(0.0);
-
-    vec2 local = px - origin;
-
-    if (local.x < 0.0 || local.x >= PREVIEW_HISTOGRAM_EXTENT ||
-        local.y < 0.0 || local.y >= PREVIEW_HISTOGRAM_EXTENT)
-        return vec4(0.0, 0.0, 0.0, 1.0);
-
-    uint index = min(
-        uint(local.x / PREVIEW_HISTOGRAM_BIN_WIDTH),
-        PREVIEW_HISTOGRAM_SIZE - 1u
-    );
-    uint column = min(
-        uint(floor(local.x)),
-        uint(PREVIEW_HISTOGRAM_EXTENT) - 1u
-    );
-    float current_height = preview_histogram_current[index];
-    float reference_height = preview_histogram_reference[index];
-    float plot_width = PREVIEW_HISTOGRAM_EXTENT - 2.0;
-    float plot_height = PREVIEW_HISTOGRAM_EXTENT - 2.0;
-    float pq_input = clamp((local.x - 1.0) / plot_width, 0.0, 1.0);
-    float pq_output = preview_histogram_curve[column];
-    float level = 1.0 - clamp((local.y - 1.0) / plot_height, 0.0, 1.0);
-
-    vec3 tint = vec3(0.0);
-
-    float grid_distance = abs(fract(level * 4.0 + 0.5) - 0.5);
-    if (grid_distance < 0.012)
-        tint = vec3(0.10);
-
-    if (level <= current_height)
-        tint = vec3(0.12, 0.72, 0.92);
-
-    if (abs(level - reference_height) <= 1.5 / plot_height)
-        tint = vec3(1.0, 0.55, 0.12);
-
-    if (abs(level - pq_input) <= 0.75 / plot_height)
-        tint = vec3(0.48);
-
-    if (abs(level - pq_output) <= 1.5 / plot_height)
-        tint = vec3(1.0, 0.78, 0.12);
-
-    return vec4(tint, 1.0);
 }
 
 vec4 draw_vectorscope(vec2 px) {
