@@ -4322,12 +4322,20 @@ uint number_fixed_value(float value) {
     return uint(scaled);
 }
 
-// Two decimals plus the decimal point follow the integer digits, and a row
-// label is four characters including the colon. Keeping both in one place
-// prevents a format or label change from drifting between the width
-// estimate and the glyphs actually drawn.
-const float NUMBER_DECIMAL_CHARACTERS = 3.0;
+// A row is drawn as "LABEL:[-]<integer digits>.<two decimals>": four label
+// characters including the colon, one for the minus sign when the number is
+// negative, and three for the decimal point and the two decimals. Keeping them
+// in one place prevents a format or label change from drifting between the
+// width estimate and the glyphs actually drawn.
+//
+// The integer budget is a cap rather than a fixed count: the panel's bounds and
+// its early-out are sized from the widest row they allow, so a longer number
+// would be cut off rather than widen the panel. The largest row is a PQ code at
+// 10000 nits.
 const float LABEL_CHARACTERS = 4.0;
+const float NUMBER_SIGN_CHARACTERS = 1.0;
+const float NUMBER_INTEGER_CHARACTERS = 5.0;
+const float NUMBER_DECIMAL_CHARACTERS = 3.0;
 
 float number_advance(float characters) {
     return characters * (CHAR_W + SPACING);
@@ -4338,7 +4346,7 @@ float number_width(float value) {
     uint digits = integer_digit_count(int_part);
 
     float characters = float(digits) + NUMBER_DECIMAL_CHARACTERS +
-                       (value < 0.0 ? 1.0 : 0.0);
+                       (value < 0.0 ? NUMBER_SIGN_CHARACTERS : 0.0);
     return number_advance(characters);
 }
 
@@ -4516,9 +4524,11 @@ vec4 draw_metrics_row(int position, vec2 origin, vec2 px, int metering) {
 }
 
 vec4 draw_metrics_panel(vec2 px) {
-    // The longest row contains four label characters and a signed 5.2 number.
+    // The widest row the panel is sized for: a full label and the widest
+    // number the format allows.
     const float MAX_ROW_WIDTH =
-        (LABEL_CHARACTERS + 1.0 + 5.0 + NUMBER_DECIMAL_CHARACTERS) *
+        (LABEL_CHARACTERS + NUMBER_SIGN_CHARACTERS +
+         NUMBER_INTEGER_CHARACTERS + NUMBER_DECIMAL_CHARACTERS) *
         (CHAR_W + SPACING);
     // The row count follows the metering level, which is a setting rather than
     // a per-frame quantity, so the panel's height and top only move when the
