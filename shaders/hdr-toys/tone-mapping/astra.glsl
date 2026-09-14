@@ -4342,19 +4342,6 @@ float number_width(float value) {
     return number_advance(characters);
 }
 
-float pq_number_width(float value) {
-    // PQ codes where two-decimal formatting rounds up to 10, 100, 1000,
-    // and 10000 nits respectively.
-    const vec4 digit_thresholds = vec4(
-        0.299659661,
-        0.508073403,
-        0.751826551,
-        0.999999948
-    );
-    float digits = 1.0 + dot(step(digit_thresholds, vec4(value)), vec4(1.0));
-    return number_advance(digits + NUMBER_DECIMAL_CHARACTERS);
-}
-
 uint decimal_divisor(uint position_from_right) {
     if (position_from_right == 4u) return 10000u;
     if (position_from_right == 3u) return 1000u;
@@ -4394,7 +4381,7 @@ int number_character(float value, int index) {
 }
 
 // Draw a labeled row: "LABEL:value".
-vec4 draw_row(float value, vec2 origin, vec2 px, int c0, int c1, int c2) {
+vec4 draw_row(float value, vec2 origin, vec2 px, ivec3 label) {
     float advance = CHAR_W + SPACING;
     float label_width = number_advance(LABEL_CHARACTERS);
     float width = label_width + number_width(value);
@@ -4407,11 +4394,11 @@ vec4 draw_row(float value, vec2 origin, vec2 px, int c0, int c1, int c2) {
     int character_index = int(floor(local.x / advance));
     int character;
     if (character_index == 0)
-        character = c0;
+        character = label.x;
     else if (character_index == 1)
-        character = c1;
+        character = label.y;
     else if (character_index == 2)
-        character = c2;
+        character = label.z;
     else if (character_index == 3)
         character = CH_COLON;
     else
@@ -4423,49 +4410,98 @@ vec4 draw_row(float value, vec2 origin, vec2 px, int c0, int c1, int c2) {
         : vec4(0.0);
 }
 
-const int BASE_METRICS_ROW_COUNT = 4;
-const int HISTOGRAM_METRICS_ROW_COUNT = 1;
-const int MATRIX_METRICS_ROW_COUNT = 2;
+// A row of the metrics panel. The table below is the single definition of the
+// panel's contents: order, label, gate and format. The row count, the widest
+// row and the position of the EV row are all read back from it, so a row
+// cannot be drawn without also being measured.
+struct MetricsRow {
+    ivec3 label;
+    int value;
+    int gate;
+};
 
-vec4 draw_metrics_row(
-    int row,
-    int row_count,
-    vec2 origin,
-    vec2 px,
-    bool show_histogram_metrics,
-    bool show_matrix_metrics
-) {
-    float value = 0.0;
-    ivec3 label = ivec3(CH_E, CH_V, CH_SPACE);
+// What a row needs before it is drawn. Every row is reserved in the panel's
+// geometry, so the panel top does not move when the metering rows come and go;
+// a reserved row that is not drawn stays blank.
+//
+// The matrix rows carry no separate "zone data has arrived" gate: the pass
+// that fills them is dispatched by the same enable_metering this gate already
+// requires, under the preview_metering that brings the panel out at all, so a
+// drawn row always has data behind it.
+const int GATE_ALWAYS = 0;
+const int GATE_METERING = 1;
 
-    if (row == 0) {
-        value = pq_eotf(input_max_i);
-        label = ivec3(CH_M, CH_A, CH_X);
-    } else if (row == 1) {
-        value = pq_eotf(input_min_i);
-        label = ivec3(CH_M, CH_I, CH_N);
-    } else if (row == 2) {
-        value = pq_eotf(input_avg_i);
-        label = ivec3(CH_A, CH_V, CH_G);
-    } else if (show_histogram_metrics && row == 3) {
-        value = pq_eotf(metered_histogram_average);
-        label = ivec3(CH_H, CH_S, CH_T);
-    } else if (show_matrix_metrics && row == 4) {
-        value = pq_eotf(metered_matrix_average);
-        label = ivec3(CH_M, CH_A, CH_T);
-    } else if (show_matrix_metrics && row == 5) {
-        value = metered_matrix_blend;
-        label = ivec3(CH_M, CH_I, CH_X);
-    } else if (row == row_count - 1) {
-        value = exposure_ev;
-    } else {
-        // The EV row is always last. Any other unhandled row draws nothing,
-        // so a future row insertion cannot silently relabel EV or duplicate a
-        // row by falling through to the next branch.
+// Where a row's number comes from. GLSL has no function pointers, so this is
+// the one thing the table cannot carry: metrics_row_value turns the value tag
+// back into the field it names. Keeping the number out of the table is also
+// what keeps the reads lazy, so a hidden row is never read.
+const int VAL_INPUT_MAX = 0;
+const int VAL_INPUT_MIN = 1;
+const int VAL_INPUT_AVG = 2;
+const int VAL_HISTOGRAM_AVG = 3;
+const int VAL_MATRIX_AVG = 4;
+const int VAL_MATRIX_MIX = 5;
+const int VAL_EXPOSURE_EV = 6;
+
+// Table order is panel order, and the EV row is last so that it stays at the
+// bottom of the panel whichever of the metering rows are showing.
+const MetricsRow METRICS_ROWS[7] = MetricsRow[7](
+    MetricsRow(ivec3(CH_M, CH_A, CH_X), VAL_INPUT_MAX, GATE_ALWAYS),
+    MetricsRow(ivec3(CH_M, CH_I, CH_N), VAL_INPUT_MIN, GATE_ALWAYS),
+    MetricsRow(ivec3(CH_A, CH_V, CH_G), VAL_INPUT_AVG, GATE_ALWAYS),
+    MetricsRow(ivec3(CH_H, CH_S, CH_T), VAL_HISTOGRAM_AVG, GATE_METERING),
+    MetricsRow(ivec3(CH_M, CH_A, CH_T), VAL_MATRIX_AVG, GATE_METERING),
+    MetricsRow(ivec3(CH_M, CH_I, CH_X), VAL_MATRIX_MIX, GATE_METERING),
+    MetricsRow(ivec3(CH_E, CH_V, CH_SPACE), VAL_EXPOSURE_EV, GATE_ALWAYS)
+);
+
+const int METRICS_ROW_SLOTS = METRICS_ROWS.length();
+// The metering block sits in the middle of the table, so with it hidden every
+// base row keeps its slot and the EV row moves up by the block's size. Adding
+// a row to that block means bumping this count; the base rows and the EV row
+// stay correct either way, the row above EV would just go blank.
+const int METRICS_ROW_METERING = 3;
+const int METRICS_ROW_RESERVED = METRICS_ROW_SLOTS - METRICS_ROW_METERING;
+
+int metrics_row_count(bool metering) {
+    return metering ? METRICS_ROW_SLOTS : METRICS_ROW_RESERVED;
+}
+
+// Panel position to table slot. Only the metering block can be hidden, and EV
+// is the last row of the table, so the identity holds below the block and only
+// the EV row has to move.
+int metrics_row_slot(int position, bool metering) {
+    return position < METRICS_ROW_RESERVED - 1 || metering
+        ? position
+        : position + METRICS_ROW_METERING;
+}
+
+bool metrics_row_visible(int slot, bool metering) {
+    return METRICS_ROWS[slot].gate == GATE_ALWAYS || metering;
+}
+
+// A row's number in display units. A PQ row converts its code here rather than
+// carrying a format flag out to the callers, so the glyphs and the width
+// estimate both measure the number that is actually drawn.
+float metrics_row_value(int value) {
+    if (value == VAL_INPUT_MAX) return pq_eotf(input_max_i);
+    if (value == VAL_INPUT_MIN) return pq_eotf(input_min_i);
+    if (value == VAL_INPUT_AVG) return pq_eotf(input_avg_i);
+    if (value == VAL_HISTOGRAM_AVG) return pq_eotf(metered_histogram_average);
+    if (value == VAL_MATRIX_AVG) return pq_eotf(metered_matrix_average);
+    if (value == VAL_MATRIX_MIX) return metered_matrix_blend;
+    if (value == VAL_EXPOSURE_EV) return exposure_ev;
+    return 0.0;
+}
+
+// Draw one panel row, or nothing when its gate is not met.
+vec4 draw_metrics_row(int position, vec2 origin, vec2 px, bool metering) {
+    int slot = metrics_row_slot(position, metering);
+    if (!metrics_row_visible(slot, metering))
         return vec4(0.0);
-    }
 
-    return draw_row(value, origin, px, label.x, label.y, label.z);
+    MetricsRow entry = METRICS_ROWS[slot];
+    return draw_row(metrics_row_value(entry.value), origin, px, entry.label);
 }
 
 vec4 draw_metrics_panel(vec2 px) {
@@ -4473,17 +4509,11 @@ vec4 draw_metrics_panel(vec2 px) {
     const float MAX_ROW_WIDTH =
         (LABEL_CHARACTERS + 1.0 + 5.0 + NUMBER_DECIMAL_CHARACTERS) *
         (CHAR_W + SPACING);
-    bool show_histogram_metrics = enable_metering > 1u;
-    // Reserve the histogram and matrix rows whenever enable_metering > 1,
-    // not only while they are shown: metered_zone_valid can appear and
-    // disappear during playback, and a row count that follows it moves the
-    // panel top and can flip the left/right column placement. The matrix
-    // rows stay blank in the reserved space while zone data is absent.
-    int row_count = BASE_METRICS_ROW_COUNT +
-                    (show_histogram_metrics
-                        ? HISTOGRAM_METRICS_ROW_COUNT +
-                          MATRIX_METRICS_ROW_COUNT
-                        : 0);
+    // The metering rows are reserved whenever enable_metering > 1, not only
+    // while they are shown: a row count that came and went during playback
+    // would move the panel top and could flip the left/right column placement.
+    bool show_metering_metrics = enable_metering > 1u;
+    int row_count = metrics_row_count(show_metering_metrics);
     float metrics_bottom = HOOKED_size.y - MARGIN * SCALE - CHAR_H * SCALE;
     float metrics_top = metrics_bottom -
                         float(row_count - 1) * LINE_H * SCALE;
@@ -4504,25 +4534,18 @@ vec4 draw_metrics_panel(vec2 px) {
     if (outside_panel_bounds(px, panel_min, panel_max))
         return vec4(0.0);
 
-    // Read the frame-uniform zone flag only for fragments inside the panel: it
-    // does not affect row_count, and an unguarded read would cost a per-fragment
-    // SSBO load across the whole frame.
-    bool show_matrix_metrics = show_histogram_metrics &&
-                               metered_zone_valid > 0u;
+    // The panel's black backing hugs the widest row it is drawing, so the
+    // estimate walks the same table through the same gate as the drawing. The
+    // slot order does not matter here, only which rows are visible.
+    float number_w = 0.0;
+    for (int slot = 0; slot < METRICS_ROW_SLOTS; slot++) {
+        if (!metrics_row_visible(slot, show_metering_metrics))
+            continue;
 
-    float label_width = number_advance(LABEL_CHARACTERS);
-    float pq_width = max(
-        max(pq_number_width(input_max_i), pq_number_width(input_min_i)),
-        pq_number_width(input_avg_i)
-    );
-    if (show_histogram_metrics)
-        pq_width = max(pq_width, pq_number_width(metered_histogram_average));
-    if (show_matrix_metrics)
-        pq_width = max(pq_width, pq_number_width(metered_matrix_average));
-    float scalar_width = number_width(exposure_ev);
-    if (show_matrix_metrics)
-        scalar_width = max(scalar_width, number_width(metered_matrix_blend));
-    float max_w = label_width + max(pq_width, scalar_width);
+        MetricsRow entry = METRICS_ROWS[slot];
+        number_w = max(number_w, number_width(metrics_row_value(entry.value)));
+    }
+    float max_w = number_advance(LABEL_CHARACTERS) + number_w;
     if (px.x > o0.x + (max_w + PAD) * SCALE)
         return vec4(0.0);
 
@@ -4534,14 +4557,7 @@ vec4 draw_metrics_panel(vec2 px) {
         vec2 origin = o0 + vec2(0.0, float(row) * row_stride);
         r = max(
             r,
-            draw_metrics_row(
-                row,
-                row_count,
-                origin,
-                px,
-                show_histogram_metrics,
-                show_matrix_metrics
-            )
+            draw_metrics_row(row, origin, px, show_metering_metrics)
         );
     }
 
