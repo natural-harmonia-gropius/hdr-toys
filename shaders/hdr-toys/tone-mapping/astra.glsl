@@ -98,6 +98,12 @@
 //!MAXIMUM 1.0
 0.4
 
+//!PARAM shadow_overshoot
+//!TYPE float
+//!MINIMUM 0.0
+//!MAXIMUM 2.0
+0.0
+
 //!PARAM highlight_weight
 //!TYPE float
 //!MINIMUM 0.0
@@ -2737,6 +2743,28 @@ float f_shoulder_hable_overshoot(
     return mix(y0, y1, t);
 }
 
+// Generalized rational toe, the reflection of f_shoulder_rational:
+//
+//   g(t) = t / (1 + a * (1 - t))^p
+//
+// For a positive span with normalized_slope >= 1, it passes through both
+// anchors, matches the outgoing slope at t = 1, and stays increasing below
+// the black point. Larger overshoot retains more slope near and below black.
+float f_toe_rational(
+    float x, float slope,
+    float x0, float y0, float x1, float y1,
+    float overshoot
+) {
+    float dx = x1 - x0;
+    float dy = y1 - y0;
+    float t = (x - x0) / dx;
+    float normalized_slope = slope * dx / dy;
+    float power = 1.0 / (1.0 + max(overshoot, 0.0));
+    float curvature = (normalized_slope - 1.0) / power;
+    float denominator = pow(1.0 + curvature * (1.0 - t), power);
+    return y0 + dy * t / denominator;
+}
+
 // Generalized rational shoulder. In normalized coordinates t and g(t):
 //
 //   g(t) = 1 - (1 - t) / (1 + a * t)^p
@@ -2812,7 +2840,11 @@ float evaluate_piecewise_tone_curve(
             return f_linear(x, slope, intercept);
         }
 
-        return f_toe_suzuki(x, slope, x0, y0, x1, y1);
+        return f_toe_rational(
+            x, slope,
+            x0, y0, x1, y1,
+            shadow_overshoot
+        );
     }
 
     if (x > x2) {
