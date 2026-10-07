@@ -80,18 +80,6 @@
 //!MAXIMUM 1
 1
 
-//!PARAM auto_exposure_white_constraint
-//!TYPE float
-//!MINIMUM 0.0
-//!MAXIMUM 1.0
-0.25
-
-//!PARAM auto_exposure_headroom_retention
-//!TYPE float
-//!MINIMUM 0.0
-//!MAXIMUM 1.0
-0.5
-
 //!PARAM exposure_value
 //!TYPE float
 //!MINIMUM -64
@@ -1773,6 +1761,11 @@ void hook() { analyze_metering_temporally(); }
 // The dynamic-metadata parameters at the top of the file are provided by mpv
 // [vo_gpu_next: add chroma location to shader parameters](https://github.com/mpv-player/mpv/pull/15239)
 
+// Fixed histogram-branch policy: blend toward the content-white exposure
+// constraint and retain half of the highlight headroom when limiting darkening.
+const float AUTO_EXPOSURE_WHITE_CONSTRAINT = 0.25;
+const float AUTO_EXPOSURE_HEADROOM_RETENTION = 0.5;
+
 // The same minimum time constant the temporal pass uses: the auto-exposure
 // and curve LUT ramps share it via ramp_alpha below, so neither copy can
 // drift away from the smoothing floor.
@@ -2053,7 +2046,7 @@ float constrain_exposure_to_content_white(
     float exposure,
     MeteringMetrics metrics
 ) {
-    if (auto_exposure_white_constraint <= 0.0 ||
+    if (AUTO_EXPOSURE_WHITE_CONSTRAINT <= 0.0 ||
         metrics.median <= 0.0 ||
         metrics.diffuse_white <= 0.0) {
         return exposure;
@@ -2073,7 +2066,7 @@ float constrain_exposure_to_content_white(
     return mix(
         exposure,
         content_white_exposure,
-        clamp(auto_exposure_white_constraint, 0.0, 1.0)
+        clamp(AUTO_EXPOSURE_WHITE_CONSTRAINT, 0.0, 1.0)
     );
 }
 
@@ -2103,13 +2096,13 @@ float histogram_negative_exposure_limit(
     float histogram_negative_limit = auto_exposure_limit_negative;
     bool has_content_white = metrics.median > 0.0 &&
                              metrics.diffuse_white > 0.0;
-    if (auto_exposure_headroom_retention > 0.0 && has_content_white) {
+    if (AUTO_EXPOSURE_HEADROOM_RETENTION > 0.0 && has_content_white) {
         float highlight_headroom = max(
             log2(maximum / max(reference_white, 1e-6)),
             0.0
         );
         float retained_headroom = clamp(
-            auto_exposure_headroom_retention,
+            AUTO_EXPOSURE_HEADROOM_RETENTION,
             0.0,
             1.0
         );
