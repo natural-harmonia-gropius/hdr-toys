@@ -98,6 +98,12 @@
 //!MAXIMUM  64
 0.0
 
+//!PARAM exposure_value_offset
+//!TYPE float
+//!MINIMUM -64
+//!MAXIMUM  64
+0.0
+
 //!PARAM shadow_weight
 //!TYPE float
 //!MINIMUM 0.0
@@ -2360,6 +2366,9 @@ void update_metering_metadata() {
         target_ev,
         automatic_exposure_enabled(metrics)
     );
+    // Apply manual EV compensation after smoothing so it stays immediate and
+    // does not enter automatic-exposure history. Bound the combined exposure.
+    exposure_ev = clamp(exposure_ev + exposure_value_offset, -64.0, 64.0);
     exposure_scale = exp2(exposure_ev);
     apply_exposure_to_range(metrics, exposure_scale);
     publish_metering_metadata(metrics);
