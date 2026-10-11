@@ -383,6 +383,26 @@ vec2 sample_metering_oriented(vec2 position, bool portrait) {
     )).xy;
 }
 
+vec3 metering_area_axis(float position, float scale, float size) {
+    if (scale <= 1.0) {
+        return vec3(position, position, 0.0);
+    }
+
+    float left = position * size - 0.5 * scale;
+    float first = floor(left);
+    float right = left + scale;
+    float w0 = min(first + 1.0, right) - left;
+    float w1 = max(min(first + 2.0, right) - (first + 1.0), 0.0);
+    float w2 = max(right - (first + 2.0), 0.0);
+    float pair = w0 + w1;
+
+    return vec3(
+        (first + w1 / pair + 0.5) / size,
+        (first + 2.5) / size,
+        w2 / scale
+    );
+}
+
 vec2 sample_metering_downscaled() {
     const vec2 target_size = vec2(512.0, 288.0);
     bool portrait = METERING_size.y > METERING_size.x;
@@ -393,31 +413,29 @@ vec2 sample_metering_downscaled() {
         return sample_metering_oriented(METERING_pos, portrait);
     }
 
-    // Extend the bilinear footprint to approximate an area average. At 2x
-    // downscaling the four taps land at the centers of the source 2x2 block.
-    vec2 offset = 0.5 * max(scale - vec2(1.0), vec2(0.0));
-    vec2 normalized_offset = offset / oriented_size;
-    vec2 sum = sample_metering_oriented(
-                   METERING_pos + vec2(-normalized_offset.x,
-                                       -normalized_offset.y),
-                   portrait
-               )
-             + sample_metering_oriented(
-                   METERING_pos + vec2( normalized_offset.x,
-                                       -normalized_offset.y),
-                   portrait
-               )
-             + sample_metering_oriented(
-                   METERING_pos + vec2(-normalized_offset.x,
-                                        normalized_offset.y),
-                   portrait
-               )
-             + sample_metering_oriented(
-                   METERING_pos + vec2( normalized_offset.x,
-                                        normalized_offset.y),
-                   portrait
-               );
-    return sum * 0.25;
+    if (any(greaterThan(scale, vec2(2.0)))) {
+        vec2 offset = 0.5 * max(scale - vec2(1.0), vec2(0.0)) / oriented_size;
+        return 0.25 * (
+            sample_metering_oriented(METERING_pos + vec2(-offset.x, -offset.y), portrait) +
+            sample_metering_oriented(METERING_pos + vec2( offset.x, -offset.y), portrait) +
+            sample_metering_oriented(METERING_pos + vec2(-offset.x,  offset.y), portrait) +
+            sample_metering_oriented(METERING_pos + vec2( offset.x,  offset.y), portrait)
+        );
+    }
+
+    vec3 x = metering_area_axis(METERING_pos.x, scale.x, oriented_size.x);
+    vec3 y = metering_area_axis(METERING_pos.y, scale.y, oriented_size.y);
+    vec2 top = mix(
+        sample_metering_oriented(vec2(x.x, y.x), portrait),
+        sample_metering_oriented(vec2(x.y, y.x), portrait),
+        x.z
+    );
+    vec2 bottom = mix(
+        sample_metering_oriented(vec2(x.x, y.y), portrait),
+        sample_metering_oriented(vec2(x.y, y.y), portrait),
+        x.z
+    );
+    return mix(top, bottom, y.z);
 }
 
 vec4 hook() { return vec4(sample_metering_downscaled(), 0.0, 1.0); }
