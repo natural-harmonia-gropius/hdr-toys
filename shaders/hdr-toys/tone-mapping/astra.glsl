@@ -1634,16 +1634,7 @@ float temporal_reference_blend_alpha(float delta_time) {
     return temporal_alpha(delta_time, time_constant);
 }
 
-void temporal_update_zone_response(uint index) {
-    if (temporal_zones_available == 0u) {
-        if (index == 0u) {
-            temporal_reset_zone_response();
-        }
-        return;
-    }
-
-    bool initialize = temporal_frame_operation == TEMPORAL_FRAME_INITIALIZE ||
-                      metered_reference_zones_valid == 0u;
+vec2 temporal_update_zone_references(uint index, bool initialize) {
     float alpha = initialize ? 1.0 : temporal_reference_blend_alpha(
         temporal_delta_time
     );
@@ -1662,7 +1653,10 @@ void temporal_update_zone_response(uint index) {
         support += delta > 0.0 ? vec2(weight, 0.0) : vec2(0.0, weight);
         metered_reference_zones[zone] = mix(reference, current, alpha);
     }
+    return support;
+}
 
+void temporal_reduce_zone_support(uint index, vec2 support) {
     temporal_zone_support[index] = support;
     barrier();
     for (uint size = TEMPORAL_HISTOGRAM_SIZE >> 1u;
@@ -1672,40 +1666,62 @@ void temporal_update_zone_response(uint index) {
         }
         barrier();
     }
+}
+
+void temporal_update_zone_evidence(bool initialize) {
+    vec2 support = temporal_zone_support[0] / float(TEMPORAL_ZONE_COUNT);
+    float direction = sign(support.x - support.y);
+    float target = smoothstep(
+        TEMPORAL_ZONE_SUPPORT_LOW,
+        TEMPORAL_ZONE_SUPPORT_HIGH,
+        max(support.x, support.y)
+    );
+    float evidence = metered_response_evidence;
+    temporal_zone_reversed = !initialize &&
+                             metered_response_direction != 0.0 &&
+                             direction != metered_response_direction;
+    if (initialize || !finite_float(evidence) ||
+        direction != metered_response_direction) {
+        evidence = 0.0;
+    }
+    float response_alpha = initialize ? 1.0 : temporal_alpha(
+        temporal_delta_time,
+        temporal_stable_duration * TEMPORAL_EVIDENCE_TIME_SCALE
+    );
+    metered_response_evidence = mix(evidence, target, response_alpha);
+    metered_response_direction = direction;
+    metered_response_confidence = smoothstep(
+        0.5, 1.0, metered_response_evidence
+    );
+    metered_reference_zones_valid = 1u;
+}
+
+void temporal_rebase_zone_references(uint index) {
+    for (uint zone = index; zone < TEMPORAL_ZONE_COUNT;
+         zone += TEMPORAL_HISTOGRAM_SIZE) {
+        metered_reference_zones[zone] = metered_zone_average[zone];
+    }
+}
+
+void temporal_update_zone_response(uint index) {
+    if (temporal_zones_available == 0u) {
+        if (index == 0u) {
+            temporal_reset_zone_response();
+        }
+        return;
+    }
+
+    bool initialize = temporal_frame_operation == TEMPORAL_FRAME_INITIALIZE ||
+                      metered_reference_zones_valid == 0u;
+    vec2 support = temporal_update_zone_references(index, initialize);
+    temporal_reduce_zone_support(index, support);
 
     if (index == 0u) {
-        support = temporal_zone_support[0] / float(TEMPORAL_ZONE_COUNT);
-        float direction = sign(support.x - support.y);
-        float target = smoothstep(
-            TEMPORAL_ZONE_SUPPORT_LOW,
-            TEMPORAL_ZONE_SUPPORT_HIGH,
-            max(support.x, support.y)
-        );
-        float evidence = metered_response_evidence;
-        temporal_zone_reversed = !initialize &&
-                                 metered_response_direction != 0.0 &&
-                                 direction != metered_response_direction;
-        if (initialize || !finite_float(evidence) ||
-            direction != metered_response_direction) {
-            evidence = 0.0;
-        }
-        float response_alpha = initialize ? 1.0 : temporal_alpha(
-            temporal_delta_time,
-            temporal_stable_duration * TEMPORAL_EVIDENCE_TIME_SCALE
-        );
-        metered_response_evidence = mix(evidence, target, response_alpha);
-        metered_response_direction = direction;
-        metered_response_confidence = smoothstep(
-            0.5, 1.0, metered_response_evidence
-        );
-        metered_reference_zones_valid = 1u;
+        temporal_update_zone_evidence(initialize);
     }
     barrier();
     if (temporal_zone_reversed) {
-        for (uint zone = index; zone < TEMPORAL_ZONE_COUNT;
-             zone += TEMPORAL_HISTOGRAM_SIZE) {
-            metered_reference_zones[zone] = metered_zone_average[zone];
-        }
+        temporal_rebase_zone_references(index);
     }
 }
 
