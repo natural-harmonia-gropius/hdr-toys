@@ -1574,7 +1574,7 @@ void temporal_initialize_frame() {
     temporal_frame_operation = TEMPORAL_FRAME_INITIALIZE;
 }
 
-vec2 temporal_measure_distribution_delta(uint index, float current) {
+vec2 temporal_measure_delta_and_update_previous(uint index, float current) {
     vec2 delta = vec2(
         current - metered_reference_histogram[index],
         current - metered_previous_histogram[index]
@@ -1872,7 +1872,7 @@ void analyze_metering_temporally() {
         return;
     }
 
-    vec2 delta = temporal_measure_distribution_delta(index, current);
+    vec2 delta = temporal_measure_delta_and_update_previous(index, current);
     temporal_scan_distribution_delta(index, delta);
     vec2 distance = temporal_cdf_distance(index);
     temporal_reduce_distances(index, distance);
