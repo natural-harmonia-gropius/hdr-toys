@@ -1553,15 +1553,19 @@ void temporal_clear_scene_candidate() {
     metered_scene_candidate_active = 0u;
 }
 
+void temporal_reset_zone_response() {
+    metered_reference_zones_valid = 0u;
+    metered_response_evidence = 0.0;
+    metered_response_direction = 0.0;
+    metered_response_confidence = 0.0;
+}
+
 void temporal_set_scalar_state(uint histogram_valid) {
     temporal_clear_scene_candidate();
     metered_temporal_valid = histogram_valid;
     metered_scene_adaptation_end_pts = 0u;
     metered_scene_fast_response = 0u;
-    metered_reference_zones_valid = 0u;
-    metered_response_evidence = 0.0;
-    metered_response_direction = 0.0;
-    metered_response_confidence = 0.0;
+    temporal_reset_zone_response();
 }
 
 void temporal_initialize_frame() {
@@ -1633,10 +1637,7 @@ float temporal_reference_blend_alpha(float delta_time) {
 void temporal_update_zone_response(uint index) {
     if (temporal_zones_available == 0u) {
         if (index == 0u) {
-            metered_reference_zones_valid = 0u;
-            metered_response_evidence = 0.0;
-            metered_response_direction = 0.0;
-            metered_response_confidence = 0.0;
+            temporal_reset_zone_response();
         }
         return;
     }
