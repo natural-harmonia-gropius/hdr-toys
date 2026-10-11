@@ -209,6 +209,11 @@
 //!VAR uint metered_scene_candidate_active
 //!VAR uint metered_scene_adaptation_end_pts
 //!VAR uint metered_scene_fast_response
+//!VAR float metered_reference_zones[144]
+//!VAR uint metered_reference_zones_valid
+//!VAR float metered_response_evidence
+//!VAR float metered_response_direction
+//!VAR float metered_response_confidence
 //!STORAGE
 
 //!BUFFER EXPOSURE_TEMPORAL
@@ -1479,6 +1484,13 @@ const float TEMPORAL_SCENE_ADAPTATION_TIME_SCALE = 0.50;
 const float TEMPORAL_MIN_TIME_CONSTANT = 1.0 / 240.0;
 const float TEMPORAL_PTS_EPSILON = 1e-6;
 
+const uint TEMPORAL_ZONE_COUNT = 144u;
+const float TEMPORAL_ZONE_DIFFERENCE_LOW = 4 * JND;
+const float TEMPORAL_ZONE_DIFFERENCE_HIGH = 32 * JND;
+const float TEMPORAL_ZONE_SUPPORT_LOW = 0.25;
+const float TEMPORAL_ZONE_SUPPORT_HIGH = 0.75;
+const float TEMPORAL_EVIDENCE_TIME_SCALE = 0.25;
+
 const uint TEMPORAL_FRAME_SKIP = 0u;
 const uint TEMPORAL_FRAME_INITIALIZE = 1u;
 const uint TEMPORAL_FRAME_PROCESS = 2u;
@@ -1491,6 +1503,9 @@ shared uint temporal_frame_operation;
 shared uint temporal_reference_operation;
 shared float temporal_delta_time;
 shared float temporal_reference_alpha;
+shared vec2 temporal_zone_support[TEMPORAL_HISTOGRAM_SIZE];
+shared bool temporal_zone_reversed;
+shared uint temporal_zones_available;
 
 float pts_to_float(uint x) {
     return uintBitsToFloat(x);
@@ -1525,6 +1540,10 @@ void temporal_set_scalar_state(uint histogram_valid) {
     metered_temporal_valid = histogram_valid;
     metered_scene_adaptation_end_pts = 0u;
     metered_scene_fast_response = 0u;
+    metered_reference_zones_valid = 0u;
+    metered_response_evidence = 0.0;
+    metered_response_direction = 0.0;
+    metered_response_confidence = 0.0;
 }
 
 void temporal_initialize_frame() {
@@ -1591,6 +1610,84 @@ float temporal_reference_blend_alpha(float delta_time) {
     float time_constant = temporal_stable_duration *
                           TEMPORAL_HISTOGRAM_TIME_SCALE;
     return temporal_alpha(delta_time, time_constant);
+}
+
+void temporal_update_zone_response(uint index) {
+    if (temporal_zones_available == 0u) {
+        if (index == 0u) {
+            metered_reference_zones_valid = 0u;
+            metered_response_evidence = 0.0;
+            metered_response_direction = 0.0;
+            metered_response_confidence = 0.0;
+        }
+        return;
+    }
+
+    bool initialize = temporal_frame_operation == TEMPORAL_FRAME_INITIALIZE ||
+                      metered_reference_zones_valid == 0u;
+    float alpha = initialize ? 1.0 : temporal_reference_blend_alpha(
+        temporal_delta_time
+    );
+    vec2 support = vec2(0.0);
+    for (uint zone = index; zone < TEMPORAL_ZONE_COUNT;
+         zone += TEMPORAL_HISTOGRAM_SIZE) {
+        float current = metered_zone_average[zone];
+        float reference = initialize ? current : metered_reference_zones[zone];
+        reference = finite_float(reference) ? reference : current;
+        float delta = current - reference;
+        float weight = smoothstep(
+            TEMPORAL_ZONE_DIFFERENCE_LOW,
+            TEMPORAL_ZONE_DIFFERENCE_HIGH,
+            abs(delta)
+        );
+        support += delta > 0.0 ? vec2(weight, 0.0) : vec2(0.0, weight);
+        metered_reference_zones[zone] = mix(reference, current, alpha);
+    }
+
+    temporal_zone_support[index] = support;
+    barrier();
+    for (uint size = TEMPORAL_HISTOGRAM_SIZE >> 1u;
+         size > 0u; size >>= 1u) {
+        if (index < size) {
+            temporal_zone_support[index] += temporal_zone_support[index + size];
+        }
+        barrier();
+    }
+
+    if (index == 0u) {
+        support = temporal_zone_support[0] / float(TEMPORAL_ZONE_COUNT);
+        float direction = sign(support.x - support.y);
+        float target = smoothstep(
+            TEMPORAL_ZONE_SUPPORT_LOW,
+            TEMPORAL_ZONE_SUPPORT_HIGH,
+            max(support.x, support.y)
+        );
+        float evidence = metered_response_evidence;
+        temporal_zone_reversed = !initialize &&
+                                 metered_response_direction != 0.0 &&
+                                 direction != metered_response_direction;
+        if (initialize || !finite_float(evidence) ||
+            direction != metered_response_direction) {
+            evidence = 0.0;
+        }
+        float response_alpha = initialize ? 1.0 : temporal_alpha(
+            temporal_delta_time,
+            temporal_stable_duration * TEMPORAL_EVIDENCE_TIME_SCALE
+        );
+        metered_response_evidence = mix(evidence, target, response_alpha);
+        metered_response_direction = direction;
+        metered_response_confidence = smoothstep(
+            0.5, 1.0, metered_response_evidence
+        );
+        metered_reference_zones_valid = 1u;
+    }
+    barrier();
+    if (temporal_zone_reversed) {
+        for (uint zone = index; zone < TEMPORAL_ZONE_COUNT;
+             zone += TEMPORAL_HISTOGRAM_SIZE) {
+            metered_reference_zones[zone] = metered_zone_average[zone];
+        }
+    }
 }
 
 // Scale the scene-change interval with the common minimum time constant.
@@ -1667,6 +1764,7 @@ void temporal_process_distances(vec2 distance) {
 void temporal_prepare_frame() {
     temporal_frame_operation = TEMPORAL_FRAME_SKIP;
     temporal_reference_operation = TEMPORAL_REFERENCE_KEEP;
+    temporal_zones_available = metered_zones_valid;
 
     if (!finite_float(PTS)) {
         // Skip histogram learning on invalid PTS; the next finite PTS
@@ -1729,6 +1827,8 @@ void analyze_metering_temporally() {
     if (temporal_frame_operation == TEMPORAL_FRAME_SKIP) {
         return;
     }
+
+    temporal_update_zone_response(index);
 
     float current = temporal_histogram_value(index);
 
@@ -2205,9 +2305,23 @@ float output_temporal_time_scale(float normal_scale) {
     bool fast_response = metered_scene_fast_response > 0u &&
                          PTS < adaptation_end &&
                          PTS >= adaptation_end - adaptation_duration;
-    return fast_response
-        ? min(normal_scale, OUTPUT_TEMPORAL_SCENE_TIME_SCALE)
-        : normal_scale;
+    float response = fast_response ? 1.0 : 0.0;
+    bool measured = enable_metering > 1 &&
+                    (force_metering > 0 ||
+                     (!(max_pq_y > 0.0) &&
+                      !(scene_max_r > 0.0 || scene_max_g > 0.0 ||
+                        scene_max_b > 0.0)));
+    if (measured && metered_temporal_valid > 0u &&
+        metered_reference_zones_valid > 0u &&
+        abs(PTS - uintBitsToFloat(metered_temporal_pts)) <= EXPOSURE_PTS_EPSILON &&
+        finite_float(metered_response_confidence)) {
+        response = max(response, clamp(metered_response_confidence, 0.0, 1.0));
+    }
+    return mix(
+        normal_scale,
+        min(normal_scale, OUTPUT_TEMPORAL_SCENE_TIME_SCALE),
+        response
+    );
 }
 
 // The exponential ramp form shared by auto-exposure and the curve LUT.
