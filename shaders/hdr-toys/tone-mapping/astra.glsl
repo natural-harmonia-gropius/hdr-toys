@@ -247,6 +247,13 @@
 //!VAR uint preview_vectorscope_bins[36864]
 //!STORAGE
 
+//!BUFFER PREVIEW_METRICS
+//!VAR uint preview_metrics_count
+//!VAR float preview_metrics_max_width
+//!VAR float preview_metrics_widths[8]
+//!VAR uint preview_metrics_glyphs[104]
+//!STORAGE
+
 //!BUFFER PREVIEW_HISTOGRAM
 //!VAR float preview_histogram_current[64]
 //!VAR float preview_histogram_reference[64]
@@ -3628,12 +3635,13 @@ vec4 hook() {
 //!BIND METADATA
 //!BIND LUTS
 //!BIND PREVIEW_HISTOGRAM
+//!BIND PREVIEW_METRICS
 //!SAVE EMPTY
 //!WIDTH 256
 //!HEIGHT 1
 //!COMPUTE 256 1 256 1
 //!WHEN preview_metering
-//!DESC metering (preview, histogram preparation)
+//!DESC metering (preview, histogram and metrics preparation)
 
 // Histogram heights are constant across each four-pixel bin, while the tone
 // curve varies once per plot column. Compute both here instead of repeating
@@ -3847,6 +3855,255 @@ void prepare_preview_curve_column(uint index) {
     preview_histogram_curve[index] = preview_curve_pq(pq_input);
 }
 
+const float CHAR_W = 3.0;
+const float SPACING = 1.0;
+
+const uint FONT_DIGITS[10] = uint[10](
+    0x7B6Fu, 0x749Au, 0x73E7u, 0x79E7u, 0x49EDu,
+    0x79CFu, 0x7BCFu, 0x4927u, 0x7BEFu, 0x79EFu
+);
+const uint FONT_LETTERS[26] = uint[26](
+    0x5BEFu, 0x3AEBu, 0x724Fu, 0x3B6Bu, 0x72CFu, 0x12CFu, 0x7B4Fu,
+    0x5BEDu, 0x7497u, 0x7B24u, 0x5AEDu, 0x7249u, 0x5BFDu, 0x5B6Fu,
+    0x7B6Fu, 0x13EFu, 0x49EFu, 0x5AEFu, 0x388Eu, 0x2497u, 0x7B6Du,
+    0x256Du, 0x5FEDu, 0x5AADu, 0x24ADu, 0x72A7u
+);
+const uint FONT_COLON = 0x0410u;
+const uint FONT_DOT   = 0x2000u;
+const uint FONT_MINUS = 0x01C0u;
+const uint FONT_SPACE = 0x0000u;
+const uint FONT_TOFU  = 0x7FFFu;
+
+const int CH_SPACE = 32;
+const int CH_MINUS = 45;
+const int CH_DOT   = 46;
+const int CH_0 = 48;
+const int CH_9 = 57;
+const int CH_COLON = 58;
+const int CH_A = 65;
+const int CH_E = 69;
+const int CH_G = 71;
+const int CH_H = 72;
+const int CH_I = 73;
+const int CH_M = 77;
+const int CH_N = 78;
+const int CH_S = 83;
+const int CH_T = 84;
+const int CH_V = 86;
+const int CH_X = 88;
+const int CH_Z = 90;
+
+uint get_glyph(int ch) {
+    if (ch >= CH_0 && ch <= CH_9) {
+        return FONT_DIGITS[ch - CH_0];
+    }
+    if (ch >= CH_A && ch <= CH_Z) {
+        return FONT_LETTERS[ch - CH_A];
+    }
+
+    if (ch == CH_SPACE) return FONT_SPACE;
+    if (ch == CH_MINUS) return FONT_MINUS;
+    if (ch == CH_DOT)   return FONT_DOT;
+    if (ch == CH_COLON) return FONT_COLON;
+    return FONT_TOFU;
+}
+
+
+uint integer_digit_count(uint int_part) {
+    uint digits = 1u;
+    if      (int_part >= 10000u) digits = 5u;
+    else if (int_part >= 1000u)  digits = 4u;
+    else if (int_part >= 100u)   digits = 3u;
+    else if (int_part >= 10u)    digits = 2u;
+    return digits;
+}
+
+const uint NUMBER_FIXED_MAX = 9999999u;
+
+uint number_fixed_value(float value) {
+    float magnitude = abs(value);
+    // Convert to hundredths with saturation; map NaN to zero.
+    float scaled = magnitude >= 0.0
+        ? min(magnitude * 100.0 + 0.5, float(NUMBER_FIXED_MAX))
+        : 0.0;
+    return uint(scaled);
+}
+
+// Number format: a three-character label, colon, optional sign,
+// up to five integer digits, and two decimal places.
+const float LABEL_CHARACTERS = 4.0;
+const float NUMBER_SIGN_CHARACTERS = 1.0;
+const float NUMBER_DECIMAL_CHARACTERS = 3.0;
+
+float number_advance(float characters) {
+    return characters * (CHAR_W + SPACING);
+}
+
+float number_width(float value) {
+    uint int_part = number_fixed_value(value) / 100u;
+    uint digits = integer_digit_count(int_part);
+
+    float characters = float(digits) + NUMBER_DECIMAL_CHARACTERS +
+                       (value < 0.0 ? NUMBER_SIGN_CHARACTERS : 0.0);
+    return number_advance(characters);
+}
+
+uint decimal_divisor(uint position_from_right) {
+    if (position_from_right == 4u) return 10000u;
+    if (position_from_right == 3u) return 1000u;
+    if (position_from_right == 2u) return 100u;
+    if (position_from_right == 1u) return 10u;
+    return 1u;
+}
+
+// Resolve one numeric character.
+int number_character(float value, int index) {
+    bool negative = value < 0.0;
+    uint fixed_value = number_fixed_value(value);
+    uint int_part = fixed_value / 100u;
+    uint dec_part = fixed_value - int_part * 100u;
+    uint digits = integer_digit_count(int_part);
+
+    if (negative) {
+        if (index == 0) {
+            return CH_MINUS;
+        }
+        index--;
+    }
+
+    if (index < int(digits)) {
+        uint position_from_right = digits - 1u - uint(index);
+        uint digit = (int_part / decimal_divisor(position_from_right)) % 10u;
+        return CH_0 + int(digit);
+    }
+
+    index -= int(digits);
+    if (index == 0) return CH_DOT;
+    if (index == 1) return CH_0 + int(dec_part / 10u);
+    if (index == 2) return CH_0 + int(dec_part % 10u);
+    return CH_SPACE;
+}
+
+// Metrics table entry: label, value source, and minimum metering level.
+struct MetricsRow {
+    ivec3 label;
+    int value;
+    int metering;
+};
+
+// Minimum enable_metering level required to display a row.
+const int METERING_NONE = 0;
+const int METERING_MINMAX = 1;
+const int METERING_FULL = 2;
+
+// Value-source tags resolved by metrics_row_value().
+const int VAL_INPUT_MAX = 0;
+const int VAL_INPUT_MIN = 1;
+const int VAL_INPUT_AVG = 2;
+const int VAL_HISTOGRAM_AVG = 3;
+const int VAL_MATRIX_AVG = 4;
+const int VAL_MATRIX_MIX = 5;
+const int VAL_EXPOSURE_EV = 6;
+const int VAL_EXPOSED_MAX = 7;
+
+// Table order is panel order.
+const MetricsRow METRICS_ROWS[] = MetricsRow[](
+    MetricsRow(ivec3(CH_M, CH_A, CH_X), VAL_INPUT_MAX, METERING_NONE),
+    MetricsRow(ivec3(CH_M, CH_I, CH_N), VAL_INPUT_MIN, METERING_NONE),
+    MetricsRow(ivec3(CH_A, CH_V, CH_G), VAL_INPUT_AVG, METERING_NONE),
+    MetricsRow(ivec3(CH_H, CH_S, CH_T), VAL_HISTOGRAM_AVG, METERING_FULL),
+    MetricsRow(ivec3(CH_M, CH_A, CH_T), VAL_MATRIX_AVG, METERING_FULL),
+    MetricsRow(ivec3(CH_M, CH_I, CH_X), VAL_MATRIX_MIX, METERING_FULL),
+    MetricsRow(ivec3(CH_E, CH_V, CH_SPACE), VAL_EXPOSURE_EV, METERING_NONE),
+    MetricsRow(ivec3(CH_E, CH_M, CH_X), VAL_EXPOSED_MAX, METERING_NONE)
+);
+
+const int METRICS_ROW_SLOTS = METRICS_ROWS.length();
+
+// Resolve a value in display units: nits, EV, or matrix blend fraction.
+float metrics_row_value(int value) {
+    if (value == VAL_INPUT_MAX) return pq_eotf(input_max_i);
+    if (value == VAL_INPUT_MIN) return pq_eotf(input_min_i);
+    if (value == VAL_INPUT_AVG) return pq_eotf(input_avg_i);
+    if (value == VAL_HISTOGRAM_AVG) return pq_eotf(metered_histogram_average);
+    if (value == VAL_MATRIX_AVG) return pq_eotf(metered_matrix_average);
+    if (value == VAL_MATRIX_MIX) return metered_matrix_blend;
+    if (value == VAL_EXPOSURE_EV) return exposure_ev;
+    if (value == VAL_EXPOSED_MAX) return pq_eotf(exposed_max_i);
+    return 0.0;
+}
+
+bool metrics_row_visible(int slot, int metering) {
+    return metering >= METRICS_ROWS[slot].metering;
+}
+
+// Count visible entries in table order.
+int metrics_row_count(int metering) {
+    int count = 0;
+    for (int slot = 0; slot < METRICS_ROW_SLOTS; slot++) {
+        if (metrics_row_visible(slot, metering)) {
+            count++;
+        }
+    }
+    return count;
+}
+
+// Map a valid visible-row position to its table slot.
+int metrics_row_slot(int position, int metering) {
+    int visible = 0;
+    for (int slot = 0; slot < METRICS_ROW_SLOTS; slot++) {
+        if (!metrics_row_visible(slot, metering)) {
+            continue;
+        }
+        if (visible == position) {
+            return slot;
+        }
+        visible++;
+    }
+    return 0;
+}
+
+const uint PREVIEW_METRICS_CHARACTERS = 13u;
+
+void prepare_preview_metrics(uint index) {
+    int metering = int(enable_metering);
+    int count = metrics_row_count(metering);
+    if (index < uint(METRICS_ROW_SLOTS) * PREVIEW_METRICS_CHARACTERS) {
+        uint row = index / PREVIEW_METRICS_CHARACTERS;
+        uint character = index % PREVIEW_METRICS_CHARACTERS;
+        uint glyph = FONT_SPACE;
+        float width = 0.0;
+        if (int(row) < count) {
+            MetricsRow entry = METRICS_ROWS[metrics_row_slot(int(row), metering)];
+            float value = metrics_row_value(entry.value);
+            width = number_advance(LABEL_CHARACTERS) + number_width(value);
+            int ch;
+            if (character < 3u) {
+                ch = entry.label[int(character)];
+            } else if (character == 3u) {
+                ch = CH_COLON;
+            } else {
+                ch = number_character(value, int(character) - 4);
+            }
+            glyph = get_glyph(ch);
+        }
+        preview_metrics_glyphs[index] = glyph;
+        if (character == 0u) {
+            preview_metrics_widths[row] = width;
+        }
+    }
+    memoryBarrierBuffer();
+    barrier();
+    if (index == 0u) {
+        preview_metrics_count = uint(count);
+        float width = 0.0;
+        for (int row = 0; row < count; row++) {
+            width = max(width, preview_metrics_widths[row]);
+        }
+        preview_metrics_max_width = width;
+    }
+}
+
 void hook() {
     uint index = gl_GlobalInvocationID.x;
     if (index < PREVIEW_HISTOGRAM_SIZE) {
@@ -3855,6 +4112,7 @@ void hook() {
     if (index < PREVIEW_HISTOGRAM_COLUMN_COUNT) {
         prepare_preview_curve_column(index);
     }
+    prepare_preview_metrics(index);
 }
 
 //!HOOK OUTPUT
@@ -3864,6 +4122,7 @@ void hook() {
 //!BIND METADATA
 //!BIND PREVIEW_VECTORSCOPE
 //!BIND PREVIEW_HISTOGRAM
+//!BIND PREVIEW_METRICS
 //!WHEN preview_metering
 //!DESC metering (preview)
 
@@ -3875,18 +4134,6 @@ const float METERING_CODE_SCALE = 4095.0;
 
 float to_float(uint x) {
     return float(x) / METERING_CODE_SCALE;
-}
-
-const float m1 = 2610.0 / 4096.0 / 4.0;
-const float m2 = 2523.0 / 4096.0 * 128.0;
-const float c1 = 3424.0 / 4096.0;
-const float c2 = 2413.0 / 4096.0 * 32.0;
-const float c3 = 2392.0 / 4096.0 * 32.0;
-const float pw = 10000.0;
-
-float pq_eotf(float x) {
-    float t = pow(x, 1.0 / m2);
-    return pow(max(t - c1, 0.0) / (c2 - c3 * t), 1.0 / m1) * pw;
 }
 
 // 3x5 bitmap font rendering
@@ -4270,269 +4517,30 @@ vec4 draw_vectorscope(vec2 px) {
     return vec4(tint, 1.0);
 }
 
-const uint FONT_DIGITS[10] = uint[10](
-    0x7B6Fu, 0x749Au, 0x73E7u, 0x79E7u, 0x49EDu,
-    0x79CFu, 0x7BCFu, 0x4927u, 0x7BEFu, 0x79EFu
-);
-const uint FONT_LETTERS[26] = uint[26](
-    0x5BEFu, 0x3AEBu, 0x724Fu, 0x3B6Bu, 0x72CFu, 0x12CFu, 0x7B4Fu,
-    0x5BEDu, 0x7497u, 0x7B24u, 0x5AEDu, 0x7249u, 0x5BFDu, 0x5B6Fu,
-    0x7B6Fu, 0x13EFu, 0x49EFu, 0x5AEFu, 0x388Eu, 0x2497u, 0x7B6Du,
-    0x256Du, 0x5FEDu, 0x5AADu, 0x24ADu, 0x72A7u
-);
-const uint FONT_COLON = 0x0410u;
-const uint FONT_DOT   = 0x2000u;
-const uint FONT_MINUS = 0x01C0u;
-const uint FONT_SPACE = 0x0000u;
-const uint FONT_TOFU  = 0x7FFFu;
-
-const int CH_SPACE = 32;
-const int CH_MINUS = 45;
-const int CH_DOT   = 46;
-const int CH_0 = 48;
-const int CH_9 = 57;
-const int CH_COLON = 58;
-const int CH_A = 65;
-const int CH_E = 69;
-const int CH_G = 71;
-const int CH_H = 72;
-const int CH_I = 73;
-const int CH_M = 77;
-const int CH_N = 78;
-const int CH_S = 83;
-const int CH_T = 84;
-const int CH_V = 86;
-const int CH_X = 88;
-const int CH_Z = 90;
-
-uint get_glyph(int ch) {
-    if (ch >= CH_0 && ch <= CH_9) {
-        return FONT_DIGITS[ch - CH_0];
-    }
-    if (ch >= CH_A && ch <= CH_Z) {
-        return FONT_LETTERS[ch - CH_A];
-    }
-
-    if (ch == CH_SPACE) return FONT_SPACE;
-    if (ch == CH_MINUS) return FONT_MINUS;
-    if (ch == CH_DOT)   return FONT_DOT;
-    if (ch == CH_COLON) return FONT_COLON;
-    return FONT_TOFU;
-}
-
 bool glyph_pixel(uint glyph, vec2 p) {
     if (p.x < 0.0 || p.x >= CHAR_W || p.y < 0.0 || p.y >= CHAR_H) return false;
     uint bit = uint(p.y) * 3u + uint(p.x);
     return (glyph & (1u << bit)) != 0u;
 }
 
-uint integer_digit_count(uint int_part) {
-    uint digits = 1u;
-    if      (int_part >= 10000u) digits = 5u;
-    else if (int_part >= 1000u)  digits = 4u;
-    else if (int_part >= 100u)   digits = 3u;
-    else if (int_part >= 10u)    digits = 2u;
-    return digits;
-}
+const int PREVIEW_METRICS_CHARACTERS = 13;
 
-const uint NUMBER_FIXED_MAX = 9999999u;
-
-uint number_fixed_value(float value) {
-    float magnitude = abs(value);
-    // Convert to hundredths with saturation; map NaN to zero.
-    float scaled = magnitude >= 0.0
-        ? min(magnitude * 100.0 + 0.5, float(NUMBER_FIXED_MAX))
-        : 0.0;
-    return uint(scaled);
-}
-
-// Number format: a three-character label, colon, optional sign,
-// up to five integer digits, and two decimal places.
-const float LABEL_CHARACTERS = 4.0;
-const float NUMBER_SIGN_CHARACTERS = 1.0;
-const float NUMBER_INTEGER_CHARACTERS = 5.0;
-const float NUMBER_DECIMAL_CHARACTERS = 3.0;
-
-float number_advance(float characters) {
-    return characters * (CHAR_W + SPACING);
-}
-
-float number_width(float value) {
-    uint int_part = number_fixed_value(value) / 100u;
-    uint digits = integer_digit_count(int_part);
-
-    float characters = float(digits) + NUMBER_DECIMAL_CHARACTERS +
-                       (value < 0.0 ? NUMBER_SIGN_CHARACTERS : 0.0);
-    return number_advance(characters);
-}
-
-uint decimal_divisor(uint position_from_right) {
-    if (position_from_right == 4u) return 10000u;
-    if (position_from_right == 3u) return 1000u;
-    if (position_from_right == 2u) return 100u;
-    if (position_from_right == 1u) return 10u;
-    return 1u;
-}
-
-// Resolve only the numeric character covered by this fragment.
-int number_character(float value, int index) {
-    bool negative = value < 0.0;
-    uint fixed_value = number_fixed_value(value);
-    uint int_part = fixed_value / 100u;
-    uint dec_part = fixed_value - int_part * 100u;
-    uint digits = integer_digit_count(int_part);
-
-    if (negative) {
-        if (index == 0) {
-            return CH_MINUS;
-        }
-        index--;
-    }
-
-    if (index < int(digits)) {
-        uint position_from_right = digits - 1u - uint(index);
-        uint digit = (int_part / decimal_divisor(position_from_right)) % 10u;
-        return CH_0 + int(digit);
-    }
-
-    index -= int(digits);
-    if (index == 0) return CH_DOT;
-    if (index == 1) return CH_0 + int(dec_part / 10u);
-    if (index == 2) return CH_0 + int(dec_part % 10u);
-    return CH_SPACE;
-}
-
-// Draw a labeled row: "LABEL:value".
-vec4 draw_row(float value, vec2 origin, vec2 px, ivec3 label) {
-    float advance = CHAR_W + SPACING;
-    float label_width = number_advance(LABEL_CHARACTERS);
-    float width = label_width + number_width(value);
+vec4 draw_metrics_row(int row, vec2 origin, vec2 px) {
     vec2 local = (px - origin) / SCALE;
-
-    if (local.x < 0.0 || local.x >= width ||
+    if (local.x < 0.0 || local.x >= preview_metrics_widths[row] ||
         local.y < 0.0 || local.y >= CHAR_H) {
         return vec4(0.0);
     }
 
-    int character_index = int(floor(local.x / advance));
-    int character;
-    if (character_index == 0) {
-        character = label.x;
-    } else if (character_index == 1) {
-        character = label.y;
-    } else if (character_index == 2) {
-        character = label.z;
-    } else if (character_index == 3) {
-        character = CH_COLON;
-    } else {
-        character = number_character(value, character_index - 4);
-    }
-
-    vec2 character_position = vec2(mod(local.x, advance), local.y);
-    return glyph_pixel(get_glyph(character), character_position)
-        ? vec4(1.0)
-        : vec4(0.0);
-}
-
-// Metrics table entry: label, value source, and minimum metering level.
-struct MetricsRow {
-    ivec3 label;
-    int value;
-    int metering;
-};
-
-// Minimum enable_metering level required to display a row.
-const int METERING_NONE = 0;
-const int METERING_MINMAX = 1;
-const int METERING_FULL = 2;
-
-// Value-source tags resolved by metrics_row_value().
-const int VAL_INPUT_MAX = 0;
-const int VAL_INPUT_MIN = 1;
-const int VAL_INPUT_AVG = 2;
-const int VAL_HISTOGRAM_AVG = 3;
-const int VAL_MATRIX_AVG = 4;
-const int VAL_MATRIX_MIX = 5;
-const int VAL_EXPOSURE_EV = 6;
-const int VAL_EXPOSED_MAX = 7;
-
-// Table order is panel order.
-const MetricsRow METRICS_ROWS[] = MetricsRow[](
-    MetricsRow(ivec3(CH_M, CH_A, CH_X), VAL_INPUT_MAX, METERING_NONE),
-    MetricsRow(ivec3(CH_M, CH_I, CH_N), VAL_INPUT_MIN, METERING_NONE),
-    MetricsRow(ivec3(CH_A, CH_V, CH_G), VAL_INPUT_AVG, METERING_NONE),
-    MetricsRow(ivec3(CH_H, CH_S, CH_T), VAL_HISTOGRAM_AVG, METERING_FULL),
-    MetricsRow(ivec3(CH_M, CH_A, CH_T), VAL_MATRIX_AVG, METERING_FULL),
-    MetricsRow(ivec3(CH_M, CH_I, CH_X), VAL_MATRIX_MIX, METERING_FULL),
-    MetricsRow(ivec3(CH_E, CH_V, CH_SPACE), VAL_EXPOSURE_EV, METERING_NONE),
-    MetricsRow(ivec3(CH_E, CH_M, CH_X), VAL_EXPOSED_MAX, METERING_NONE)
-);
-
-const int METRICS_ROW_SLOTS = METRICS_ROWS.length();
-
-// Resolve a value in display units: nits, EV, or matrix blend fraction.
-float metrics_row_value(int value) {
-    if (value == VAL_INPUT_MAX) return pq_eotf(input_max_i);
-    if (value == VAL_INPUT_MIN) return pq_eotf(input_min_i);
-    if (value == VAL_INPUT_AVG) return pq_eotf(input_avg_i);
-    if (value == VAL_HISTOGRAM_AVG) return pq_eotf(metered_histogram_average);
-    if (value == VAL_MATRIX_AVG) return pq_eotf(metered_matrix_average);
-    if (value == VAL_MATRIX_MIX) return metered_matrix_blend;
-    if (value == VAL_EXPOSURE_EV) return exposure_ev;
-    if (value == VAL_EXPOSED_MAX) return pq_eotf(exposed_max_i);
-    return 0.0;
-}
-
-bool metrics_row_visible(int slot, int metering) {
-    return metering >= METRICS_ROWS[slot].metering;
-}
-
-// Count visible entries in table order.
-int metrics_row_count(int metering) {
-    int count = 0;
-    for (int slot = 0; slot < METRICS_ROW_SLOTS; slot++) {
-        if (metrics_row_visible(slot, metering)) {
-            count++;
-        }
-    }
-    return count;
-}
-
-// Map a valid visible-row position to its table slot.
-int metrics_row_slot(int position, int metering) {
-    int visible = 0;
-    for (int slot = 0; slot < METRICS_ROW_SLOTS; slot++) {
-        if (!metrics_row_visible(slot, metering)) {
-            continue;
-        }
-        if (visible == position) {
-            return slot;
-        }
-        visible++;
-    }
-    return 0;
-}
-
-// Draw a visible row; position must be below metrics_row_count(metering).
-vec4 draw_metrics_row(int position, vec2 origin, vec2 px, int metering) {
-    int slot = metrics_row_slot(position, metering);
-    if (!metrics_row_visible(slot, metering)) {
-        return vec4(0.0);
-    }
-
-    MetricsRow entry = METRICS_ROWS[slot];
-    return draw_row(metrics_row_value(entry.value), origin, px, entry.label);
+    float advance = CHAR_W + SPACING;
+    int character = int(floor(local.x / advance));
+    uint glyph = preview_metrics_glyphs[row * PREVIEW_METRICS_CHARACTERS + character];
+    vec2 position = vec2(mod(local.x, advance), local.y);
+    return glyph_pixel(glyph, position) ? vec4(1.0) : vec4(0.0);
 }
 
 vec4 draw_metrics_panel(vec2 px) {
-    // Maximum width admitted by the number format.
-    const float MAX_ROW_WIDTH =
-        (LABEL_CHARACTERS + NUMBER_SIGN_CHARACTERS +
-         NUMBER_INTEGER_CHARACTERS + NUMBER_DECIMAL_CHARACTERS) *
-        (CHAR_W + SPACING);
-    // Size the panel for the rows visible at the current metering level.
-    int metering = int(enable_metering);
-    int row_count = metrics_row_count(metering);
+    int row_count = int(preview_metrics_count);
     float metrics_bottom = HOOKED_size.y - MARGIN * SCALE - CHAR_H * SCALE;
     float metrics_top = metrics_bottom -
                         float(row_count - 1) * LINE_H * SCALE;
@@ -4546,26 +4554,11 @@ vec4 draw_metrics_panel(vec2 px) {
     vec2 o0 = vec2(metrics_x, metrics_top);
     vec2 panel_min = o0 - vec2(PAD * SCALE);
     vec2 panel_max = vec2(
-        o0.x + (MAX_ROW_WIDTH + PAD) * SCALE,
+        o0.x + (preview_metrics_max_width + PAD) * SCALE,
         metrics_bottom + (CHAR_H + PAD) * SCALE
     );
 
     if (outside_panel_bounds(px, panel_min, panel_max)) {
-        return vec4(0.0);
-    }
-
-    // Fit the backing to the widest visible value.
-    float number_w = 0.0;
-    for (int slot = 0; slot < METRICS_ROW_SLOTS; slot++) {
-        if (!metrics_row_visible(slot, metering)) {
-            continue;
-        }
-
-        MetricsRow entry = METRICS_ROWS[slot];
-        number_w = max(number_w, number_width(metrics_row_value(entry.value)));
-    }
-    float max_w = number_advance(LABEL_CHARACTERS) + number_w;
-    if (px.x > o0.x + (max_w + PAD) * SCALE) {
         return vec4(0.0);
     }
 
@@ -4577,7 +4570,7 @@ vec4 draw_metrics_panel(vec2 px) {
         vec2 origin = o0 + vec2(0.0, float(row) * row_stride);
         r = max(
             r,
-            draw_metrics_row(row, origin, px, metering)
+            draw_metrics_row(row, origin, px)
         );
     }
 
