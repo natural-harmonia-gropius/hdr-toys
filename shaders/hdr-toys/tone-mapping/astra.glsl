@@ -197,13 +197,13 @@
 //!VAR float metered_histogram_average
 //!VAR float metered_matrix_average
 //!VAR float metered_matrix_blend
-//!VAR uint metered_zone_valid
+//!VAR uint metered_zones_valid
 //!STORAGE
 
 //!BUFFER METERED_TEMPORAL
 //!VAR float metered_reference_histogram[64]
 //!VAR float metered_previous_histogram[64]
-//!VAR uint metered_histogram_valid
+//!VAR uint metered_temporal_valid
 //!VAR uint metered_temporal_pts
 //!VAR uint metered_scene_candidate_start_pts
 //!VAR uint metered_scene_candidate_active
@@ -212,13 +212,13 @@
 //!STORAGE
 
 //!BUFFER EXPOSURE_TEMPORAL
-//!VAR float smoothed_ev
-//!VAR uint smoothed_ev_pts
-//!VAR uint smoothed_ev_valid
+//!VAR float exposure_temporal_ev
+//!VAR uint exposure_temporal_pts
+//!VAR uint exposure_temporal_valid
 //!STORAGE
 
 //!BUFFER CURVE_TEMPORAL
-//!VAR float smoothed_curve[1024]
+//!VAR float curve_temporal_values[1024]
 //!VAR float curve_temporal_alpha
 //!VAR uint curve_temporal_reset
 //!VAR uint curve_temporal_pts
@@ -545,7 +545,7 @@ void clear_metering_histogram_bin(uint index) {
     }
     if (index == 0u) {
         metered_max_rgb = 0u;
-        metered_zone_valid = 0u;
+        metered_zones_valid = 0u;
     }
 }
 
@@ -856,7 +856,7 @@ void analyze_matrix_zone() {
         if (zone_index < MATRIX_ZONE_COUNT) {
             publish_matrix_zone(zone_index);
             if (zone_index == 0u) {
-                metered_zone_valid = 1u;
+                metered_zones_valid = 1u;
             }
         }
     }
@@ -1075,7 +1075,7 @@ void prepare_matrix_active_region(uint tid) {
         uint top = 0u;
         uint bottom = MATRIX_ZONE_ROWS;
 
-        if (metered_zone_valid > 0u) {
+        if (metered_zones_valid > 0u) {
             for (uint x = 0u; x < MATRIX_ZONE_COLUMNS; x++) {
                 if (matrix_column_black_fraction(x) <
                     METERING_BORDER_OCCUPANCY_MIN) {
@@ -1178,7 +1178,7 @@ float matrix_difference_confidence(float difference) {
 }
 
 vec2 matrix_zone_partial(uint index, float reference_average) {
-    if (metered_zone_valid == 0u || index >= MATRIX_ZONE_COUNT) {
+    if (metered_zones_valid == 0u || index >= MATRIX_ZONE_COUNT) {
         return vec2(0.0);
     }
 
@@ -1522,7 +1522,7 @@ void temporal_clear_scene_candidate() {
 
 void temporal_set_scalar_state(uint histogram_valid) {
     temporal_clear_scene_candidate();
-    metered_histogram_valid = histogram_valid;
+    metered_temporal_valid = histogram_valid;
     metered_scene_adaptation_end_pts = 0u;
     metered_scene_fast_response = 0u;
 }
@@ -1675,7 +1675,7 @@ void temporal_prepare_frame() {
         return;
     }
 
-    if (metered_histogram_valid == 0u) {
+    if (metered_temporal_valid == 0u) {
         temporal_initialize_frame();
         return;
     }
@@ -2220,9 +2220,9 @@ float ramp_alpha(float delta_time, float time_scale) {
 }
 
 float reset_auto_exposure(float target) {
-    smoothed_ev = target;
-    smoothed_ev_pts = floatBitsToUint(PTS);
-    smoothed_ev_valid = 1u;
+    exposure_temporal_ev = target;
+    exposure_temporal_pts = floatBitsToUint(PTS);
+    exposure_temporal_valid = 1u;
     return target;
 }
 
@@ -2230,15 +2230,15 @@ float stabilize_auto_exposure(float target, bool automatic) {
     // Clamp EV to the declared range; use neutral EV for a non-finite target.
     target = finite_float(target) ? clamp(target, -64.0, 64.0) : 0.0;
     // Discard non-finite exposure history or timestamps.
-    if (smoothed_ev_valid > 0u &&
-        (!finite_float(smoothed_ev) ||
-         !finite_float(uintBitsToFloat(smoothed_ev_pts)))) {
-        smoothed_ev_valid = 0u;
+    if (exposure_temporal_valid > 0u &&
+        (!finite_float(exposure_temporal_ev) ||
+         !finite_float(uintBitsToFloat(exposure_temporal_pts)))) {
+        exposure_temporal_valid = 0u;
     }
 
     if (!finite_float(PTS)) {
         // Bypass smoothing on invalid PTS. The next finite PTS sets a new baseline.
-        smoothed_ev_valid = 0u;
+        exposure_temporal_valid = 0u;
         return target;
     }
 
@@ -2246,27 +2246,27 @@ float stabilize_auto_exposure(float target, bool automatic) {
         return reset_auto_exposure(target);
     }
 
-    if (smoothed_ev_valid == 0u) {
+    if (exposure_temporal_valid == 0u) {
         return reset_auto_exposure(target);
     }
 
-    float delta_time = PTS - uintBitsToFloat(smoothed_ev_pts);
+    float delta_time = PTS - uintBitsToFloat(exposure_temporal_pts);
     if (abs(delta_time) <= EXPOSURE_PTS_EPSILON) {
-        return smoothed_ev;
+        return exposure_temporal_ev;
     }
 
     if (delta_time < 0.0 || delta_time > temporal_stable_duration) {
         return reset_auto_exposure(target);
     }
 
-    float time_scale = target > smoothed_ev
+    float time_scale = target > exposure_temporal_ev
         ? EXPOSURE_RISE_TIME_SCALE
         : EXPOSURE_FALL_TIME_SCALE;
     time_scale = output_temporal_time_scale(time_scale);
     float alpha = ramp_alpha(delta_time, time_scale);
-    smoothed_ev = mix(smoothed_ev, target, alpha);
-    smoothed_ev_pts = floatBitsToUint(PTS);
-    return smoothed_ev;
+    exposure_temporal_ev = mix(exposure_temporal_ev, target, alpha);
+    exposure_temporal_pts = floatBitsToUint(PTS);
+    return exposure_temporal_ev;
 }
 
 void record_curve_temporal_pts() {
@@ -2899,25 +2899,25 @@ bool finite_float(float value) {
 float stabilize_curve_value(int index, float target) {
     // Read history only when reset is inactive.
     bool history_valid = curve_temporal_reset == 0u &&
-                         finite_float(smoothed_curve[index]);
+                         finite_float(curve_temporal_values[index]);
     // On a non-finite target, hold valid history or use zero.
     if (!finite_float(target)) {
-        target = history_valid ? smoothed_curve[index] : 0.0;
+        target = history_valid ? curve_temporal_values[index] : 0.0;
     }
 
     if (curve_temporal_reset > 0u || !history_valid) {
-        smoothed_curve[index] = target;
+        curve_temporal_values[index] = target;
         return target;
     }
 
     float value = mix(
-        smoothed_curve[index],
+        curve_temporal_values[index],
         target,
         curve_temporal_alpha
     );
     // Fall back to the target if interpolation produces a non-finite value.
     value = finite_float(value) ? value : target;
-    smoothed_curve[index] = value;
+    curve_temporal_values[index] = value;
     return value;
 }
 
@@ -3655,7 +3655,7 @@ void prepare_preview_histogram_bin(uint index) {
     vec2 source_interval = preview_histogram_source_interval(index);
     float current_count = preview_histogram_count(source_interval);
     bool temporal_reference_valid = temporal_stable_duration > 0.0 &&
-                                    metered_histogram_valid > 0u;
+                                    metered_temporal_valid > 0u;
     float reference_count = temporal_reference_valid
         ? preview_reference_histogram_count(source_interval, total)
         : current_count;
@@ -3793,7 +3793,7 @@ vec4 draw_excluded_matrix_zone(vec2 position, vec2 size, vec2 edge_distance) {
 
 // Striped cells are excluded by the border heuristic.
 vec4 draw_matrix_metering(vec2 position) {
-    if (metered_zone_valid == 0u) {
+    if (metered_zones_valid == 0u) {
         return vec4(0.0);
     }
 
