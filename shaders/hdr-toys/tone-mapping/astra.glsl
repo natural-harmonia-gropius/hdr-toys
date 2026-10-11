@@ -238,8 +238,8 @@
 //!VAR float output_reverse_max_jhk
 //!STORAGE
 
-//!BUFFER VECTORSCOPE
-//!VAR uint vectorscope_bins[36864]
+//!BUFFER PREVIEW_VECTORSCOPE
+//!VAR uint preview_vectorscope_bins[36864]
 //!STORAGE
 
 //!BUFFER PREVIEW_HISTOGRAM
@@ -2948,7 +2948,7 @@ void hook() {
 }
 
 //!HOOK OUTPUT
-//!BIND VECTORSCOPE
+//!BIND PREVIEW_VECTORSCOPE
 //!SAVE EMPTY
 //!COMPONENTS 1
 //!WIDTH 96
@@ -2970,16 +2970,16 @@ void hook() {
     uint base = index * VECTORSCOPE_CHANNEL_COUNT;
     // Interleave count and RGB sums so clearing, scattering, and reading one
     // bin touch adjacent addresses instead of four distant cache lines.
-    vectorscope_bins[base + 0u] = 0u;
-    vectorscope_bins[base + 1u] = 0u;
-    vectorscope_bins[base + 2u] = 0u;
-    vectorscope_bins[base + 3u] = 0u;
+    preview_vectorscope_bins[base + 0u] = 0u;
+    preview_vectorscope_bins[base + 1u] = 0u;
+    preview_vectorscope_bins[base + 2u] = 0u;
+    preview_vectorscope_bins[base + 3u] = 0u;
 }
 
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!BIND LUTS
-//!BIND VECTORSCOPE
+//!BIND PREVIEW_VECTORSCOPE
 //!SAVE EMPTY
 //!COMPONENTS 1
 //!WIDTH 256
@@ -3171,10 +3171,10 @@ void hook() {
 
     // The 256x144 sampling grid bounds each 16-bit channel sum below uint
     // overflow, even if every sample lands in the same vectorscope bin.
-    atomicAdd(vectorscope_bins[base + 0u], 1u);
-    atomicAdd(vectorscope_bins[base + 1u], encoded_rgb.r);
-    atomicAdd(vectorscope_bins[base + 2u], encoded_rgb.g);
-    atomicAdd(vectorscope_bins[base + 3u], encoded_rgb.b);
+    atomicAdd(preview_vectorscope_bins[base + 0u], 1u);
+    atomicAdd(preview_vectorscope_bins[base + 1u], encoded_rgb.r);
+    atomicAdd(preview_vectorscope_bins[base + 2u], encoded_rgb.g);
+    atomicAdd(preview_vectorscope_bins[base + 3u], encoded_rgb.b);
 }
 
 //!HOOK OUTPUT
@@ -3694,7 +3694,7 @@ void hook() {
 //!BIND METERING
 //!BIND METERED
 //!BIND METADATA
-//!BIND VECTORSCOPE
+//!BIND PREVIEW_VECTORSCOPE
 //!BIND PREVIEW_HISTOGRAM
 //!WHEN preview_metering
 //!DESC metering (preview)
@@ -4057,7 +4057,7 @@ vec4 draw_vectorscope(vec2 px) {
     );
     uint index = bin.y * PREVIEW_VECTORSCOPE_SIZE + bin.x;
     uint base = index * PREVIEW_VECTORSCOPE_CHANNEL_COUNT;
-    float count = float(vectorscope_bins[base + 0u]);
+    float count = float(preview_vectorscope_bins[base + 0u]);
     // The density reference is the same fixed 128-bin scale: the (grid / 128)^2
     // normalization keeps the rendered density at that appearance, so retuning
     // the grid changes resolution only, never trace brightness.
@@ -4070,9 +4070,9 @@ vec4 draw_vectorscope(vec2 px) {
         1.0
     );
     vec3 color_sum = vec3(
-        vectorscope_bins[base + 1u],
-        vectorscope_bins[base + 2u],
-        vectorscope_bins[base + 3u]
+        preview_vectorscope_bins[base + 1u],
+        preview_vectorscope_bins[base + 2u],
+        preview_vectorscope_bins[base + 3u]
     );
     vec3 average_color = color_sum / max(
         count * PREVIEW_VECTORSCOPE_COLOR_SCALE,
