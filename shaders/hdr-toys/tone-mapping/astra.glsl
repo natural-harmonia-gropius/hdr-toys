@@ -2048,6 +2048,18 @@ void normalize_metering_metrics(inout MeteringMetrics metrics) {
     );
 }
 
+bool measured_metering_enabled() {
+    bool has_pq_peak = max_pq_y > 0.0;
+    bool has_scene_peak = scene_max_r > 0.0 || scene_max_g > 0.0 ||
+                          scene_max_b > 0.0;
+    return enable_metering > 0 &&
+           (force_metering > 0 || (!has_pq_peak && !has_scene_peak));
+}
+
+bool full_metering_enabled() {
+    return enable_metering > 1 && measured_metering_enabled();
+}
+
 MeteringMetrics resolve_metering_metrics() {
     MeteringMetrics metrics;
     float pq_peak = sanitize_metadata_pq(max_pq_y);
@@ -2064,9 +2076,8 @@ MeteringMetrics resolve_metering_metrics() {
 
     // Match the intensity-map pass's peak-metadata test.
     // Preview computes measurements without changing this selection.
-    bool use_measured = enable_metering > 0 &&
-                        (force_metering > 0 ||
-                         (!has_pq_peak && !has_scene_peak));
+    bool use_measured = measured_metering_enabled();
+    bool use_full_measured = full_metering_enabled();
 
     if (use_measured) {
         metrics.maximum = to_float(metered_max_i);
@@ -2100,7 +2111,7 @@ MeteringMetrics resolve_metering_metrics() {
         metrics.minimum = 0.0;
     }
 
-    if (use_measured && enable_metering > 1) {
+    if (use_full_measured) {
         metrics.average = to_float(metered_avg_i);
     } else if (pq_average > 0.0) {
         metrics.average = pq_average;
@@ -2118,7 +2129,7 @@ MeteringMetrics resolve_metering_metrics() {
     // measurement path. Metadata paths retain the original single-exposure
     // behavior by assigning the resolved average to both branches and giving
     // the matrix branch zero weight.
-    if (use_measured && enable_metering > 1) {
+    if (use_full_measured) {
         metrics.histogram_average = sanitize_metadata_pq(
             metered_histogram_average
         );
@@ -2324,12 +2335,7 @@ float output_temporal_time_scale(float normal_scale) {
                          PTS < adaptation_end &&
                          PTS >= adaptation_end - adaptation_duration;
     float response = fast_response ? 1.0 : 0.0;
-    bool measured = enable_metering > 1 &&
-                    (force_metering > 0 ||
-                     (!(max_pq_y > 0.0) &&
-                      !(scene_max_r > 0.0 || scene_max_g > 0.0 ||
-                        scene_max_b > 0.0)));
-    if (measured && metered_temporal_valid > 0u &&
+    if (full_metering_enabled() && metered_temporal_valid > 0u &&
         metered_reference_zones_valid > 0u &&
         abs(PTS - uintBitsToFloat(metered_temporal_pts)) <= EXPOSURE_PTS_EPSILON &&
         finite_float(metered_response_confidence)) {
