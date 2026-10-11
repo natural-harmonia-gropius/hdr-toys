@@ -40,7 +40,6 @@
 //!TYPE float
 //!MINIMUM 0.0
 //!MAXIMUM 100000000.0
-
 1000.0
 
 //!PARAM chroma_correction_scaling
@@ -59,8 +58,32 @@ maxrgb
 
 //!HOOK OUTPUT
 //!BIND HOOKED
-//!WHEN representation ictcp =
-//!DESC tone mapping (bt.2390, ICtCp)
+//!DESC tone mapping (bt.2390)
+
+const vec3 y_coef = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
+
+const float a = y_coef.r;
+const float b = y_coef.g;
+const float c = y_coef.b;
+const float d = 2.0 * (1.0 - c);
+const float e = 2.0 * (1.0 - a);
+
+vec3 RGB_to_YCbCr(vec3 RGB) {
+    return RGB * mat3(
+         a,      b,      c,
+        -a / d, -b / d,  0.5,
+         0.5,   -b / e, -c / e
+    );
+}
+
+vec3 YCbCr_to_RGB(vec3 YCbCr) {
+    return YCbCr * mat3(
+        1.0,  0.0,        e,
+        1.0, -c / b * d, -a / b * e,
+        1.0,  d,          0.0
+    );
+}
+
 
 const float m1 = 2610.0 / 4096.0 / 4.0;
 const float m2 = 2523.0 / 4096.0 * 128.0;
@@ -70,7 +93,7 @@ const float c3 = 2392.0 / 4096.0 * 32.0;
 const float pw = 10000.0;
 
 float pq_eotf_inv(float x) {
-    float t = pow(x / pw, m1);
+    float t = pow(max(x, 0.0) / pw, m1);
     return pow((c1 + c2 * t) / (1.0 + c3 * t), m2);
 }
 
@@ -83,7 +106,7 @@ vec3 pq_eotf_inv(vec3 color) {
 }
 
 float pq_eotf(float x) {
-    float t = pow(x, 1.0 / m2);
+    float t = pow(max(x, 0.0), 1.0 / m2);
     return pow(max(t - c1, 0.0) / (c2 - c3 * t), 1.0 / m1) * pw;
 }
 
@@ -167,159 +190,6 @@ float get_max_i() {
 
     if (scene_max_r > 0.0 || scene_max_g > 0.0 || scene_max_b > 0.0) {
         vec3 scene_max_rgb = vec3(scene_max_r, scene_max_g, scene_max_b);
-        return pq_eotf_inv(RGB_to_XYZ(scene_max_rgb).y);
-    }
-
-    if (max_cll > 0.0)
-        return pq_eotf_inv(max_cll);
-
-    if (max_luma > 0.0)
-        return pq_eotf_inv(max_luma);
-
-    return pq_eotf_inv(1000.0);
-}
-
-float get_min_i() {
-    if (min_luma > 0.0)
-        return pq_eotf_inv(min_luma);
-
-    return pq_eotf_inv(0.001);
-}
-
-float f(float x, float iw, float ib, float ow, float ob) {
-    float minLum = (ob - ib) / (iw - ib);
-    float maxLum = (ow - ib) / (iw - ib);
-
-    float KS = 1.5 * maxLum - 0.5;
-    float b = minLum;
-
-    // E1
-    x = (x - ib) / (iw - ib);
-
-    // E2
-    if (KS <= x) {
-        float TB  = (x - KS) / (1.0 - KS);
-        float TB2 = TB * TB;
-        float TB3 = TB * TB2;
-
-        float PB  = (2.0 * TB3 - 3.0 * TB2 + 1.0) * KS  +
-                    (TB3 - 2.0 * TB2 + TB) * (1.0 - KS) +
-                    (-2.0 * TB3 + 3.0 * TB2) * maxLum;
-
-        x = PB;
-    }
-
-    // E3
-    if (0.0 <= x) {
-        x = x + b * pow((1.0 - x), 4.0);
-    }
-
-    // E4
-    x = x * (iw - ib) + ib;
-
-    return clamp(x, ob, ow);
-}
-
-float curve(float x) {
-    float ow = pq_eotf_inv(reference_white);
-    float ob = pq_eotf_inv(
-        contrast_ratio > 0.0 ? reference_white / contrast_ratio : 0.0
-    );
-    float iw = max(get_max_i(), ow + 1e-3);
-    float ib = min(get_min_i(), ob - 1e-3);
-    return f(x, iw, ib, ow, ob);
-}
-
-vec2 chroma_correction(vec2 ab, float i1, float i2) {
-    float r1 = i1 / max(i2, 1e-6);
-    float r2 = i2 / max(i1, 1e-6);
-    return ab * mix(1.0, min(r1, r2), chroma_correction_scaling);
-}
-
-vec3 tone_mapping(vec3 iab) {
-    float i2 = curve(iab.x);
-    vec2 ab2 = chroma_correction(iab.yz, iab.x, i2);
-    return vec3(i2, ab2);
-}
-
-vec4 hook() {
-    vec4 color = HOOKED_tex(HOOKED_pos);
-
-    color.rgb = RGB_to_ICtCp(color.rgb);
-    color.rgb = tone_mapping(color.rgb);
-    color.rgb = ICtCp_to_RGB(color.rgb);
-
-    return color;
-}
-
-//!HOOK OUTPUT
-//!BIND HOOKED
-//!WHEN representation ycbcr =
-//!DESC tone mapping (bt.2390, Y'Cb'Cr')
-
-const float m1 = 2610.0 / 4096.0 / 4.0;
-const float m2 = 2523.0 / 4096.0 * 128.0;
-const float c1 = 3424.0 / 4096.0;
-const float c2 = 2413.0 / 4096.0 * 32.0;
-const float c3 = 2392.0 / 4096.0 * 32.0;
-const float pw = 10000.0;
-
-float pq_eotf_inv(float x) {
-    float t = pow(x / pw, m1);
-    return pow((c1 + c2 * t) / (1.0 + c3 * t), m2);
-}
-
-vec3 pq_eotf_inv(vec3 color) {
-    return vec3(
-        pq_eotf_inv(color.r),
-        pq_eotf_inv(color.g),
-        pq_eotf_inv(color.b)
-    );
-}
-
-float pq_eotf(float x) {
-    float t = pow(x, 1.0 / m2);
-    return pow(max(t - c1, 0.0) / (c2 - c3 * t), 1.0 / m1) * pw;
-}
-
-vec3 pq_eotf(vec3 color) {
-    return vec3(
-        pq_eotf(color.r),
-        pq_eotf(color.g),
-        pq_eotf(color.b)
-    );
-}
-
-const vec3 y_coef = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
-
-const float a = y_coef.r;
-const float b = y_coef.g;
-const float c = y_coef.b;
-const float d = 2.0 * (1.0 - c);
-const float e = 2.0 * (1.0 - a);
-
-vec3 RGB_to_YCbCr(vec3 RGB) {
-    return RGB * mat3(
-         a,      b,      c,
-        -a / d, -b / d,  0.5,
-         0.5,   -b / e, -c / e
-    );
-}
-
-vec3 YCbCr_to_RGB(vec3 YCbCr) {
-    return YCbCr * mat3(
-        1.0,  0.0,        e,
-        1.0, -c / b * d, -a / b * e,
-        1.0,  d,          0.0
-    );
-}
-
-float get_max_i() {
-    if (max_pq_y > 0.0)
-        return max_pq_y;
-
-    if (scene_max_r > 0.0 || scene_max_g > 0.0 || scene_max_b > 0.0) {
-        vec3 scene_max_rgb = vec3(scene_max_r, scene_max_g, scene_max_b);
         return pq_eotf_inv(dot(scene_max_rgb, y_coef));
     }
 
@@ -389,393 +259,56 @@ vec2 chroma_correction(vec2 ab, float i1, float i2) {
     return ab * mix(1.0, min(r1, r2), chroma_correction_scaling);
 }
 
-vec3 tone_mapping(vec3 iab) {
+vec3 tone_mapping_iab(vec3 iab) {
     float i2 = curve(iab.x);
     vec2 ab2 = chroma_correction(iab.yz, iab.x, i2);
     return vec3(i2, ab2);
 }
 
-vec4 hook() {
-    vec4 color = HOOKED_tex(HOOKED_pos);
-
-    color.rgb = pq_eotf_inv(color.rgb * reference_white);
-    color.rgb = RGB_to_YCbCr(color.rgb);
-    color.rgb = tone_mapping(color.rgb);
-    color.rgb = YCbCr_to_RGB(color.rgb);
-    color.rgb = pq_eotf(color.rgb) / reference_white;
-
-    return color;
-}
-
-//!HOOK OUTPUT
-//!BIND HOOKED
-//!WHEN representation yrgb =
-//!DESC tone mapping (bt.2390, YRGB)
-
-const float m1 = 2610.0 / 4096.0 / 4.0;
-const float m2 = 2523.0 / 4096.0 * 128.0;
-const float c1 = 3424.0 / 4096.0;
-const float c2 = 2413.0 / 4096.0 * 32.0;
-const float c3 = 2392.0 / 4096.0 * 32.0;
-const float pw = 10000.0;
-
-float pq_eotf_inv(float x) {
-    float t = pow(x / pw, m1);
-    return pow((c1 + c2 * t) / (1.0 + c3 * t), m2);
-}
-
-vec3 pq_eotf_inv(vec3 color) {
-    return vec3(
-        pq_eotf_inv(color.r),
-        pq_eotf_inv(color.g),
-        pq_eotf_inv(color.b)
-    );
-}
-
-float pq_eotf(float x) {
-    float t = pow(x, 1.0 / m2);
-    return pow(max(t - c1, 0.0) / (c2 - c3 * t), 1.0 / m1) * pw;
-}
-
-vec3 pq_eotf(vec3 color) {
-    return vec3(
-        pq_eotf(color.r),
-        pq_eotf(color.g),
-        pq_eotf(color.b)
-    );
-}
-
-const vec3 y_coef = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
-
-float get_max_i() {
-    if (max_pq_y > 0.0)
-        return max_pq_y;
-
-    if (scene_max_r > 0.0 || scene_max_g > 0.0 || scene_max_b > 0.0) {
-        vec3 scene_max_rgb = vec3(scene_max_r, scene_max_g, scene_max_b);
-        return pq_eotf_inv(dot(scene_max_rgb, y_coef));
+// YRGB and maxRGB preserve chromaticity away from zero. Below the old
+// 1e-6-nit division floor, smoothly approach neutral mapped black instead of
+// fading to zero. Both terms retain the mapped Y (or maximum channel).
+vec3 scale_luminance(vec3 rgb, float input_luma, float output_luma) {
+    const float epsilon = 1e-6;
+    if (input_luma < epsilon) {
+        float t = input_luma / epsilon;
+        float blend = t * t * (3.0 - 2.0 * t);
+        // blend / input_luma simplifies to this finite gain even at zero.
+        float gain = t * (3.0 - 2.0 * t) / epsilon;
+        return output_luma * (vec3((1.0 - blend) / reference_white) + rgb * gain);
     }
-
-    if (max_cll > 0.0)
-        return pq_eotf_inv(max_cll);
-
-    if (max_luma > 0.0)
-        return pq_eotf_inv(max_luma);
-
-    return pq_eotf_inv(1000.0);
+    return rgb * (output_luma / input_luma);
 }
 
-float get_min_i() {
-    if (min_luma > 0.0)
-        return pq_eotf_inv(min_luma);
-
-    return pq_eotf_inv(0.001);
-}
-
-float f(float x, float iw, float ib, float ow, float ob) {
-    float minLum = (ob - ib) / (iw - ib);
-    float maxLum = (ow - ib) / (iw - ib);
-
-    float KS = 1.5 * maxLum - 0.5;
-    float b = minLum;
-
-    // E1
-    x = (x - ib) / (iw - ib);
-
-    // E2
-    if (KS <= x) {
-        float TB  = (x - KS) / (1.0 - KS);
-        float TB2 = TB * TB;
-        float TB3 = TB * TB2;
-
-        float PB  = (2.0 * TB3 - 3.0 * TB2 + 1.0) * KS  +
-                    (TB3 - 2.0 * TB2 + TB) * (1.0 - KS) +
-                    (-2.0 * TB3 + 3.0 * TB2) * maxLum;
-
-        x = PB;
-    }
-
-    // E3
-    if (0.0 <= x) {
-        x = x + b * pow((1.0 - x), 4.0);
-    }
-
-    // E4
-    x = x * (iw - ib) + ib;
-
-    return clamp(x, ob, ow);
-}
-
-float curve(float x) {
-    float ow = pq_eotf_inv(reference_white);
-    float ob = pq_eotf_inv(
-        contrast_ratio > 0.0 ? reference_white / contrast_ratio : 0.0
-    );
-    float iw = max(get_max_i(), ow + 1e-3);
-    float ib = min(get_min_i(), ob - 1e-3);
-    return f(x, iw, ib, ow, ob);
-}
-
-vec3 tone_mapping(vec3 rgb) {
-    float y1 = dot(rgb, y_coef) * reference_white;
-    float y2 = pq_eotf(curve(pq_eotf_inv(y1)));
-    return (y2 / max(y1, 1e-6)) * rgb;
+vec3 tone_mapping_luminance(vec3 rgb, bool use_max) {
+    float input_luma = (use_max ? max(max(rgb.r, rgb.g), rgb.b) : dot(rgb, y_coef))
+                     * reference_white;
+    float output_luma = pq_eotf(curve(pq_eotf_inv(input_luma)));
+    return scale_luminance(rgb, input_luma, output_luma);
 }
 
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
+    // Negative linear RGB is outside the input domain of PQ encoding.
+    color.rgb = max(color.rgb, 0.0);
 
-    color.rgb = tone_mapping(color.rgb);
-
-    return color;
-}
-
-//!HOOK OUTPUT
-//!BIND HOOKED
-//!WHEN representation prergb =
-//!DESC tone mapping (bt.2390, R'G'B')
-
-const float m1 = 2610.0 / 4096.0 / 4.0;
-const float m2 = 2523.0 / 4096.0 * 128.0;
-const float c1 = 3424.0 / 4096.0;
-const float c2 = 2413.0 / 4096.0 * 32.0;
-const float c3 = 2392.0 / 4096.0 * 32.0;
-const float pw = 10000.0;
-
-float pq_eotf_inv(float x) {
-    float t = pow(x / pw, m1);
-    return pow((c1 + c2 * t) / (1.0 + c3 * t), m2);
-}
-
-vec3 pq_eotf_inv(vec3 color) {
-    return vec3(
-        pq_eotf_inv(color.r),
-        pq_eotf_inv(color.g),
-        pq_eotf_inv(color.b)
-    );
-}
-
-float pq_eotf(float x) {
-    float t = pow(x, 1.0 / m2);
-    return pow(max(t - c1, 0.0) / (c2 - c3 * t), 1.0 / m1) * pw;
-}
-
-vec3 pq_eotf(vec3 color) {
-    return vec3(
-        pq_eotf(color.r),
-        pq_eotf(color.g),
-        pq_eotf(color.b)
-    );
-}
-
-const vec3 y_coef = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
-
-float get_max_i() {
-    if (max_pq_y > 0.0)
-        return max_pq_y;
-
-    if (scene_max_r > 0.0 || scene_max_g > 0.0 || scene_max_b > 0.0) {
-        vec3 scene_max_rgb = vec3(scene_max_r, scene_max_g, scene_max_b);
-        return pq_eotf_inv(dot(scene_max_rgb, y_coef));
+    if (representation == ictcp) {
+        color.rgb = RGB_to_ICtCp(color.rgb);
+        color.rgb = tone_mapping_iab(color.rgb);
+        color.rgb = ICtCp_to_RGB(color.rgb);
+    } else if (representation == ycbcr) {
+        color.rgb = pq_eotf_inv(color.rgb * reference_white);
+        color.rgb = RGB_to_YCbCr(color.rgb);
+        color.rgb = tone_mapping_iab(color.rgb);
+        color.rgb = YCbCr_to_RGB(color.rgb);
+        color.rgb = pq_eotf(color.rgb) / reference_white;
+    } else if (representation == yrgb || representation == maxrgb) {
+        color.rgb = tone_mapping_luminance(color.rgb, representation == maxrgb);
+    } else if (representation == prergb) {
+        color.rgb = pq_eotf_inv(color.rgb * reference_white);
+        color.rgb = vec3(curve(color.r), curve(color.g), curve(color.b));
+        color.rgb = pq_eotf(color.rgb) / reference_white;
     }
-
-    if (max_cll > 0.0)
-        return pq_eotf_inv(max_cll);
-
-    if (max_luma > 0.0)
-        return pq_eotf_inv(max_luma);
-
-    return pq_eotf_inv(1000.0);
-}
-
-float get_min_i() {
-    if (min_luma > 0.0)
-        return pq_eotf_inv(min_luma);
-
-    return pq_eotf_inv(0.001);
-}
-
-float f(float x, float iw, float ib, float ow, float ob) {
-    float minLum = (ob - ib) / (iw - ib);
-    float maxLum = (ow - ib) / (iw - ib);
-
-    float KS = 1.5 * maxLum - 0.5;
-    float b = minLum;
-
-    // E1
-    x = (x - ib) / (iw - ib);
-
-    // E2
-    if (KS <= x) {
-        float TB  = (x - KS) / (1.0 - KS);
-        float TB2 = TB * TB;
-        float TB3 = TB * TB2;
-
-        float PB  = (2.0 * TB3 - 3.0 * TB2 + 1.0) * KS  +
-                    (TB3 - 2.0 * TB2 + TB) * (1.0 - KS) +
-                    (-2.0 * TB3 + 3.0 * TB2) * maxLum;
-
-        x = PB;
-    }
-
-    // E3
-    if (0.0 <= x) {
-        x = x + b * pow((1.0 - x), 4.0);
-    }
-
-    // E4
-    x = x * (iw - ib) + ib;
-
-    return clamp(x, ob, ow);
-}
-
-float curve(float x) {
-    float ow = pq_eotf_inv(reference_white);
-    float ob = pq_eotf_inv(
-        contrast_ratio > 0.0 ? reference_white / contrast_ratio : 0.0
-    );
-    float iw = max(get_max_i(), ow + 1e-3);
-    float ib = min(get_min_i(), ob - 1e-3);
-    return f(x, iw, ib, ow, ob);
-}
-
-vec3 tone_mapping(vec3 rgb) {
-    return vec3(
-        curve(rgb.r),
-        curve(rgb.g),
-        curve(rgb.b)
-    );
-}
-
-vec4 hook() {
-    vec4 color = HOOKED_tex(HOOKED_pos);
-
-    color.rgb = pq_eotf_inv(color.rgb * reference_white);
-    color.rgb = tone_mapping(color.rgb);
-    color.rgb = pq_eotf(color.rgb) / reference_white;
-
-    return color;
-}
-
-//!HOOK OUTPUT
-//!BIND HOOKED
-//!WHEN representation maxrgb =
-//!DESC tone mapping (bt.2390, maxRGB)
-
-const float m1 = 2610.0 / 4096.0 / 4.0;
-const float m2 = 2523.0 / 4096.0 * 128.0;
-const float c1 = 3424.0 / 4096.0;
-const float c2 = 2413.0 / 4096.0 * 32.0;
-const float c3 = 2392.0 / 4096.0 * 32.0;
-const float pw = 10000.0;
-
-float pq_eotf_inv(float x) {
-    float t = pow(x / pw, m1);
-    return pow((c1 + c2 * t) / (1.0 + c3 * t), m2);
-}
-
-vec3 pq_eotf_inv(vec3 color) {
-    return vec3(
-        pq_eotf_inv(color.r),
-        pq_eotf_inv(color.g),
-        pq_eotf_inv(color.b)
-    );
-}
-
-float pq_eotf(float x) {
-    float t = pow(x, 1.0 / m2);
-    return pow(max(t - c1, 0.0) / (c2 - c3 * t), 1.0 / m1) * pw;
-}
-
-vec3 pq_eotf(vec3 color) {
-    return vec3(
-        pq_eotf(color.r),
-        pq_eotf(color.g),
-        pq_eotf(color.b)
-    );
-}
-
-const vec3 y_coef = vec3(0.2627002120112671, 0.6779980715188708, 0.05930171646986196);
-
-float get_max_i() {
-    if (max_pq_y > 0.0)
-        return max_pq_y;
-
-    if (scene_max_r > 0.0 || scene_max_g > 0.0 || scene_max_b > 0.0) {
-        vec3 scene_max_rgb = vec3(scene_max_r, scene_max_g, scene_max_b);
-        return pq_eotf_inv(dot(scene_max_rgb, y_coef));
-    }
-
-    if (max_cll > 0.0)
-        return pq_eotf_inv(max_cll);
-
-    if (max_luma > 0.0)
-        return pq_eotf_inv(max_luma);
-
-    return pq_eotf_inv(1000.0);
-}
-
-float get_min_i() {
-    if (min_luma > 0.0)
-        return pq_eotf_inv(min_luma);
-
-    return pq_eotf_inv(0.001);
-}
-
-float f(float x, float iw, float ib, float ow, float ob) {
-    float minLum = (ob - ib) / (iw - ib);
-    float maxLum = (ow - ib) / (iw - ib);
-
-    float KS = 1.5 * maxLum - 0.5;
-    float b = minLum;
-
-    // E1
-    x = (x - ib) / (iw - ib);
-
-    // E2
-    if (KS <= x) {
-        float TB  = (x - KS) / (1.0 - KS);
-        float TB2 = TB * TB;
-        float TB3 = TB * TB2;
-
-        float PB  = (2.0 * TB3 - 3.0 * TB2 + 1.0) * KS  +
-                    (TB3 - 2.0 * TB2 + TB) * (1.0 - KS) +
-                    (-2.0 * TB3 + 3.0 * TB2) * maxLum;
-
-        x = PB;
-    }
-
-    // E3
-    if (0.0 <= x) {
-        x = x + b * pow((1.0 - x), 4.0);
-    }
-
-    // E4
-    x = x * (iw - ib) + ib;
-
-    return clamp(x, ob, ow);
-}
-
-float curve(float x) {
-    float ow = pq_eotf_inv(reference_white);
-    float ob = pq_eotf_inv(
-        contrast_ratio > 0.0 ? reference_white / contrast_ratio : 0.0
-    );
-    float iw = max(get_max_i(), ow + 1e-3);
-    float ib = min(get_min_i(), ob - 1e-3);
-    return f(x, iw, ib, ow, ob);
-}
-
-vec3 tone_mapping(vec3 rgb) {
-    float m1 = max(max(rgb.r, rgb.g), rgb.b) * reference_white;
-    float m2 = pq_eotf(curve(pq_eotf_inv(m1)));
-    return (m2 / max(m1, 1e-6)) * rgb;
-}
-
-vec4 hook() {
-    vec4 color = HOOKED_tex(HOOKED_pos);
-
-    color.rgb = tone_mapping(color.rgb);
 
     return color;
 }
