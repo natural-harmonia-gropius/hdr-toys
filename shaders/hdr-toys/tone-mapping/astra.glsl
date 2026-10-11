@@ -271,7 +271,8 @@
 // Preview also runs metering, but does not force the resolver to use it.
 // BIND METERING gates consumers on the availability of the current map.
 // WHEN is evaluated before BIND; do not query a conditionally absent texture.
-// Keep the header delimiter out of GLSL body comments.
+// Keep the shader directive marker (two slashes followed by an exclamation
+// mark) out of GLSL body comments to avoid it being parsed as a directive.
 
 const float m1 = 2610.0 / 4096.0 / 4.0;
 const float m2 = 2523.0 / 4096.0 * 128.0;
@@ -1314,8 +1315,10 @@ void publish_matrix_average(uint tid) {
     if (!matrix_available) {
         matrix_weight = 0.0;
     }
-    // These values feed the two independent exposure branches as well as the
-    // optional preview. Publish them unconditionally whenever metering runs.
+    // Exposure uses the separate histogram and matrix averages below: each
+    // branch solves and constrains its own EV before the EVs are blended.
+    // The blended PQ average is published for reporting and the auto-exposure
+    // enable check; it is not the average used to solve either exposure branch.
     metered_histogram_average = histogram_average;
     metered_matrix_average = matrix_average;
     metered_matrix_blend = matrix_weight;
@@ -2287,6 +2290,9 @@ float histogram_negative_exposure_limit(
     return histogram_negative_limit;
 }
 
+// Solve and constrain the two exposures separately, then blend in EV space.
+// Using metrics.average instead would blend PQ values before exposure solving
+// and would bypass the distinct constraints of the two branches.
 float calculate_auto_exposure(MeteringMetrics metrics) {
     float reference_iz = iz_eotf_inv(reference_white);
     float reference_j = I_to_J(reference_iz);
@@ -3646,6 +3652,9 @@ vec4 hook() {
 // Histogram heights are constant across each four-pixel bin, while the tone
 // curve varies once per plot column. Compute both here instead of repeating
 // histogram integration and colour-space conversion along all 256 rows.
+// Prepare metric glyphs and row widths in the same dispatch; synchronize the
+// width writes before reducing the panel width. The preview drawing pass
+// reads these prepared buffers instead of formatting values per pixel.
 
 const uint PREVIEW_HISTOGRAM_SIZE = 64u;
 const uint PREVIEW_HISTOGRAM_RAW_SIZE = 1024u;
