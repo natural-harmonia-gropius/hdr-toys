@@ -1091,66 +1091,79 @@ float matrix_row_black_fraction(uint y, uint left, uint right) {
     );
 }
 
+struct MatrixActiveRegion {
+    uvec4 bounds;
+    float border_confidence;
+};
+
+MatrixActiveRegion detect_matrix_active_region() {
+    uint left = 0u;
+    uint right = MATRIX_ZONE_COLUMNS;
+    uint top = 0u;
+    uint bottom = MATRIX_ZONE_ROWS;
+
+    if (metered_zones_valid > 0u) {
+        for (uint x = 0u; x < MATRIX_ZONE_COLUMNS; x++) {
+            if (matrix_column_black_fraction(x) <
+                METERING_BORDER_OCCUPANCY_MIN) {
+                break;
+            }
+            left = x + 1u;
+        }
+        for (int x = int(MATRIX_ZONE_COLUMNS) - 1; x >= 0; x--) {
+            if (matrix_column_black_fraction(uint(x)) <
+                METERING_BORDER_OCCUPANCY_MIN) {
+                break;
+            }
+            right = uint(x);
+        }
+
+        if (right > left &&
+            right - left >= METERING_ACTIVE_COLUMNS_MIN) {
+            for (uint y = 0u; y < MATRIX_ZONE_ROWS; y++) {
+                if (matrix_row_black_fraction(y, left, right) <
+                    METERING_BORDER_OCCUPANCY_MIN) {
+                    break;
+                }
+                top = y + 1u;
+            }
+            for (int y = int(MATRIX_ZONE_ROWS) - 1; y >= 0; y--) {
+                if (matrix_row_black_fraction(
+                        uint(y), left, right
+                    ) < METERING_BORDER_OCCUPANCY_MIN) {
+                    break;
+                }
+                bottom = uint(y);
+            }
+        }
+    }
+
+    bool valid_bounds = right > left && bottom > top &&
+                        right - left >= METERING_ACTIVE_COLUMNS_MIN &&
+                        bottom - top >= METERING_ACTIVE_ROWS_MIN;
+    if (!valid_bounds) {
+        left = 0u;
+        right = MATRIX_ZONE_COLUMNS;
+        top = 0u;
+        bottom = MATRIX_ZONE_ROWS;
+    }
+
+    MatrixActiveRegion region;
+    region.bounds = uvec4(left, right, top, bottom);
+    float active_area = float((right - left) * (bottom - top));
+    float removed_fraction = 1.0 - active_area /
+                             float(MATRIX_ZONE_COUNT);
+    region.border_confidence = valid_bounds
+        ? smoothstep(0.05, 0.30, removed_fraction)
+        : 0.0;
+    return region;
+}
+
 void prepare_matrix_active_region(uint tid) {
     if (tid == 0u) {
-        uint left = 0u;
-        uint right = MATRIX_ZONE_COLUMNS;
-        uint top = 0u;
-        uint bottom = MATRIX_ZONE_ROWS;
-
-        if (metered_zones_valid > 0u) {
-            for (uint x = 0u; x < MATRIX_ZONE_COLUMNS; x++) {
-                if (matrix_column_black_fraction(x) <
-                    METERING_BORDER_OCCUPANCY_MIN) {
-                    break;
-                }
-                left = x + 1u;
-            }
-            for (int x = int(MATRIX_ZONE_COLUMNS) - 1; x >= 0; x--) {
-                if (matrix_column_black_fraction(uint(x)) <
-                    METERING_BORDER_OCCUPANCY_MIN) {
-                    break;
-                }
-                right = uint(x);
-            }
-
-            if (right > left &&
-                right - left >= METERING_ACTIVE_COLUMNS_MIN) {
-                for (uint y = 0u; y < MATRIX_ZONE_ROWS; y++) {
-                    if (matrix_row_black_fraction(y, left, right) <
-                        METERING_BORDER_OCCUPANCY_MIN) {
-                        break;
-                    }
-                    top = y + 1u;
-                }
-                for (int y = int(MATRIX_ZONE_ROWS) - 1; y >= 0; y--) {
-                    if (matrix_row_black_fraction(
-                            uint(y), left, right
-                        ) < METERING_BORDER_OCCUPANCY_MIN) {
-                        break;
-                    }
-                    bottom = uint(y);
-                }
-            }
-        }
-
-        bool valid_bounds = right > left && bottom > top &&
-                            right - left >= METERING_ACTIVE_COLUMNS_MIN &&
-                            bottom - top >= METERING_ACTIVE_ROWS_MIN;
-        if (!valid_bounds) {
-            left = 0u;
-            right = MATRIX_ZONE_COLUMNS;
-            top = 0u;
-            bottom = MATRIX_ZONE_ROWS;
-        }
-
-        matrix_active_bounds = uvec4(left, right, top, bottom);
-        float active_area = float((right - left) * (bottom - top));
-        float removed_fraction = 1.0 - active_area /
-                                 float(MATRIX_ZONE_COUNT);
-        matrix_border_confidence = valid_bounds
-            ? smoothstep(0.05, 0.30, removed_fraction)
-            : 0.0;
+        MatrixActiveRegion region = detect_matrix_active_region();
+        matrix_active_bounds = region.bounds;
+        matrix_border_confidence = region.border_confidence;
     }
     barrier();
 }
