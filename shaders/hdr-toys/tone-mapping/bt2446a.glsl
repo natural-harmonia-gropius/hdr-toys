@@ -60,8 +60,6 @@ float get_max_l() {
 }
 
 float f(float Y) {
-    Y = pow(Y, 1.0 / 2.4);
-
     float pHDR = 1.0 + 32.0 * pow(get_max_l() / 10000.0, 1.0 / 2.4);
     float pSDR = 1.0 + 32.0 * pow(reference_white / 10000.0, 1.0 / 2.4);
 
@@ -74,9 +72,7 @@ float f(float Y) {
 
     float Ysdr = (pow(pSDR, Yc) - 1.0) / (pSDR - 1.0);
 
-    Y = pow(Ysdr, 2.4);
-
-    return Y;
+    return Ysdr;
 }
 
 float curve(float Y) {
@@ -84,15 +80,16 @@ float curve(float Y) {
 }
 
 vec3 tone_mapping(vec3 YCbCr) {
-    YCbCr /= get_max_l() / reference_white;
-
     float Y  = YCbCr.r;
     float Cb = YCbCr.g;
     float Cr = YCbCr.b;
 
+    if (Y <= 0.0)
+        return vec3(0.0);
+
     float Ysdr = curve(Y);
 
-    float Yr = Ysdr / max(1.1 * Y, 1e-6);
+    float Yr = Ysdr / (1.1 * Y);
     Cb *= Yr;
     Cr *= Yr;
     Y = Ysdr - max(0.1 * Cr, 0.0);
@@ -131,9 +128,17 @@ vec3 f_scale(vec3 x, float x0, float y0, float x1, float y1) {
 vec4 hook() {
     vec4 color = HOOKED_tex(HOOKED_pos);
 
+    // Input is linear BT.2020 display light in units of reference_white.
+    // Tables 2 and 3 operate on gamma-encoded RGB and Y'Cb'Cr', so normalize
+    // and encode each RGB channel before deriving luma and colour differences.
+    color.rgb = max(color.rgb, 0.0) * (reference_white / get_max_l());
+    color.rgb = pow(color.rgb, vec3(1.0 / 2.4));
     color.rgb = RGB_to_YCbCr(color.rgb);
     color.rgb = tone_mapping(color.rgb);
     color.rgb = YCbCr_to_RGB(color.rgb);
+    // Return linear SDR for the following gamut mapper and BT.1886 encoder.
+    // Clamp negative reconstruction values before pow, but retain super-whites.
+    color.rgb = pow(max(color.rgb, 0.0), vec3(2.4));
     color.rgb = f_scale(
         color.rgb,
         0.0,
