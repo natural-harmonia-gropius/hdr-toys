@@ -240,6 +240,8 @@
 //!VAR float exposure_scale
 //!VAR float exposed_max_i
 //!VAR float exposed_min_i
+//!VAR float input_max_j
+//!VAR float input_min_j
 //!VAR float output_max_j
 //!VAR float output_min_j
 //!VAR float output_reverse_max_jhk
@@ -2580,6 +2582,14 @@ void apply_exposure_to_range(inout MeteringMetrics metrics, float scale) {
 void publish_metering_metadata(MeteringMetrics metrics) {
     exposed_max_i = metrics.max_rgb;
     exposed_min_i = metrics.minimum;
+    // All 1024 curve samples share these exposed, output-bounded endpoints.
+    // Convert PQ to J once in this single-invocation metadata pass.
+    input_max_j = max(
+        I_to_J(iz_eotf_inv(pq_eotf(exposed_max_i))), output_max_j
+    );
+    input_min_j = min(
+        I_to_J(iz_eotf_inv(pq_eotf(exposed_min_i))), output_min_j
+    );
 }
 
 void publish_input_metering_metadata(MeteringMetrics metrics) {
@@ -2967,9 +2977,11 @@ float f_shoulder_rational(
     return y0 + dy * mapped;
 }
 
-float evaluate_piecewise_tone_curve(
-    float x, float iw, float ib, float ow, float ob
-) {
+float evaluate_tone_curve(float x) {
+    float iw = input_max_j;
+    float ib = input_min_j;
+    float ow = output_max_j;
+    float ob = output_min_j;
     float midgray   = 0.5 * ow;
     float shadow    = mix(midgray, ob, shadow_weight);
     float highlight = mix(midgray, ow, highlight_weight);
@@ -3043,18 +3055,6 @@ float evaluate_piecewise_tone_curve(
     }
 
     return x;
-}
-
-float evaluate_tone_curve(float x) {
-    float ow = output_max_j;
-    float ob = output_min_j;
-    float iw = I_to_J(iz_eotf_inv(pq_eotf(exposed_max_i)));
-    float ib = I_to_J(iz_eotf_inv(pq_eotf(exposed_min_i)));
-
-    iw = max(iw, ow);
-    ib = min(ib, ob);
-
-    return evaluate_piecewise_tone_curve(x, iw, ib, ow, ob);
 }
 
 // LUT atlas layout: a flattened 65^3 RGB-to-Jab LUT, a 129x65x65
