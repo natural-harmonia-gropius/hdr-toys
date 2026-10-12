@@ -210,6 +210,7 @@
 //!VAR uint metered_scene_adaptation_end_pts
 //!VAR uint metered_scene_fast_response
 //!VAR uint metered_scene_cut_confirmed
+//!VAR float metered_scene_speed
 //!VAR float metered_reference_zones[144]
 //!VAR uint metered_reference_zones_valid
 //!VAR float metered_response_evidence
@@ -1516,14 +1517,16 @@ const float JND = 1.0 / 720.0;
 // Scene analysis uses one-dimensional Wasserstein distance on the 64-bin PQ
 // distributions. The current frame is compared both with a slowly moving shot
 // reference and with the immediately previous frame: only an abrupt transition
-// can start a cut candidate, so gradual ramps do not become cuts merely because
-// they eventually move far from the old reference.
+// can start a cut candidate. The previous speed predicts normal change over
+// the elapsed PTS interval, so sustained ramps do not become cuts merely
+// because their per-observation distance grows with the sampling interval.
 
 const uint TEMPORAL_HISTOGRAM_SIZE = 64u;
 const uint TEMPORAL_HISTOGRAM_SAMPLE_COUNT = 512u * 288u;
 const float TEMPORAL_HISTOGRAM_CUT_THRESHOLD = 144 * JND;
 const float TEMPORAL_HISTOGRAM_FRAME_THRESHOLD = 72 * JND;
 const float TEMPORAL_HISTOGRAM_TIME_SCALE = 0.50;
+const float TEMPORAL_SCENE_SPEED_TIME_SCALE = 0.50;
 const float TEMPORAL_SCENE_CONFIRM_TIME_SCALE = 0.25;
 const float TEMPORAL_SCENE_ADAPTATION_TIME_SCALE = 0.50;
 // Minimum temporal time constant in seconds (approximately 4.17 ms),
@@ -1603,6 +1606,7 @@ void temporal_set_scalar_state(uint histogram_valid) {
     metered_scene_adaptation_end_pts = 0u;
     metered_scene_fast_response = 0u;
     metered_scene_cut_confirmed = 0u;
+    metered_scene_speed = 0.0;
     temporal_reset_zone_response();
 }
 
@@ -1811,6 +1815,13 @@ void temporal_update_fast_response() {
     }
 }
 
+float temporal_expected_scene_distance() {
+    float speed = finite_float(metered_scene_speed)
+        ? max(metered_scene_speed, 0.0) : 0.0;
+    // Do not let old motion explain away arbitrarily large new transitions.
+    return min(speed * temporal_delta_time, TEMPORAL_HISTOGRAM_CUT_THRESHOLD);
+}
+
 bool temporal_scene_candidate_active(
     float reference_distance,
     float frame_distance
@@ -1821,19 +1832,38 @@ bool temporal_scene_candidate_active(
         return far_from_reference;
     }
 
+    float unexpected_distance = frame_distance - temporal_expected_scene_distance();
     return far_from_reference &&
-           frame_distance > TEMPORAL_HISTOGRAM_FRAME_THRESHOLD;
+           frame_distance > TEMPORAL_HISTOGRAM_FRAME_THRESHOLD &&
+           unexpected_distance > TEMPORAL_HISTOGRAM_FRAME_THRESHOLD;
 }
 
 void temporal_confirm_scene_change() {
     temporal_reset_zone_response();
     metered_scene_cut_confirmed = 1u;
+    metered_scene_speed = 0.0;
     temporal_clear_scene_candidate();
     metered_scene_adaptation_end_pts = pts_to_uint(
         PTS + temporal_scene_time(TEMPORAL_SCENE_ADAPTATION_TIME_SCALE)
     );
     metered_scene_fast_response = 1u;
     temporal_reference_operation = TEMPORAL_REFERENCE_REPLACE;
+}
+
+void temporal_update_scene_speed(float frame_distance) {
+    float speed = finite_float(metered_scene_speed)
+        ? max(metered_scene_speed, 0.0) : 0.0;
+    // Winsorize positive innovations in distance units before learning the
+    // speed, limiting how strongly a flash outside the cut gate raises it.
+    float limited_distance = min(
+        frame_distance,
+        temporal_expected_scene_distance() + TEMPORAL_HISTOGRAM_FRAME_THRESHOLD
+    );
+    float observed_speed = max(limited_distance, 0.0) / temporal_delta_time;
+    float alpha = temporal_alpha(
+        temporal_delta_time, temporal_stable_duration * TEMPORAL_SCENE_SPEED_TIME_SCALE
+    );
+    metered_scene_speed = mix(speed, observed_speed, alpha);
 }
 
 void temporal_process_distances(vec2 distance) {
@@ -1844,6 +1874,11 @@ void temporal_process_distances(vec2 distance) {
                      );
 
     if (!candidate) {
+        // Detect before learning. Also exclude the return from a rejected
+        // candidate (for example, a flash) from the normal-motion baseline.
+        if (metered_scene_candidate_active == 0u) {
+            temporal_update_scene_speed(distance.y);
+        }
         temporal_clear_scene_candidate();
         temporal_reference_operation = TEMPORAL_REFERENCE_BLEND;
         temporal_reference_alpha = temporal_reference_blend_alpha(
