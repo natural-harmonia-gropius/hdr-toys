@@ -209,6 +209,7 @@
 //!VAR uint metered_scene_candidate_active
 //!VAR uint metered_scene_adaptation_end_pts
 //!VAR uint metered_scene_fast_response
+//!VAR uint metered_scene_cut_confirmed
 //!VAR float metered_reference_zones[144]
 //!VAR uint metered_reference_zones_valid
 //!VAR float metered_response_evidence
@@ -1588,6 +1589,7 @@ void temporal_set_scalar_state(uint histogram_valid) {
     metered_temporal_valid = histogram_valid;
     metered_scene_adaptation_end_pts = 0u;
     metered_scene_fast_response = 0u;
+    metered_scene_cut_confirmed = 0u;
     temporal_reset_zone_response();
 }
 
@@ -1782,6 +1784,7 @@ bool temporal_scene_candidate_active(
 }
 
 void temporal_confirm_scene_change() {
+    metered_scene_cut_confirmed = 1u;
     temporal_clear_scene_candidate();
     metered_scene_adaptation_end_pts = pts_to_uint(
         PTS + temporal_scene_time(TEMPORAL_SCENE_ADAPTATION_TIME_SCALE)
@@ -1849,6 +1852,7 @@ void temporal_prepare_frame() {
         return;
     }
 
+    metered_scene_cut_confirmed = 0u;
     temporal_delta_time = delta_time;
     metered_temporal_pts = pts_to_uint(PTS);
     temporal_update_fast_response();
@@ -1944,7 +1948,7 @@ const float EXPOSURE_PTS_EPSILON = 1e-6;
 // Fast-response window after a scene change: the duration scales the
 // stabilization interval and the time scale clamps the ramp.
 const float OUTPUT_TEMPORAL_SCENE_TIME_SCALE = 0.125;
-const float OUTPUT_TEMPORAL_SCENE_ADAPTATION_TIME_SCALE = 0.50;
+const float CURVE_TEMPORAL_RESPONSE_TIME_SCALE = 0.0625;
 
 // All curve samples use one PTS-derived coefficient. Compute it once in this
 // single-invocation pass instead of repeating the timestamp state and exp()
@@ -2366,29 +2370,40 @@ float resolve_exposure(MeteringMetrics metrics) {
     return calculate_auto_exposure(metrics);
 }
 
-float output_temporal_time_scale(float normal_scale) {
-    float adaptation_end = uintBitsToFloat(
-        metered_scene_adaptation_end_pts
-    );
-    float adaptation_duration = max(
-        temporal_stable_duration * OUTPUT_TEMPORAL_SCENE_ADAPTATION_TIME_SCALE,
-        TEMPORAL_MIN_TIME_CONSTANT
-    );
-    bool fast_response = metered_scene_fast_response > 0u &&
-                         PTS < adaptation_end &&
-                         PTS >= adaptation_end - adaptation_duration;
-    float response = fast_response ? 1.0 : 0.0;
-    if (full_metering_enabled() && metered_temporal_valid > 0u &&
-        metered_reference_zones_valid > 0u &&
-        abs(PTS - uintBitsToFloat(metered_temporal_pts)) <= EXPOSURE_PTS_EPSILON &&
-        finite_float(metered_response_confidence)) {
-        response = max(response, clamp(metered_response_confidence, 0.0, 1.0));
+// Resolve once per metadata pass. Only current, selected measurements may
+// influence output history; preview-only or stale metering must not do so.
+float output_change_confidence;
+bool output_cut_confirmed;
+
+void prepare_output_temporal_response() {
+    output_change_confidence = 0.0;
+    output_cut_confirmed = false;
+    bool current = temporal_stable_duration > 0.0 &&
+                   measured_metering_enabled() && metered_temporal_valid > 0u &&
+                   finite_float(PTS) &&
+                   abs(PTS - uintBitsToFloat(metered_temporal_pts)) <=
+                       EXPOSURE_PTS_EPSILON;
+    if (!current) {
+        return;
     }
-    return mix(
-        normal_scale,
-        min(normal_scale, OUTPUT_TEMPORAL_SCENE_TIME_SCALE),
-        response
-    );
+
+    output_cut_confirmed = temporal_stable_scene_change > 0u &&
+                           metered_scene_cut_confirmed > 0u;
+    bool fast_response = temporal_stable_scene_change > 0u &&
+                         metered_scene_fast_response > 0u &&
+                         PTS < uintBitsToFloat(metered_scene_adaptation_end_pts);
+    output_change_confidence = fast_response ? 1.0 : 0.0;
+    if (full_metering_enabled() && metered_reference_zones_valid > 0u &&
+        finite_float(metered_response_confidence)) {
+        output_change_confidence = max(
+            output_change_confidence, clamp(metered_response_confidence, 0.0, 1.0)
+        );
+    }
+}
+
+float output_temporal_time_scale(float normal_scale, float response_scale) {
+    return mix(normal_scale, min(normal_scale, response_scale),
+               output_change_confidence);
 }
 
 // The exponential ramp form shared by auto-exposure and the curve LUT.
@@ -2436,14 +2451,17 @@ float stabilize_auto_exposure(float target, bool automatic) {
         return exposure_temporal_ev;
     }
 
-    if (delta_time < 0.0 || delta_time > temporal_stable_duration) {
+    if (delta_time < 0.0 || delta_time > temporal_stable_duration ||
+        output_cut_confirmed) {
         return reset_auto_exposure(target);
     }
 
     float time_scale = target > exposure_temporal_ev
         ? EXPOSURE_RISE_TIME_SCALE
         : EXPOSURE_FALL_TIME_SCALE;
-    time_scale = output_temporal_time_scale(time_scale);
+    time_scale = output_temporal_time_scale(
+        time_scale, OUTPUT_TEMPORAL_SCENE_TIME_SCALE
+    );
     float alpha = ramp_alpha(delta_time, time_scale);
     exposure_temporal_ev = mix(exposure_temporal_ev, target, alpha);
     exposure_temporal_pts = floatBitsToUint(PTS);
@@ -2483,12 +2501,15 @@ void prepare_curve_temporal() {
     }
 
     record_curve_temporal_pts();
-    if (delta_time < 0.0 || delta_time > temporal_stable_duration) {
+    if (delta_time < 0.0 || delta_time > temporal_stable_duration ||
+        output_cut_confirmed) {
         return;
     }
 
+    // Exposure is already filtered: shorten the second ramp during changes.
+    // One coefficient for the entire LUT preserves monotonicity.
     float time_scale = output_temporal_time_scale(
-        CURVE_TEMPORAL_TIME_SCALE
+        CURVE_TEMPORAL_TIME_SCALE, CURVE_TEMPORAL_RESPONSE_TIME_SCALE
     );
     curve_temporal_alpha = ramp_alpha(delta_time, time_scale);
     curve_temporal_reset = 0u;
@@ -2536,6 +2557,7 @@ void publish_output_lightness_range() {
 }
 
 void update_metering_metadata() {
+    prepare_output_temporal_response();
     prepare_curve_temporal();
     publish_output_lightness_range();
 
