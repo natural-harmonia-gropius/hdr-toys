@@ -1937,9 +1937,8 @@ void hook() { analyze_metering_temporally(); }
 const float AUTO_EXPOSURE_WHITE_CONSTRAINT = 0.25;
 const float AUTO_EXPOSURE_HEADROOM_RETENTION = 0.5;
 
-// The same minimum time constant the temporal pass uses: the auto-exposure
-// and curve LUT ramps share it via ramp_alpha below, so neither copy can
-// drift away from the smoothing floor.
+// Match the temporal pass's minimum time constant for both the exposure
+// integrator and the curve LUT ramp.
 const float TEMPORAL_MIN_TIME_CONSTANT = 1.0 / 240.0;
 
 // Filter automatic exposure in its final EV domain so observation noise cannot
@@ -2414,7 +2413,7 @@ float output_temporal_time_scale(float normal_scale, float response_scale) {
                output_change_confidence);
 }
 
-// The exponential ramp form shared by auto-exposure and the curve LUT.
+// PTS-derived exponential blend coefficient for the curve LUT.
 float ramp_alpha(float delta_time, float time_scale) {
     float time_constant = max(
         temporal_stable_duration * time_scale,
