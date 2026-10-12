@@ -1524,8 +1524,8 @@ const float TEMPORAL_HISTOGRAM_FRAME_THRESHOLD = 72 * JND;
 const float TEMPORAL_HISTOGRAM_TIME_SCALE = 0.50;
 const float TEMPORAL_SCENE_CONFIRM_TIME_SCALE = 0.25;
 const float TEMPORAL_SCENE_ADAPTATION_TIME_SCALE = 0.50;
-// The floor shared by the reference blend and both scene ramps: even the
-// fastest stabilization setting keeps one 240-fps frame of smoothing.
+// Minimum temporal time constant in seconds (approximately 4.17 ms),
+// shared by the reference blend and scene response intervals.
 const float TEMPORAL_MIN_TIME_CONSTANT = 1.0 / 240.0;
 const float TEMPORAL_PTS_EPSILON = 1e-6;
 
