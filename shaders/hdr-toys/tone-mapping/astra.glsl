@@ -215,6 +215,8 @@
 //!VAR float metered_response_evidence
 //!VAR float metered_response_direction
 //!VAR float metered_response_confidence
+//!VAR uint metered_response_candidate_active
+//!VAR uint metered_response_candidate_start_pts
 //!STORAGE
 
 //!BUFFER EXPOSURE_TEMPORAL
@@ -1535,6 +1537,8 @@ const float TEMPORAL_ZONE_DIFFERENCE_HIGH = 32 * JND;
 const float TEMPORAL_ZONE_SUPPORT_LOW = 0.25;
 const float TEMPORAL_ZONE_SUPPORT_HIGH = 0.75;
 const float TEMPORAL_EVIDENCE_TIME_SCALE = 0.25;
+const float TEMPORAL_DIRECTION_DEADBAND = 0.05;
+const float TEMPORAL_DIRECTION_CONFIRM_TIME_SCALE = 0.125;
 
 const uint TEMPORAL_FRAME_SKIP = 0u;
 const uint TEMPORAL_FRAME_INITIALIZE = 1u;
@@ -1580,7 +1584,13 @@ void temporal_clear_scene_candidate() {
     metered_scene_candidate_active = 0u;
 }
 
+void temporal_clear_zone_candidate() {
+    metered_response_candidate_active = 0u;
+    metered_response_candidate_start_pts = 0u;
+}
+
 void temporal_reset_zone_response() {
+    temporal_clear_zone_candidate();
     metered_reference_zones_valid = 0u;
     metered_response_evidence = 0.0;
     metered_response_direction = 0.0;
@@ -1698,26 +1708,55 @@ void temporal_reduce_zone_support(uint index, vec2 support) {
 
 void temporal_update_zone_evidence(bool initialize) {
     vec2 support = temporal_zone_support[0] / float(TEMPORAL_ZONE_COUNT);
-    float direction = sign(support.x - support.y);
+    float balance = support.x - support.y;
+    float direction = abs(balance) > TEMPORAL_DIRECTION_DEADBAND
+        ? sign(balance) : 0.0;
     float target = smoothstep(
         TEMPORAL_ZONE_SUPPORT_LOW,
         TEMPORAL_ZONE_SUPPORT_HIGH,
         max(support.x, support.y)
     );
     float evidence = metered_response_evidence;
-    temporal_zone_reversed = !initialize &&
-                             metered_response_direction != 0.0 &&
-                             direction != metered_response_direction;
-    if (initialize || !finite_float(evidence) ||
-        direction != metered_response_direction) {
+    temporal_zone_reversed = false;
+    if (initialize || !finite_float(evidence)) {
         evidence = 0.0;
+        metered_response_direction = 0.0;
+        temporal_clear_zone_candidate();
+    }
+
+    if (direction == 0.0) {
+        // Ambiguous support interrupts confirmation, but only decays evidence.
+        temporal_clear_zone_candidate();
+        target = 0.0;
+    } else if (metered_response_direction == 0.0 ||
+               direction == metered_response_direction) {
+        metered_response_direction = direction;
+        temporal_clear_zone_candidate();
+    } else {
+        // Do not turn a single opposite observation into a direction reset.
+        if (metered_response_candidate_active == 0u) {
+            metered_response_candidate_active = 1u;
+            metered_response_candidate_start_pts = pts_to_uint(PTS);
+        }
+        float elapsed = PTS - pts_to_float(metered_response_candidate_start_pts);
+        float confirmation_time = max(
+            temporal_stable_duration * TEMPORAL_DIRECTION_CONFIRM_TIME_SCALE,
+            TEMPORAL_MIN_TIME_CONSTANT
+        );
+        if (elapsed >= confirmation_time) {
+            evidence = 0.0;
+            metered_response_direction = direction;
+            temporal_zone_reversed = true;
+            temporal_clear_zone_candidate();
+        }
+        // Pending reversals decay old evidence; confirmed ones rebase below.
+        target = 0.0;
     }
     float response_alpha = initialize ? 1.0 : temporal_alpha(
         temporal_delta_time,
         temporal_stable_duration * TEMPORAL_EVIDENCE_TIME_SCALE
     );
     metered_response_evidence = mix(evidence, target, response_alpha);
-    metered_response_direction = direction;
     metered_response_confidence = smoothstep(
         0.5, 1.0, metered_response_evidence
     );
@@ -1787,6 +1826,7 @@ bool temporal_scene_candidate_active(
 }
 
 void temporal_confirm_scene_change() {
+    temporal_reset_zone_response();
     metered_scene_cut_confirmed = 1u;
     temporal_clear_scene_candidate();
     metered_scene_adaptation_end_pts = pts_to_uint(
