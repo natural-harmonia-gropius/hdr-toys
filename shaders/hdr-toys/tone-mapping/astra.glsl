@@ -1525,6 +1525,7 @@ const uint TEMPORAL_HISTOGRAM_SIZE = 64u;
 const uint TEMPORAL_HISTOGRAM_SAMPLE_COUNT = 512u * 288u;
 const float TEMPORAL_HISTOGRAM_CUT_THRESHOLD = 144 * JND;
 const float TEMPORAL_HISTOGRAM_FRAME_THRESHOLD = 72 * JND;
+const float TEMPORAL_HISTOGRAM_IMMEDIATE_THRESHOLD = 180 * JND;
 const float TEMPORAL_HISTOGRAM_TIME_SCALE = 0.50;
 const float TEMPORAL_SCENE_SPEED_TIME_SCALE = 0.50;
 const float TEMPORAL_SCENE_CONFIRM_TIME_SCALE = 0.25;
@@ -1884,6 +1885,17 @@ void temporal_process_distances(vec2 distance) {
         temporal_reference_alpha = temporal_reference_blend_alpha(
             temporal_delta_time
         );
+        return;
+    }
+
+    // A large unpredicted discontinuity must not carry the old shot's
+    // exposure and curve through the confirmation interval. Weaker changes
+    // still require persistence; a sufficiently strong flash is inherently
+    // indistinguishable from a cut here without looking at future frames.
+    float unexpected_distance = distance.y - temporal_expected_scene_distance();
+    if (distance.x > TEMPORAL_HISTOGRAM_IMMEDIATE_THRESHOLD &&
+        unexpected_distance > TEMPORAL_HISTOGRAM_IMMEDIATE_THRESHOLD) {
+        temporal_confirm_scene_change();
         return;
     }
 
