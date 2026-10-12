@@ -1511,6 +1511,14 @@ void hook() { reduce_metering_statistics(); }
 //!WHEN temporal_stable_duration 0.0 >
 //!DESC metering (temporal stabilization)
 
+// METERED_TEMPORAL lifecycle:
+// Written by temporal metering; read by metadata only when its PTS matches
+// the current, selected measurements. A confirmed cut remains latched across
+// redraws of that PTS and is cleared on the next processed observation.
+// Exposure and curve consumers check their own PTS before acting on the cut,
+// so each history resets only once. Fast response instead lasts until its
+// adaptation deadline; zone confidence describes sustained spatial change.
+
 // One just-noticeable difference step on the PQ scale.
 const float JND = 1.0 / 720.0;
 
@@ -1823,9 +1831,9 @@ float temporal_expected_scene_distance() {
     return min(speed * temporal_delta_time, TEMPORAL_HISTOGRAM_CUT_THRESHOLD);
 }
 
-bool temporal_scene_candidate_active(
+bool temporal_should_track_scene_candidate(
     float reference_distance,
-    float frame_distance
+    float unexpected_distance
 ) {
     bool far_from_reference = reference_distance >
                               TEMPORAL_HISTOGRAM_CUT_THRESHOLD;
@@ -1833,13 +1841,14 @@ bool temporal_scene_candidate_active(
         return far_from_reference;
     }
 
-    float unexpected_distance = frame_distance - temporal_expected_scene_distance();
+    // Expected distance is nonnegative, so this also bounds frame distance.
     return far_from_reference &&
-           frame_distance > TEMPORAL_HISTOGRAM_FRAME_THRESHOLD &&
            unexpected_distance > TEMPORAL_HISTOGRAM_FRAME_THRESHOLD;
 }
 
-void temporal_confirm_scene_change() {
+// Commit the accepted cut to metering state. Metadata translates this event
+// into exposure resets and reset instructions for the curve LUT pass.
+void temporal_accept_scene_cut() {
     temporal_reset_zone_response();
     metered_scene_cut_confirmed = 1u;
     metered_scene_speed = 0.0;
@@ -1851,14 +1860,14 @@ void temporal_confirm_scene_change() {
     temporal_reference_operation = TEMPORAL_REFERENCE_REPLACE;
 }
 
-void temporal_update_scene_speed(float frame_distance) {
+void temporal_update_scene_speed(float frame_distance, float expected_distance) {
     float speed = finite_float(metered_scene_speed)
         ? max(metered_scene_speed, 0.0) : 0.0;
     // Winsorize positive innovations in distance units before learning the
     // speed, limiting how strongly a flash outside the cut gate raises it.
     float limited_distance = min(
         frame_distance,
-        temporal_expected_scene_distance() + TEMPORAL_HISTOGRAM_FRAME_THRESHOLD
+        expected_distance + TEMPORAL_HISTOGRAM_FRAME_THRESHOLD
     );
     float observed_speed = max(limited_distance, 0.0) / temporal_delta_time;
     float alpha = temporal_alpha(
@@ -1868,17 +1877,22 @@ void temporal_update_scene_speed(float frame_distance) {
 }
 
 void temporal_process_distances(vec2 distance) {
+    float reference_distance = distance.x;
+    float frame_distance = distance.y;
+    // Predict once from the old trend, before any candidate or speed update.
+    float expected_distance = temporal_expected_scene_distance();
+    float unexpected_distance = frame_distance - expected_distance;
     bool candidate = temporal_stable_scene_change > 0 &&
-                     temporal_scene_candidate_active(
-                         distance.x,
-                         distance.y
+                     temporal_should_track_scene_candidate(
+                         reference_distance,
+                         unexpected_distance
                      );
 
     if (!candidate) {
         // Detect before learning. Also exclude the return from a rejected
         // candidate (for example, a flash) from the normal-motion baseline.
         if (metered_scene_candidate_active == 0u) {
-            temporal_update_scene_speed(distance.y);
+            temporal_update_scene_speed(frame_distance, expected_distance);
         }
         temporal_clear_scene_candidate();
         temporal_reference_operation = TEMPORAL_REFERENCE_BLEND;
@@ -1892,10 +1906,9 @@ void temporal_process_distances(vec2 distance) {
     // exposure and curve through the confirmation interval. Weaker changes
     // still require persistence; a sufficiently strong flash is inherently
     // indistinguishable from a cut here without looking at future frames.
-    float unexpected_distance = distance.y - temporal_expected_scene_distance();
-    if (distance.x > TEMPORAL_HISTOGRAM_IMMEDIATE_THRESHOLD &&
+    if (reference_distance > TEMPORAL_HISTOGRAM_IMMEDIATE_THRESHOLD &&
         unexpected_distance > TEMPORAL_HISTOGRAM_IMMEDIATE_THRESHOLD) {
-        temporal_confirm_scene_change();
+        temporal_accept_scene_cut();
         return;
     }
 
@@ -1908,7 +1921,7 @@ void temporal_process_distances(vec2 distance) {
         metered_scene_candidate_start_pts
     );
     if (elapsed >= temporal_scene_time(TEMPORAL_SCENE_CONFIRM_TIME_SCALE)) {
-        temporal_confirm_scene_change();
+        temporal_accept_scene_cut();
     }
 }
 
@@ -2015,6 +2028,13 @@ void hook() { analyze_metering_temporally(); }
 //!HEIGHT 1
 //!COMPUTE 1 1
 //!DESC metering (metadata)
+
+// CURVE_TEMPORAL ownership:
+// Metadata owns pts/valid and publishes reset/alpha for the current dispatch.
+// The curve LUT pass owns values and consumes those instructions: reset
+// overwrites history without reading alpha; otherwise alpha blends history.
+// With smoothing enabled and valid history, repeated PTS publishes
+// reset=0, alpha=0 to hold the existing LUT.
 
 // The dynamic-metadata parameters at the top of the file are provided by mpv
 // [vo_gpu_next: add chroma location to shader parameters](https://github.com/mpv-player/mpv/pull/15239)
@@ -2524,7 +2544,8 @@ float reset_auto_exposure(float target) {
 // The closed-form update composes exactly for a fixed weight and time scale.
 // Residual-dependent weights are sampled per observation, so different input
 // PTS sequences need not give identical nonlinear trajectories.
-float exposure_wolf_gain(float delta_time, float time_scale, float residual) {
+// Advance the variance history and return the corresponding EV blend gain.
+float update_exposure_wolf_gain(float delta_time, float time_scale, float residual) {
     float tau = max(temporal_stable_duration * time_scale,
                     TEMPORAL_MIN_TIME_CONSTANT);
     float scaled_residual = residual / EXPOSURE_WOLF_OUTLIER_EV;
@@ -2595,7 +2616,7 @@ float stabilize_auto_exposure(float target, bool automatic) {
     time_scale = output_temporal_time_scale(
         time_scale, OUTPUT_TEMPORAL_SCENE_TIME_SCALE
     );
-    float alpha = exposure_wolf_gain(
+    float alpha = update_exposure_wolf_gain(
         delta_time, time_scale, target - exposure_temporal_ev
     );
     exposure_temporal_ev = mix(exposure_temporal_ev, target, alpha);
