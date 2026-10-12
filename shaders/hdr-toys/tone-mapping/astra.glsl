@@ -164,6 +164,18 @@
 //!MAXIMUM 1
 1
 
+//!PARAM temporal_exposure_filter
+//!TYPE uint
+//!MINIMUM 0
+//!MAXIMUM 1
+0
+
+//!PARAM temporal_exposure_outlier_ev
+//!TYPE float
+//!MINIMUM 0.01
+//!MAXIMUM 8.0
+0.5
+
 //!PARAM enable_metering
 //!TYPE uint
 //!MINIMUM 0
@@ -219,6 +231,8 @@
 
 //!BUFFER EXPOSURE_TEMPORAL
 //!VAR float exposure_temporal_ev
+//!VAR float exposure_temporal_variance
+//!VAR uint exposure_temporal_filter
 //!VAR uint exposure_temporal_pts
 //!VAR uint exposure_temporal_valid
 //!STORAGE
@@ -1944,6 +1958,19 @@ const float TEMPORAL_MIN_TIME_CONSTANT = 1.0 / 240.0;
 const float EXPOSURE_RISE_TIME_SCALE = 0.50;
 const float EXPOSURE_FALL_TIME_SCALE = 0.35;
 const float EXPOSURE_PTS_EPSILON = 1e-6;
+// Normalize covariance by the observation variance at 60 Hz. Scale per-frame
+// observation variance inversely with dt so sample rate does not change the
+// information acquired per second. The noise density itself stays fixed.
+const float EXPOSURE_WOLF_REFERENCE_DT = 1.0 / 60.0;
+const float EXPOSURE_WOLF_VARIANCE_MIN = 1e-6;
+const float EXPOSURE_WOLF_VARIANCE_MAX = 1e6;
+
+float exposure_reference_gain(float time_scale) {
+    float tau = max(temporal_stable_duration * time_scale,
+                    TEMPORAL_MIN_TIME_CONSTANT);
+    return clamp(1.0 - exp(-EXPOSURE_WOLF_REFERENCE_DT / tau),
+                 EXPOSURE_WOLF_VARIANCE_MIN, 0.9999);
+}
 
 // Fast-response window after a scene change: the duration scales the
 // stabilization interval and the time scale clamps the ramp.
@@ -2417,9 +2444,35 @@ float ramp_alpha(float delta_time, float time_scale) {
 
 float reset_auto_exposure(float target) {
     exposure_temporal_ev = target;
+    exposure_temporal_variance = exposure_reference_gain(EXPOSURE_RISE_TIME_SCALE);
+    exposure_temporal_filter = temporal_exposure_filter;
     exposure_temporal_pts = floatBitsToUint(PTS);
     exposure_temporal_valid = 1u;
     return target;
+}
+
+// Scalar random-walk WoLF-IMQ, with covariance normalized by R_ref = 1.
+// https://arxiv.org/html/2405.05646v2 (Algorithm 1 and equation 17).
+float exposure_wolf_gain(float delta_time, float time_scale, float residual) {
+    float reference_gain = exposure_reference_gain(time_scale);
+    // Q/R = K^2/(1-K) matches the EMA steady-state gain at the reference dt.
+    float process_noise = reference_gain * reference_gain /
+                          (1.0 - reference_gain);
+    float predicted = clamp(
+        exposure_temporal_variance + process_noise *
+            (delta_time / EXPOSURE_WOLF_REFERENCE_DT),
+        EXPOSURE_WOLF_VARIANCE_MIN, EXPOSURE_WOLF_VARIANCE_MAX
+    );
+    float observation = EXPOSURE_WOLF_REFERENCE_DT / delta_time;
+    float scaled_residual = residual / max(temporal_exposure_outlier_ev, 0.01);
+    float weight_squared = 1.0 / (1.0 + scaled_residual * scaled_residual);
+    float gain = predicted * weight_squared /
+                 (observation + predicted * weight_squared);
+    exposure_temporal_variance = clamp(
+        (1.0 - gain) * predicted,
+        EXPOSURE_WOLF_VARIANCE_MIN, EXPOSURE_WOLF_VARIANCE_MAX
+    );
+    return gain;
 }
 
 float stabilize_auto_exposure(float target, bool automatic) {
@@ -2442,7 +2495,11 @@ float stabilize_auto_exposure(float target, bool automatic) {
         return reset_auto_exposure(target);
     }
 
-    if (exposure_temporal_valid == 0u) {
+    if (exposure_temporal_valid == 0u ||
+        exposure_temporal_filter != temporal_exposure_filter ||
+        (temporal_exposure_filter > 0u &&
+         (!finite_float(exposure_temporal_variance) ||
+          exposure_temporal_variance <= 0.0))) {
         return reset_auto_exposure(target);
     }
 
@@ -2462,7 +2519,9 @@ float stabilize_auto_exposure(float target, bool automatic) {
     time_scale = output_temporal_time_scale(
         time_scale, OUTPUT_TEMPORAL_SCENE_TIME_SCALE
     );
-    float alpha = ramp_alpha(delta_time, time_scale);
+    float alpha = temporal_exposure_filter > 0u
+        ? exposure_wolf_gain(delta_time, time_scale, target - exposure_temporal_ev)
+        : ramp_alpha(delta_time, time_scale);
     exposure_temporal_ev = mix(exposure_temporal_ev, target, alpha);
     exposure_temporal_pts = floatBitsToUint(PTS);
     return exposure_temporal_ev;
