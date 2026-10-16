@@ -3743,6 +3743,13 @@ float chroma_correction_attenuation(float x, float rate, float threshold) {
     return pow(smooth_ratio, 1.0 + rate);
 }
 
+float chroma_correction_contrast(float bias) {
+    // Match the middle-segment contrast slope in the opponent coordinates.
+    // Apply the same gain throughout to avoid extra joins at toe/shoulder.
+    // Zero contrast bias preserves the existing chroma correction exactly.
+    return exp2(bias);
+}
+
 // Based on the chroma correction method for ICtCp in BT.2390/BT.2408
 // [BT.2408: Guidance for operational practices in HDR television production](https://www.itu.int/pub/R-REP-BT.2408)
 //
@@ -3760,7 +3767,8 @@ vec2 chroma_correction(vec2 ab, float l1, float l2) {
     float ratio_min = min(l1, l2) / max(max(l1, l2), 1e-6);
     float ratio_scaled = mix(1.0, ratio_min, chroma_correction_scaling);
     float ratio_safe = max(ratio_scaled, 0.0);
-    return ab * chroma_correction_attenuation(
+    float contrast_gain = chroma_correction_contrast(contrast_bias);
+    return (ab * contrast_gain) * chroma_correction_attenuation(
         ratio_safe,
         chroma_correction_rate,
         chroma_correction_threshold
