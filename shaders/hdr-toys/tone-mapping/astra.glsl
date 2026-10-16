@@ -207,7 +207,7 @@
 //!VAR uint metered_temporal_pts
 //!VAR uint metered_scene_adaptation_end_pts
 //!VAR uint metered_scene_fast_response
-//!VAR uint metered_scene_cut_confirmed
+//!VAR uint metered_scene_cut_detected
 //!VAR float metered_scene_speed
 //!VAR float metered_reference_zones[144]
 //!VAR uint metered_reference_zones_valid
@@ -1511,7 +1511,7 @@ void hook() { reduce_metering_statistics(); }
 
 // METERED_TEMPORAL lifecycle:
 // Written by temporal metering; read by metadata only when its PTS matches
-// the current, selected measurements. A confirmed cut remains latched across
+// the current, selected measurements. A detected cut remains latched across
 // redraws of that PTS and is cleared on the next processed observation.
 // Exposure and curve consumers check their own PTS before acting on the cut,
 // so each history resets only once. Fast response instead lasts until its
@@ -1604,7 +1604,7 @@ void temporal_set_scalar_state(uint histogram_valid) {
     metered_temporal_valid = histogram_valid;
     metered_scene_adaptation_end_pts = 0u;
     metered_scene_fast_response = 0u;
-    metered_scene_cut_confirmed = 0u;
+    metered_scene_cut_detected = 0u;
     metered_scene_speed = 0.0;
     temporal_reset_zone_response();
 }
@@ -1834,7 +1834,7 @@ bool temporal_detect_scene_cut(
 // into exposure resets and reset instructions for the curve LUT pass.
 void temporal_accept_scene_cut() {
     temporal_reset_zone_response();
-    metered_scene_cut_confirmed = 1u;
+    metered_scene_cut_detected = 1u;
     metered_scene_speed = 0.0;
     metered_scene_adaptation_end_pts = pts_to_uint(
         PTS + temporal_scene_time(TEMPORAL_SCENE_ADAPTATION_TIME_SCALE)
@@ -1912,7 +1912,7 @@ void temporal_prepare_frame() {
         return;
     }
 
-    metered_scene_cut_confirmed = 0u;
+    metered_scene_cut_detected = 0u;
     temporal_delta_time = delta_time;
     metered_temporal_pts = pts_to_uint(PTS);
     temporal_update_fast_response();
@@ -2443,12 +2443,13 @@ float resolve_exposure(MeteringMetrics metrics) {
 
 // Resolve once per metadata pass. Only current, selected measurements may
 // influence output history; preview-only or stale metering must not do so.
-float output_change_confidence;
-bool output_cut_confirmed;
+// Acceleration weight combining zone confidence and the post-cut fast window.
+float output_response_weight;
+bool output_scene_cut;
 
 void prepare_output_temporal_response() {
-    output_change_confidence = 0.0;
-    output_cut_confirmed = false;
+    output_response_weight = 0.0;
+    output_scene_cut = false;
     bool current = temporal_stable_duration > 0.0 &&
                    measured_metering_enabled() && metered_temporal_valid > 0u &&
                    finite_float(PTS) &&
@@ -2458,23 +2459,23 @@ void prepare_output_temporal_response() {
         return;
     }
 
-    output_cut_confirmed = temporal_stable_scene_change > 0u &&
-                           metered_scene_cut_confirmed > 0u;
+    output_scene_cut = temporal_stable_scene_change > 0u &&
+                       metered_scene_cut_detected > 0u;
     bool fast_response = temporal_stable_scene_change > 0u &&
                          metered_scene_fast_response > 0u &&
                          PTS < uintBitsToFloat(metered_scene_adaptation_end_pts);
-    output_change_confidence = fast_response ? 1.0 : 0.0;
+    output_response_weight = fast_response ? 1.0 : 0.0;
     if (full_metering_enabled() && metered_reference_zones_valid > 0u &&
         finite_float(metered_response_confidence)) {
-        output_change_confidence = max(
-            output_change_confidence, clamp(metered_response_confidence, 0.0, 1.0)
+        output_response_weight = max(
+            output_response_weight, clamp(metered_response_confidence, 0.0, 1.0)
         );
     }
 }
 
 float output_temporal_time_scale(float normal_scale, float response_scale) {
     return mix(normal_scale, min(normal_scale, response_scale),
-               output_change_confidence);
+               output_response_weight);
 }
 
 // PTS-derived exponential blend coefficient for the curve LUT.
@@ -2563,7 +2564,7 @@ float stabilize_auto_exposure(float target, bool automatic) {
     }
 
     if (delta_time < 0.0 || delta_time > temporal_stable_duration ||
-        output_cut_confirmed) {
+        output_scene_cut) {
         return reset_auto_exposure(target);
     }
 
@@ -2615,7 +2616,7 @@ void prepare_curve_temporal() {
 
     record_curve_temporal_pts();
     if (delta_time < 0.0 || delta_time > temporal_stable_duration ||
-        output_cut_confirmed) {
+        output_scene_cut) {
         return;
     }
 
