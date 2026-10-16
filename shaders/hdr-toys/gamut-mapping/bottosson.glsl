@@ -288,57 +288,14 @@ vec3 fetch_boundary_texel(int hue_index, int lightness_index) {
     return GAMUT_BOUNDARY_mul * value;
 }
 
-vec3 monotone_slope(vec3 previous_delta, vec3 next_delta) {
-    vec3 magnitude = min(
-        min(abs(previous_delta), abs(next_delta)),
-        0.5 * abs(previous_delta + next_delta)
-    );
-    vec3 same_direction = step(
-        vec3(0.0),
-        previous_delta * next_delta
-    );
-    return sign(previous_delta) * magnitude * same_direction;
-}
-
-vec3 monotone_cubic(
-    vec3 p0,
-    vec3 p1,
-    vec3 p2,
-    vec3 p3,
-    float weight
-) {
-    vec3 m1 = monotone_slope(p1 - p0, p2 - p1);
-    vec3 m2 = monotone_slope(p2 - p1, p3 - p2);
-    float weight2 = weight * weight;
-    float weight3 = weight2 * weight;
-    return (2.0 * weight3 - 3.0 * weight2 + 1.0) * p1
-         + (weight3 - 2.0 * weight2 + weight) * m1
-         + (-2.0 * weight3 + 3.0 * weight2) * p2
-         + (weight3 - weight2) * m2;
-}
-
-vec3 sample_gamut_boundary_hue(
-    int hue_index,
-    int lightness_index,
-    float weight
-) {
-    int hue_previous = (hue_index - 1 + BOUNDARY_HUE_SIZE) %
-                       BOUNDARY_HUE_SIZE;
-    int hue_next = (hue_index + 1) % BOUNDARY_HUE_SIZE;
-    int hue_following = (hue_index + 2) % BOUNDARY_HUE_SIZE;
-    return monotone_cubic(
-        fetch_boundary_texel(hue_previous, lightness_index),
-        fetch_boundary_texel(hue_index, lightness_index),
-        fetch_boundary_texel(hue_next, lightness_index),
-        fetch_boundary_texel(hue_following, lightness_index),
-        weight
-    );
-}
-
+// GAMUT_BOUNDARY already carries the generator's hue-periodic filtering, so
+// four texels are enough: the cusps where the boundary turns sharply are
+// narrower than the table's hue spacing and stay unresolved by any stencil.
 vec3 sample_gamut_boundary(float lightness, float hue) {
     float hue_position = normalized_hue(hue) *
                          float(BOUNDARY_HUE_SIZE);
     int hue_lower = int(floor(hue_position)) % BOUNDARY_HUE_SIZE;
+    int hue_upper = (hue_lower + 1) % BOUNDARY_HUE_SIZE;
     float hue_weight = fract(hue_position);
 
     float lightness_position = clamp(lightness, 0.0, 1.0) *
@@ -350,14 +307,14 @@ vec3 sample_gamut_boundary(float lightness, float hue) {
     );
     float lightness_weight = fract(lightness_position);
 
-    vec3 lower = sample_gamut_boundary_hue(
-        hue_lower,
-        lightness_lower,
+    vec3 lower = mix(
+        fetch_boundary_texel(hue_lower, lightness_lower),
+        fetch_boundary_texel(hue_upper, lightness_lower),
         hue_weight
     );
-    vec3 upper = sample_gamut_boundary_hue(
-        hue_lower,
-        lightness_upper,
+    vec3 upper = mix(
+        fetch_boundary_texel(hue_lower, lightness_upper),
+        fetch_boundary_texel(hue_upper, lightness_upper),
         hue_weight
     );
     return mix(lower, upper, lightness_weight);
