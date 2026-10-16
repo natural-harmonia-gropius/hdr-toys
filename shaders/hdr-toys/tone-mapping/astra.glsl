@@ -3724,7 +3724,7 @@ float sample_tone_curve_lut(float x) {
 }
 
 float chroma_correction_attenuation(float x, float rate, float threshold) {
-    // Preserve the identity endpoint when threshold collapses the interval.
+    // Preserve the identity endpoint; threshold == 1 remains a hard switch.
     if (x >= 1.0) {
         return 1.0;
     }
@@ -3737,7 +3737,10 @@ float chroma_correction_attenuation(float x, float rate, float threshold) {
         0.0,
         1.0
     );
-    return pow(norm, 1.0 + rate * (1.0 - norm));
+    // Flat endpoint slopes smooth both the cutoff and the l1 == l2 crossing.
+    // Rate accelerates fading; rate == 0 retains the smoothstep baseline.
+    float smooth_ratio = norm * norm * (3.0 - 2.0 * norm);
+    return pow(smooth_ratio, 1.0 + rate);
 }
 
 // Based on the chroma correction method for ICtCp in BT.2390/BT.2408
