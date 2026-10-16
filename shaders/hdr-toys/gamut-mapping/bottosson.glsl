@@ -24,35 +24,37 @@ const float INV_TAU = 1.0 / TAU;
 // ColorChecker Digital SG reference data released in 2016 for charts made
 // after November 2014 (D50 Lab -> Bradford D65 -> Oklab).
 //
-// Near-neutral samples (C < 0.02) have unstable hue and are excluded. For the
-// remaining 81 patches, C is normalized by the BT.709 boundary at the same
-// L/h. The median occupancy plus 2.5% forms the floor; more saturated patches
-// add 12-degree Gaussian lobes combined with an eighth-order smooth norm.
-// Values above one are intersected with BT.709. A smooth cap reserves the
-// outermost 2% for a differentiable compression shell; neutral samples are
-// protected separately by the radial construction and remain unchanged.
+// The table holds an absolute Oklab chroma, computed without reference to any
+// gamut, so the profile is a property of the reference colours alone and does
+// not move with the source or destination primaries. Near-neutral samples
+// (C < 0.02) have unstable hue and are excluded; for the remaining 81 patches
+// the median chroma plus 2.5% forms the floor, and every more saturated patch
+// adds a 12-degree Gaussian lobe, the lobes combining through an eighth-order
+// smooth norm. The pixel stage clamps the result against the output boundary,
+// which is what tapers the protection towards black and white; neutral samples
+// are protected separately by the radial construction and remain unchanged.
 // The periodic table is sampled cubically so sparse chart hues do not become
 // polygonal boundary corners.
 // Reference data: https://doi.org/10.5281/zenodo.3245895
 const int COLORCHECKER_PROTECTION_SIZE = 64;
 const float COLORCHECKER_PROTECTION[COLORCHECKER_PROTECTION_SIZE] =
     float[COLORCHECKER_PROTECTION_SIZE](
-        0.93244497, 0.95679049, 0.97544561, 0.98000000,
-        0.98000000, 0.98000000, 0.97993395, 0.94650252,
-        0.98000000, 0.98000000, 0.98000000, 0.98000000,
-        0.96384304, 0.98000000, 0.98000000, 0.98000000,
-        0.98000000, 0.98000000, 0.98000000, 0.98000000,
-        0.98000000, 0.98000000, 0.98000000, 0.97999481,
-        0.95142858, 0.98000000, 0.98000000, 0.97999989,
-        0.98000000, 0.98000000, 0.98000000, 0.98000000,
-        0.95707003, 0.97999993, 0.98000000, 0.98000000,
-        0.98000000, 0.96628910, 0.98000000, 0.98000000,
-        0.98000000, 0.97772026, 0.98000000, 0.98000000,
-        0.98000000, 0.98000000, 0.98000000, 0.98000000,
-        0.96843090, 0.91480939, 0.86717875, 0.83591858,
-        0.82083819, 0.83113779, 0.85160185, 0.87822881,
-        0.90113199, 0.90840840, 0.89578826, 0.87066070,
-        0.87561894, 0.90416089, 0.91938827, 0.91446137
+        0.18158027, 0.19516221, 0.19640634, 0.20838294,
+        0.22344620, 0.22778351, 0.21271361, 0.18519045,
+        0.19126318, 0.19723860, 0.18640968, 0.16684714,
+        0.16482479, 0.17893054, 0.18111996, 0.17452106,
+        0.18723654, 0.19247854, 0.18363837, 0.18146806,
+        0.18256231, 0.18268473, 0.18513779, 0.17611732,
+        0.17041260, 0.18824219, 0.19375455, 0.18274167,
+        0.16157620, 0.14881917, 0.14981350, 0.14395775,
+        0.13463538, 0.13850075, 0.14259487, 0.14075095,
+        0.13407823, 0.13329459, 0.14016930, 0.14252374,
+        0.14097312, 0.15197975, 0.16111179, 0.16087414,
+        0.15178165, 0.15817795, 0.17093226, 0.17291499,
+        0.16295567, 0.14675358, 0.13180242, 0.12200595,
+        0.11884665, 0.12692752, 0.14128497, 0.15998762,
+        0.17610309, 0.18126176, 0.17243716, 0.15512532,
+        0.16286327, 0.17827389, 0.18209356, 0.17319406
     );
 
 float monotone_slope(float previous_delta, float next_delta) {
@@ -178,12 +180,12 @@ void generate_gamut_boundary(ivec2 position) {
         hue_direction,
         XYZ_TO_BT709
     );
-    float protection_scale = sample_colorchecker_protection(hue);
+    float protection_chroma = sample_colorchecker_protection(hue);
 
     imageStore(
         out_image,
         position,
-        vec4(input_chroma, output_chroma, protection_scale, 1.0)
+        vec4(input_chroma, output_chroma, protection_chroma, 1.0)
     );
 }
 
@@ -196,15 +198,20 @@ void hook() {
 //!BIND GAMUT_BOUNDARY
 //!DESC gamut mapping (bottosson)
 
-// GAMUT_BOUNDARY stores input/output chroma and the ColorChecker-derived
-// protection scale. Keeping the scale separate guarantees that interpolated
-// protection never exceeds the correspondingly interpolated output boundary.
-// Their remaining shell provides room to turn gradually towards the smooth
-// guide gamut before RGB fitting.
+// GAMUT_BOUNDARY stores the input and output chroma and the ColorChecker-derived
+// protection chroma. Clamping the interpolated protection against the
+// interpolated output boundary is what keeps a protected colour inside the
+// output gamut. Their remaining shell provides room to turn gradually towards
+// the smooth guide gamut before RGB fitting.
 const float CHROMA_EPSILON = 1e-6;
 // Avoid an arbitrarily steep shell where both gamut boundaries converge at
 // black and white. Those nearly neutral endpoints need no full guide pull.
 const float SHELL_MIN_CHROMA_SPAN = 0.01;
+// The protection profile is an absolute chroma, so it needs the output
+// boundary to bound it. The cap reserves the outermost 2% for the shell and
+// the blend keeps the hand-over differentiable where the cap takes over.
+const float PROTECTION_CAP = 0.98;
+const float PROTECTION_CAP_BLEND = 0.01;
 const float GUIDE_ANCHOR_LIGHTNESS = 0.70;
 const float GUIDE_KNEE_SCALE = 0.85;
 const float SOFT_CLIP_GREY = 0.20;
@@ -324,6 +331,14 @@ float smooth_shell_weight(float position) {
     return position * position * (3.0 - 2.0 * position);
 }
 
+// Polynomial smooth minimum: the exact minimum outside the blend width and
+// differentiable across it. A plain minimum would leave a crease in the
+// protection wherever the profile hands over to the output cap.
+float smooth_minimum(float a, float b, float blend) {
+    float weight = clamp(0.5 + 0.5 * (b - a) / blend, 0.0, 1.0);
+    return mix(b, a, weight) - blend * weight * (1.0 - weight);
+}
+
 // A rotationally symmetric, rounded chroma guide inspired by Bjorn Ottosson's
 // Extended Oklab and two-stage gamut-reduction experiment. It provides a
 // smooth target without importing the RGB cube's hue-dependent cusp.
@@ -379,7 +394,11 @@ vec3 map_to_guide_gamut(vec3 lab) {
     vec3 lch = oklab_to_oklch(lab);
     float lightness = clamp(lch.x, 0.0, 1.0);
     vec3 boundary = sample_gamut_boundary(lightness, lch.z);
-    float protection_boundary = boundary.y * boundary.z;
+    float protection_boundary = smooth_minimum(
+        boundary.z,
+        PROTECTION_CAP * boundary.y,
+        PROTECTION_CAP_BLEND
+    );
 
     if (lch.y <= protection_boundary)
         return lab;
