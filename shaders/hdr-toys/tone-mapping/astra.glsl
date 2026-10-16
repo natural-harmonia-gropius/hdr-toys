@@ -2921,18 +2921,13 @@ float Jhk_to_J(vec3 JCh) {
     return J - C * hke_fh(h);
 }
 
-// The JND coefficient of ΔE_{ITP} is 1 / 720
-// 0.0001 C_z is much smaller than a JND
-// [BT.2124: Objective metric for the assessment of the potential visibility of colour differences in television](https://www.itu.int/rec/R-REC-BT.2124)
-const float epsilon = 0.0001;
-
 vec3 Lab_to_LCh(vec3 Lab) {
     float L = Lab.x;
     float a = Lab.y;
     float b = Lab.z;
 
     float C = length(vec2(a, b));
-    float h = C < epsilon ? 0.0 : atan(b, a);
+    float h = C == 0.0 ? 0.0 : atan(b, a);
 
     return vec3(L, C, h);
 }
