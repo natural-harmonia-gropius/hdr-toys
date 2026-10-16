@@ -422,6 +422,11 @@ vec3 soft_saturate(vec3 value, float softness) {
 // Based on "soft clipping scaled to only have an effect if the color is
 // outside the gamut":
 vec3 soft_clip_rgb_outside_only(vec3 color) {
+    // Exact: the reparameterization below maps the unit cube onto itself.
+    if (all(greaterThanEqual(color, vec3(0.0))) &&
+        all(lessThanEqual(color, vec3(1.0))))
+        return color;
+
     vec3 centered = color - SOFT_CLIP_GREY;
     vec3 direction = sign(centered);
     vec3 scale = 0.5 + direction * (0.5 - SOFT_CLIP_GREY);
