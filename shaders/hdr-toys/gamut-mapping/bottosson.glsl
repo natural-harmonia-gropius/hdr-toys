@@ -444,13 +444,9 @@ vec4 hook() {
     vec3 xyz = color.rgb * BT2020_TO_XYZ;
     vec3 lab = xyz_to_oklab(xyz);
     lab = map_to_guide_gamut(lab);
-
     vec3 mapped_xyz = oklab_to_xyz(lab);
     vec3 mapped_rgb = mapped_xyz * XYZ_TO_BT709;
-    color.rgb = clamp(
-        soft_clip_rgb_outside_only(mapped_rgb),
-        0.0,
-        1.0
-    );
+    color.rgb = soft_clip_rgb_outside_only(mapped_rgb);
+    color.rgb = clamp(color.rgb, 0.0, 1.0);
     return color;
 }
