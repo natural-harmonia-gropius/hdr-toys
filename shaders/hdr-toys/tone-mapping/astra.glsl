@@ -3507,6 +3507,7 @@ void hook() {
 //!BIND HOOKED
 //!BIND LUTS
 //!BIND METADATA
+//!BIND CURVE_TEMPORAL
 //!DESC tone mapping (astra)
 
 // LUT atlas layout: a flattened 65^3 RGB-to-Jab LUT, a 129x65x65
@@ -3723,6 +3724,38 @@ float sample_tone_curve_lut(float x) {
     return LUTS_mul * mix(lower_value, upper_value, weight);
 }
 
+float sample_tone_curve_slope(float x) {
+    float position = sanitize_bounded(x, 0.0, 1.0) *
+                     float(CURVE_SIZE - 1);
+    int lower_index = min(int(floor(position)), CURVE_SIZE - 2);
+    int upper_index = lower_index + 1;
+    float weight = position - float(lower_index);
+
+    // Use the full-precision, temporally stabilized source of the LUT.
+    // Differencing a half-float atlas could amplify quantization into bands.
+    float lower_value = curve_temporal_values[lower_index];
+    float upper_value = curve_temporal_values[upper_index];
+    float previous_value = lower_index > 0
+        ? curve_temporal_values[lower_index - 1]
+        : 2.0 * lower_value - upper_value;
+    float next_value = upper_index < CURVE_SIZE - 1
+        ? curve_temporal_values[upper_index + 1]
+        : 2.0 * upper_value - lower_value;
+
+    // Derivative of a cubic B-spline reconstruction: blend three secant
+    // slopes with nonnegative quadratic weights. The slope estimate is
+    // C1 across LUT cells, without changing the linear lightness lookup.
+    // Linear endpoint extrapolation preserves a constant curve slope.
+    float left_weight = 0.5 * (1.0 - weight) * (1.0 - weight);
+    float right_weight = 0.5 * weight * weight;
+    float middle_weight = 1.0 - left_weight - right_weight;
+    return max(0.0, float(CURVE_SIZE - 1) * (
+        left_weight * (lower_value - previous_value) +
+        middle_weight * (upper_value - lower_value) +
+        right_weight * (next_value - upper_value)
+    ));
+}
+
 float chroma_correction_attenuation(float x, float rate, float threshold) {
     // Preserve the identity endpoint; threshold == 1 remains a hard switch.
     if (x >= 1.0) {
@@ -3743,11 +3776,18 @@ float chroma_correction_attenuation(float x, float rate, float threshold) {
     return pow(smooth_ratio, 1.0 + rate);
 }
 
-float chroma_correction_contrast(float bias) {
-    // Match the middle-segment contrast slope in the opponent coordinates.
-    // Apply the same gain throughout to avoid extra joins at toe/shoulder.
-    // Zero contrast bias preserves the existing chroma correction exactly.
-    return exp2(bias);
+float chroma_correction_contrast(float bias, float lightness) {
+    if (bias == 0.0) {
+        return 1.0;
+    }
+
+    // Keep the full middle-segment gain; relax toward unity as toe/shoulder
+    // compression flattens the curve. This weights the contrast adjustment,
+    // not the chroma itself, so a flat segment does not force extra fading.
+    float middle_slope = exp2(bias);
+    float local_slope = sample_tone_curve_slope(lightness);
+    float weight = smoothstep(0.0, 1.0, local_slope / middle_slope);
+    return exp2(bias * weight);
 }
 
 // Based on the chroma correction method for ICtCp in BT.2390/BT.2408
@@ -3767,7 +3807,7 @@ vec2 chroma_correction(vec2 ab, float l1, float l2) {
     float ratio_min = min(l1, l2) / max(max(l1, l2), 1e-6);
     float ratio_scaled = mix(1.0, ratio_min, chroma_correction_scaling);
     float ratio_safe = max(ratio_scaled, 0.0);
-    float contrast_gain = chroma_correction_contrast(contrast_bias);
+    float contrast_gain = chroma_correction_contrast(contrast_bias, l1);
     return (ab * contrast_gain) * chroma_correction_attenuation(
         ratio_safe,
         chroma_correction_rate,
