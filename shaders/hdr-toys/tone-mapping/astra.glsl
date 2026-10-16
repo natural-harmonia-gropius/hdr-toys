@@ -2996,6 +2996,17 @@ float f_contrast_slope(float c) {
     return exp2(c);
 }
 
+// Generalized rational toe/shoulder inspired by:
+// - Suzuki's hyperbolic segments, recovered here when overshoot = 0 (p = 1).
+//   [Hyperbola tone mapping](https://technorgb.blogspot.com/2018/02/hyperbola-tone-mapping.html)
+// - Hable's piecewise construction, slope matching, and shoulder overshoot.
+//   [Filmic Tonemapping with Piecewise Power Curves](https://filmicworlds.com/blog/filmic-tonemapping-with-piecewise-power-curves/)
+// This extension keeps both anchors and the join slope fixed while varying
+// the denominator exponent; it does not use Hable's power-curve formula or
+// his virtual-white-point construction. The toe reflects the shoulder.
+// "rational" names the base family: for noninteger p the generalized form
+// is generally not a rational function (a ratio of polynomials).
+//
 // Generalized rational toe, the reflection of f_shoulder_rational:
 //
 //   g(t) = t / (1 + a * (1 - t))^p
