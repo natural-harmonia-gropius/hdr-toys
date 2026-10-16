@@ -3808,11 +3808,12 @@ vec2 chroma_correction(vec2 ab, float l1, float l2) {
     float ratio_scaled = mix(1.0, ratio_min, chroma_correction_scaling);
     float ratio_safe = max(ratio_scaled, 0.0);
     float contrast_gain = chroma_correction_contrast(contrast_bias, l1);
-    return (ab * contrast_gain) * chroma_correction_attenuation(
+    float attenuation = chroma_correction_attenuation(
         ratio_safe,
         chroma_correction_rate,
         chroma_correction_threshold
     );
+    return ab * contrast_gain * attenuation;
 }
 
 vec3 tone_mapping(vec3 lab) {
