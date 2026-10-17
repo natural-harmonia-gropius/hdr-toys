@@ -3269,6 +3269,115 @@ void hook() {
 }
 
 //!HOOK OUTPUT
+//!BIND LUTS
+//!BIND METADATA
+//!SAVE CHROMA_BOUNDARY
+//!COMPONENTS 1
+//!WIDTH 361
+//!HEIGHT 129
+//!COMPUTE 16 8
+//!DESC tone mapping (astra, chroma boundary)
+
+// Search once per Jhk/hue grid point, not once per output pixel. The final
+// column repeats hue zero so interpolation across the hue seam is explicit.
+// Store C/Jhk, which also behaves well near black. Regenerate after LUTS so
+// H-K settings, output range and the inverse texture's precision all agree.
+const int BOUNDARY_HUE_INTERVALS = 360;
+const int BOUNDARY_LIGHTNESS_INTERVALS = 128;
+const int BOUNDARY_REVERSE_ROW = 65;
+const int BOUNDARY_CHROMA_SIZE = 65;
+const float BOUNDARY_AB_SCALE = 0.25;
+const vec2 BOUNDARY_RATIO_LIMIT = vec2(2.5, 3.0);
+
+vec3 boundary_fetch_rgb(ivec3 texel) {
+    return texelFetch(LUTS_raw, ivec2(
+        texel.y + texel.z * BOUNDARY_CHROMA_SIZE,
+        BOUNDARY_REVERSE_ROW + texel.x
+    ), 0).rgb;
+}
+
+vec3 boundary_inverse_rgb(vec2 ratio, int lightness_index) {
+    vec2 qmax = BOUNDARY_RATIO_LIMIT /
+                (BOUNDARY_RATIO_LIMIT + BOUNDARY_AB_SCALE);
+    vec2 encoded = 0.5 + 0.5 * sign(ratio) *
+        (abs(ratio) / (abs(ratio) + BOUNDARY_AB_SCALE)) / qmax;
+    vec2 position = clamp(encoded, 0.0, 1.0) *
+                    float(BOUNDARY_CHROMA_SIZE - 1);
+    ivec2 lower = ivec2(floor(position));
+    ivec2 upper = min(lower + ivec2(1), ivec2(BOUNDARY_CHROMA_SIZE - 1));
+    vec2 weight = fract(position);
+
+    // At an exact Jhk row, the final pass's tetrahedral interpolation reduces
+    // to these two triangles. Bilinear interpolation here would measure a
+    // different RGB boundary, especially around highly saturated blues.
+    vec3 v0 = boundary_fetch_rgb(ivec3(lightness_index, lower));
+    vec3 v2 = boundary_fetch_rgb(ivec3(lightness_index, upper));
+    if (weight.x >= weight.y) {
+        vec3 v1 = boundary_fetch_rgb(ivec3(lightness_index, upper.x, lower.y));
+        return LUTS_mul * (v0 + weight.x * (v1 - v0) + weight.y * (v2 - v1));
+    }
+    vec3 v1 = boundary_fetch_rgb(ivec3(lightness_index, lower.x, upper.y));
+    return LUTS_mul * (v0 + weight.y * (v1 - v0) + weight.x * (v2 - v1));
+}
+
+bool boundary_ratio_is_valid(vec2 ratio, int lightness_index) {
+    vec3 rgb = boundary_inverse_rgb(ratio, lightness_index);
+    return !any(isnan(rgb)) && !any(isinf(rgb)) &&
+           all(greaterThanEqual(rgb, vec3(0.0)));
+}
+
+void hook() {
+    ivec2 position = ivec2(gl_GlobalInvocationID.xy);
+    if (position.x > BOUNDARY_HUE_INTERVALS ||
+        position.y > BOUNDARY_LIGHTNESS_INTERVALS) {
+        return;
+    }
+    int hue_index = position.x % BOUNDARY_HUE_INTERVALS;
+    float hue = 6.283185307179586 * float(hue_index) /
+                float(BOUNDARY_HUE_INTERVALS);
+    vec2 direction = vec2(cos(hue), sin(hue));
+    vec2 bounds = BOUNDARY_RATIO_LIMIT / max(abs(direction), vec2(1e-6));
+    float ratio_max = min(bounds.x, bounds.y);
+
+    // A zero-lightness row contains only black regardless of its a/b ratio.
+    // Use the next row's ratio there; reconstructed chroma still tends to 0.
+    int lightness_index = position.y;
+    if (lightness_index == 0 && output_min_j <= 0.0) {
+        lightness_index = 1;
+    }
+
+    float lower = 0.0;
+    float upper = ratio_max;
+    bool found_boundary = false;
+    // Find the first sampled exit from the neutral-connected region instead
+    // of assuming that a potentially nonconvex slice has only one crossing.
+    for (int step_index = 1; step_index <= 8; step_index++) {
+        float probe = ratio_max * (float(step_index) / 8.0);
+        if (!boundary_ratio_is_valid(direction * probe, lightness_index)) {
+            upper = probe;
+            found_boundary = true;
+            break;
+        }
+        lower = probe;
+    }
+    if (found_boundary) {
+        for (int iteration = 0; iteration < 12; iteration++) {
+            float middle = 0.5 * (lower + upper);
+            if (boundary_ratio_is_valid(direction * middle, lightness_index)) {
+                lower = middle;
+            } else {
+                upper = middle;
+            }
+        }
+    }
+
+    // Leave room for rounding when the scalar boundary texture is half-float.
+    // Interpolation can still overestimate a curved boundary; the final pass
+    // validates its actual RGB result and handles that case separately.
+    imageStore(out_image, position, vec4(lower * 0.999, 0.0, 0.0, 1.0));
+}
+
+//!HOOK OUTPUT
 //!BIND PREVIEW_VECTORSCOPE
 //!SAVE EMPTY
 //!COMPONENTS 1
@@ -3501,6 +3610,7 @@ void hook() {
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!BIND LUTS
+//!BIND CHROMA_BOUNDARY
 //!BIND METADATA
 //!BIND CURVE_TEMPORAL
 //!DESC tone mapping (astra)
@@ -3785,7 +3895,7 @@ float chroma_correction_contrast(float bias, float lightness) {
     return exp2(bias * weight);
 }
 
-bool chroma_correction_is_valid(vec2 ab, float lightness) {
+bool chroma_correction_is_valid(vec2 ab, float lightness, vec3 rgb) {
     // Reject coordinates that would be silently clipped by the LUT shapers.
     // Otherwise independent a/b clipping could change the hue of the result.
     vec2 ratio_limit = vec2(A_RATIO_LIMIT, B_RATIO_LIMIT) *
@@ -3794,12 +3904,30 @@ bool chroma_correction_is_valid(vec2 ab, float lightness) {
         return false;
     }
 
-    // Test the actual inverse LUT, including H-K compensation and its
-    // interpolation. Nonnegative Jz or LMS alone cannot guarantee valid RGB.
-    // Do not impose a peak cap here: display-gamut mapping follows Astra.
-    vec3 rgb = LAB_to_RGB(vec3(lightness, ab));
+    // Reuse the final conversion, including H-K and LUT interpolation.
+    // Display peak limiting remains the responsibility of the next stage.
     return !any(isnan(rgb)) && !any(isinf(rgb)) &&
            all(greaterThanEqual(rgb, vec3(0.0)));
+}
+
+float sample_chroma_boundary(vec2 ab, float lightness) {
+    const float hue_intervals = 360.0;
+    const float lightness_intervals = 128.0;
+    float hue = fract(atan(ab.y, ab.x) / 6.283185307179586 + 1.0);
+    vec2 position = vec2(hue * hue_intervals,
+        encode_output_lightness(lightness) * lightness_intervals);
+    ivec2 lower = ivec2(floor(position));
+    ivec2 upper = min(lower + ivec2(1), ivec2(360, 128));
+    vec2 weight = fract(position);
+    float r00 = texelFetch(CHROMA_BOUNDARY_raw, lower, 0).x;
+    float r10 = texelFetch(CHROMA_BOUNDARY_raw, ivec2(upper.x, lower.y), 0).x;
+    float r01 = texelFetch(CHROMA_BOUNDARY_raw, ivec2(lower.x, upper.y), 0).x;
+    float r11 = texelFetch(CHROMA_BOUNDARY_raw, upper, 0).x;
+    float ratio = CHROMA_BOUNDARY_mul * mix(
+        mix(r00, r10, weight.x), mix(r01, r11, weight.x), weight.y
+    );
+    // Match LAB_to_lut_coordinates even if the Jhk lookup clamps at an end.
+    return max(ratio, 0.0) * max(lightness, 1e-6);
 }
 
 vec2 chroma_correction_gamut(vec2 ab, float lightness) {
@@ -3810,42 +3938,46 @@ vec2 chroma_correction_gamut(vec2 ab, float lightness) {
         return ab;
     }
 
-    // Leave the interior untouched. Probe beyond the requested chroma so
-    // compression starts at 80% of the boundary, before RGB turns negative.
+    // Preserve the same 80% rational soft knee, now using the precomputed
+    // C/Jhk boundary rather than searching the inverse LUT for every pixel.
     const float knee = 0.8;
-    bool input_valid = chroma_correction_is_valid(ab, lightness);
-    float upper_scale = input_valid ? 1.0 / knee : 1.0;
-    if (input_valid &&
-        chroma_correction_is_valid(ab * upper_scale, lightness)) {
+    float chroma = length(ab);
+    float limit = sample_chroma_boundary(ab, lightness);
+    float knee_chroma = knee * limit;
+    if (chroma <= knee_chroma) {
         return ab;
     }
+    float span = limit - knee_chroma;
+    float excess = chroma - knee_chroma;
+    float mapped_chroma = knee_chroma + span * excess / (span + excess);
+    return ab * (mapped_chroma / chroma);
+}
 
-    // Bracket a valid chroma along the neutral-to-color ray at fixed Jhk.
-    // This deliberately uses the current inverse LUT instead of a boundary
-    // measured at fixed Jz, which would disagree with H-K compensation.
+vec3 ensure_valid_rgb(vec3 lab, vec3 rgb) {
+    if (chroma_correction_is_valid(lab.yz, lab.x, rgb)) {
+        return rgb;
+    }
+
+    // Only interpolation errors or nonconvex slices reach this fallback.
+    // Keep the RGB of each proven-valid sample; do not repeat the conversion
+    // after searching. The normal path has no inverse-LUT probes or loops.
+    vec3 neutral = LAB_to_RGB(vec3(lab.x, 0.0, 0.0));
+    vec3 valid_rgb = chroma_correction_is_valid(vec2(0.0), lab.x, neutral)
+        ? neutral : vec3(0.0);
     float lower_scale = 0.0;
+    float upper_scale = 1.0;
     for (int iteration = 0; iteration < 12; iteration++) {
         float middle_scale = 0.5 * (lower_scale + upper_scale);
-        if (chroma_correction_is_valid(ab * middle_scale, lightness)) {
+        vec2 candidate_ab = lab.yz * middle_scale;
+        vec3 candidate_rgb = LAB_to_RGB(vec3(lab.x, candidate_ab));
+        if (chroma_correction_is_valid(candidate_ab, lab.x, candidate_rgb)) {
             lower_scale = middle_scale;
+            valid_rgb = candidate_rgb;
         } else {
             upper_scale = middle_scale;
         }
     }
-
-    // Rational soft knee: identity and unit slope at the knee, tending to
-    // the conservative boundary from below. All quantities are C / C_input.
-    float knee_scale = knee * lower_scale;
-    float span = lower_scale - knee_scale;
-    float excess = max(1.0 - knee_scale, 0.0);
-    float mapped_scale = knee_scale + span * excess / (span + excess);
-    vec2 mapped_ab = ab * mapped_scale;
-
-    // A nonconvex inverse-LUT slice need not stay valid throughout a ray.
-    // Recheck the result and fall back to a sample already proven valid.
-    return chroma_correction_is_valid(mapped_ab, lightness)
-        ? mapped_ab
-        : ab * min(lower_scale, 1.0);
+    return valid_rgb;
 }
 
 // Based on the chroma correction method for ICtCp in BT.2390/BT.2408
@@ -3885,7 +4017,9 @@ vec4 hook() {
     color.rgb = apply_exposure(color.rgb);
     color.rgb = RGB_to_LAB(color.rgb);
     color.rgb = tone_mapping(color.rgb);
+    vec3 lab = color.rgb;
     color.rgb = LAB_to_RGB(color.rgb);
+    color.rgb = ensure_valid_rgb(lab, color.rgb);
     return color;
 }
 
