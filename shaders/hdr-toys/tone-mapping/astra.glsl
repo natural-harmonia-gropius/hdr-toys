@@ -3785,6 +3785,69 @@ float chroma_correction_contrast(float bias, float lightness) {
     return exp2(bias * weight);
 }
 
+bool chroma_correction_is_valid(vec2 ab, float lightness) {
+    // Reject coordinates that would be silently clipped by the LUT shapers.
+    // Otherwise independent a/b clipping could change the hue of the result.
+    vec2 ratio_limit = vec2(A_RATIO_LIMIT, B_RATIO_LIMIT) *
+                       max(lightness, 1e-6);
+    if (any(greaterThan(abs(ab), ratio_limit))) {
+        return false;
+    }
+
+    // Test the actual inverse LUT, including H-K compensation and its
+    // interpolation. Nonnegative Jz or LMS alone cannot guarantee valid RGB.
+    // Do not impose a peak cap here: display-gamut mapping follows Astra.
+    vec3 rgb = LAB_to_RGB(vec3(lightness, ab));
+    return !any(isnan(rgb)) && !any(isinf(rgb)) &&
+           all(greaterThanEqual(rgb, vec3(0.0)));
+}
+
+vec2 chroma_correction_gamut(vec2 ab, float lightness) {
+    if (lightness <= 0.0) {
+        return vec2(0.0);
+    }
+    if (all(equal(ab, vec2(0.0)))) {
+        return ab;
+    }
+
+    // Leave the interior untouched. Probe beyond the requested chroma so
+    // compression starts at 80% of the boundary, before RGB turns negative.
+    const float knee = 0.8;
+    bool input_valid = chroma_correction_is_valid(ab, lightness);
+    float upper_scale = input_valid ? 1.0 / knee : 1.0;
+    if (input_valid &&
+        chroma_correction_is_valid(ab * upper_scale, lightness)) {
+        return ab;
+    }
+
+    // Bracket a valid chroma along the neutral-to-color ray at fixed Jhk.
+    // This deliberately uses the current inverse LUT instead of a boundary
+    // measured at fixed Jz, which would disagree with H-K compensation.
+    float lower_scale = 0.0;
+    for (int iteration = 0; iteration < 12; iteration++) {
+        float middle_scale = 0.5 * (lower_scale + upper_scale);
+        if (chroma_correction_is_valid(ab * middle_scale, lightness)) {
+            lower_scale = middle_scale;
+        } else {
+            upper_scale = middle_scale;
+        }
+    }
+
+    // Rational soft knee: identity and unit slope at the knee, tending to
+    // the conservative boundary from below. All quantities are C / C_input.
+    float knee_scale = knee * lower_scale;
+    float span = lower_scale - knee_scale;
+    float excess = max(1.0 - knee_scale, 0.0);
+    float mapped_scale = knee_scale + span * excess / (span + excess);
+    vec2 mapped_ab = ab * mapped_scale;
+
+    // A nonconvex inverse-LUT slice need not stay valid throughout a ray.
+    // Recheck the result and fall back to a sample already proven valid.
+    return chroma_correction_is_valid(mapped_ab, lightness)
+        ? mapped_ab
+        : ab * min(lower_scale, 1.0);
+}
+
 // Based on the chroma correction method for ICtCp in BT.2390/BT.2408
 // [BT.2408: Guidance for operational practices in HDR television production](https://www.itu.int/pub/R-REP-BT.2408)
 //
@@ -3808,7 +3871,7 @@ vec2 chroma_correction(vec2 ab, float l1, float l2) {
         chroma_correction_rate,
         chroma_correction_threshold
     );
-    return ab * contrast_gain * attenuation;
+    return chroma_correction_gamut(ab * contrast_gain * attenuation, l2);
 }
 
 vec3 tone_mapping(vec3 lab) {
