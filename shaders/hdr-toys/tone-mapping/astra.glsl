@@ -3343,26 +3343,10 @@ bool boundary_ratio_is_valid(vec2 ratio, int lightness_index) {
            all(greaterThanEqual(rgb, vec3(0.0)));
 }
 
-void hook() {
-    ivec2 position = ivec2(gl_GlobalInvocationID.xy);
-    if (position.x > BOUNDARY_HUE_INTERVALS ||
-        position.y > BOUNDARY_LIGHTNESS_INTERVALS) {
-        return;
-    }
-    int hue_index = position.x % BOUNDARY_HUE_INTERVALS;
-    float hue = 6.283185307179586 * float(hue_index) /
-                float(BOUNDARY_HUE_INTERVALS);
-    vec2 direction = vec2(cos(hue), sin(hue));
+float find_chroma_boundary(vec2 direction, int lightness_index) {
     vec2 bounds = vec2(A_RATIO_LIMIT, B_RATIO_LIMIT) /
                   max(abs(direction), vec2(1e-6));
     float ratio_max = min(bounds.x, bounds.y);
-
-    // A zero-lightness row contains only black regardless of its a/b ratio.
-    // Use the next row's ratio there; reconstructed chroma still tends to 0.
-    int lightness_index = position.y;
-    if (lightness_index == 0 && output_min_j <= 0.0) {
-        lightness_index = 1;
-    }
 
     float lower = 0.0;
     float upper = ratio_max;
@@ -3388,11 +3372,32 @@ void hook() {
             }
         }
     }
+    return lower;
+}
+
+void hook() {
+    ivec2 position = ivec2(gl_GlobalInvocationID.xy);
+    if (position.x > BOUNDARY_HUE_INTERVALS ||
+        position.y > BOUNDARY_LIGHTNESS_INTERVALS) {
+        return;
+    }
+    int hue_index = position.x % BOUNDARY_HUE_INTERVALS;
+    float hue = 6.283185307179586 * float(hue_index) /
+                float(BOUNDARY_HUE_INTERVALS);
+    vec2 direction = vec2(cos(hue), sin(hue));
+
+    // A zero-lightness row contains only black regardless of its a/b ratio.
+    // Use the next row's ratio there; reconstructed chroma still tends to 0.
+    int lightness_index = position.y;
+    if (lightness_index == 0 && output_min_j <= 0.0) {
+        lightness_index = 1;
+    }
+    float boundary = find_chroma_boundary(direction, lightness_index);
 
     // Leave room for rounding when the scalar boundary texture is half-float.
     // Interpolation can still overestimate a curved boundary; the final pass
     // validates its actual RGB result and handles that case separately.
-    imageStore(out_image, position, vec4(lower * 0.999, 0.0, 0.0, 1.0));
+    imageStore(out_image, position, vec4(boundary * 0.999, 0.0, 0.0, 1.0));
 }
 
 //!HOOK OUTPUT
