@@ -3133,11 +3133,14 @@ float evaluate_tone_curve(float x) {
 // higher-resolution Jhk axis in atlas rows and spans the output Rec.2020 cube,
 // while a/b share the flattened axis to keep the atlas 65^2 texels wide. The
 // neutral tone curve retains its narrower J range.
+// Each pass owns its GLSL constants. Keep the same names and derivations in
+// the consumers; astra-lab checks their agreement and the header allocations.
+// Both flattened color LUTs share a row width.
 const int FORWARD_LUT_SIZE = 65;
 const int FORWARD_LUT_LAST = FORWARD_LUT_SIZE - 1;
 const int REVERSE_LIGHTNESS_LUT_SIZE = 129;
 const int REVERSE_LIGHTNESS_LUT_LAST = REVERSE_LIGHTNESS_LUT_SIZE - 1;
-const int REVERSE_CHROMA_LUT_SIZE = 65;
+const int REVERSE_CHROMA_LUT_SIZE = FORWARD_LUT_SIZE;
 const int REVERSE_CHROMA_LUT_LAST = REVERSE_CHROMA_LUT_SIZE - 1;
 const int LUT_ATLAS_WIDTH = FORWARD_LUT_SIZE * FORWARD_LUT_SIZE;
 const int RGB_TO_LAB_ROW = 0;
@@ -3282,29 +3285,43 @@ void hook() {
 // column repeats hue zero so interpolation across the hue seam is explicit.
 // Store C/Jhk, which also behaves well near black. Regenerate after LUTS so
 // H-K settings, output range and the inverse texture's precision all agree.
+// Layout and shaper definitions match the LUT generation and application passes.
+const int FORWARD_LUT_SIZE = 65;
+const int REVERSE_LIGHTNESS_LUT_SIZE = 129;
+const int REVERSE_LIGHTNESS_LUT_LAST = REVERSE_LIGHTNESS_LUT_SIZE - 1;
+const int REVERSE_CHROMA_LUT_SIZE = FORWARD_LUT_SIZE;
+const int REVERSE_CHROMA_LUT_LAST = REVERSE_CHROMA_LUT_SIZE - 1;
+const int RGB_TO_LAB_ROW = 0;
+const int LAB_TO_RGB_ROW = RGB_TO_LAB_ROW + FORWARD_LUT_SIZE;
+const float AB_RATIO_SCALE = 0.25;
+const float A_RATIO_LIMIT = 2.5;
+const float B_RATIO_LIMIT = 3.0;
+
 const int BOUNDARY_HUE_INTERVALS = 360;
-const int BOUNDARY_LIGHTNESS_INTERVALS = 128;
-const int BOUNDARY_REVERSE_ROW = 65;
-const int BOUNDARY_CHROMA_SIZE = 65;
-const float BOUNDARY_AB_SCALE = 0.25;
-const vec2 BOUNDARY_RATIO_LIMIT = vec2(2.5, 3.0);
+const int BOUNDARY_LIGHTNESS_INTERVALS = REVERSE_LIGHTNESS_LUT_LAST;
+
+float encode_signed_coordinate(float value, float limit) {
+    float maximum_magnitude = limit / (limit + AB_RATIO_SCALE);
+    float encoded_magnitude = abs(value) / (abs(value) + AB_RATIO_SCALE);
+    float signed_magnitude = sign(value) * encoded_magnitude / maximum_magnitude;
+    return clamp(0.5 + 0.5 * signed_magnitude, 0.0, 1.0);
+}
 
 vec3 boundary_fetch_rgb(ivec3 texel) {
     return texelFetch(LUTS_raw, ivec2(
-        texel.y + texel.z * BOUNDARY_CHROMA_SIZE,
-        BOUNDARY_REVERSE_ROW + texel.x
+        texel.y + texel.z * REVERSE_CHROMA_LUT_SIZE,
+        LAB_TO_RGB_ROW + texel.x
     ), 0).rgb;
 }
 
 vec3 boundary_inverse_rgb(vec2 ratio, int lightness_index) {
-    vec2 qmax = BOUNDARY_RATIO_LIMIT /
-                (BOUNDARY_RATIO_LIMIT + BOUNDARY_AB_SCALE);
-    vec2 encoded = 0.5 + 0.5 * sign(ratio) *
-        (abs(ratio) / (abs(ratio) + BOUNDARY_AB_SCALE)) / qmax;
-    vec2 position = clamp(encoded, 0.0, 1.0) *
-                    float(BOUNDARY_CHROMA_SIZE - 1);
+    vec2 encoded = vec2(
+        encode_signed_coordinate(ratio.x, A_RATIO_LIMIT),
+        encode_signed_coordinate(ratio.y, B_RATIO_LIMIT)
+    );
+    vec2 position = encoded * float(REVERSE_CHROMA_LUT_LAST);
     ivec2 lower = ivec2(floor(position));
-    ivec2 upper = min(lower + ivec2(1), ivec2(BOUNDARY_CHROMA_SIZE - 1));
+    ivec2 upper = min(lower + ivec2(1), ivec2(REVERSE_CHROMA_LUT_LAST));
     vec2 weight = fract(position);
 
     // At an exact Jhk row, the final pass's tetrahedral interpolation reduces
@@ -3336,7 +3353,8 @@ void hook() {
     float hue = 6.283185307179586 * float(hue_index) /
                 float(BOUNDARY_HUE_INTERVALS);
     vec2 direction = vec2(cos(hue), sin(hue));
-    vec2 bounds = BOUNDARY_RATIO_LIMIT / max(abs(direction), vec2(1e-6));
+    vec2 bounds = vec2(A_RATIO_LIMIT, B_RATIO_LIMIT) /
+                  max(abs(direction), vec2(1e-6));
     float ratio_max = min(bounds.x, bounds.y);
 
     // A zero-lightness row contains only black regardless of its a/b ratio.
@@ -3622,7 +3640,7 @@ const int FORWARD_LUT_SIZE = 65;
 const int FORWARD_LUT_LAST = FORWARD_LUT_SIZE - 1;
 const int REVERSE_LIGHTNESS_LUT_SIZE = 129;
 const int REVERSE_LIGHTNESS_LUT_LAST = REVERSE_LIGHTNESS_LUT_SIZE - 1;
-const int REVERSE_CHROMA_LUT_SIZE = 65;
+const int REVERSE_CHROMA_LUT_SIZE = FORWARD_LUT_SIZE;
 const int REVERSE_CHROMA_LUT_LAST = REVERSE_CHROMA_LUT_SIZE - 1;
 const int RGB_TO_LAB_ROW = 0;
 const int LAB_TO_RGB_ROW = RGB_TO_LAB_ROW + FORWARD_LUT_SIZE;
@@ -3630,6 +3648,9 @@ const int CURVE_ROW = LAB_TO_RGB_ROW + REVERSE_LIGHTNESS_LUT_SIZE;
 const int CURVE_SIZE = 1024;
 const int RGB_TO_LAB_LUT = 0;
 const int LAB_TO_RGB_LUT = 1;
+
+const int BOUNDARY_HUE_INTERVALS = 360;
+const int BOUNDARY_LIGHTNESS_INTERVALS = REVERSE_LIGHTNESS_LUT_LAST;
 
 // LAB chroma-coordinate shaper: the scale concentrates precision near neutral,
 // while the limits define the representable ranges of the a/L and b/L ratios.
@@ -3911,13 +3932,11 @@ bool chroma_correction_is_valid(vec2 ab, float lightness, vec3 rgb) {
 }
 
 float sample_chroma_boundary(vec2 ab, float lightness) {
-    const float hue_intervals = 360.0;
-    const float lightness_intervals = 128.0;
     float hue = fract(atan(ab.y, ab.x) / 6.283185307179586 + 1.0);
-    vec2 position = vec2(hue * hue_intervals,
-        encode_output_lightness(lightness) * lightness_intervals);
+    ivec2 last_texel = ivec2(BOUNDARY_HUE_INTERVALS, BOUNDARY_LIGHTNESS_INTERVALS);
+    vec2 position = vec2(hue, encode_output_lightness(lightness)) * vec2(last_texel);
     ivec2 lower = ivec2(floor(position));
-    ivec2 upper = min(lower + ivec2(1), ivec2(360, 128));
+    ivec2 upper = min(lower + ivec2(1), last_texel);
     vec2 weight = fract(position);
     float r00 = texelFetch(CHROMA_BOUNDARY_raw, lower, 0).x;
     float r10 = texelFetch(CHROMA_BOUNDARY_raw, ivec2(upper.x, lower.y), 0).x;
