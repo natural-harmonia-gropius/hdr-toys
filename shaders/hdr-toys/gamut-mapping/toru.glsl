@@ -1,20 +1,22 @@
+// https://www.itu.int/dms_pub/itu-r/opb/rep/R-REP-BT.2407-2017-PDF-E.pdf
 // https://trev16.hatenablog.com/entry/2020/06/07/094646
 // https://github.com/toru-ver4/sample_code/blob/develop/2020/020_explain_BT2407/bt2047_gamut_mapping.py
 //
-// BT.2407 Annex 2 lightness mapping without the Annex's hue remapping, as
-// implemented by Toru Yoshihara. Colours outside BT.709 are projected onto the
-// BT.709 boundary in the CIELAB chroma-lightness plane; colours inside BT.709
-// are unchanged. The projection leaves from one of two hue-dependent focal
-// points: colours above the line joining the focal points move towards the
-// focal point on the lightness axis, colours below it move towards the focal
-// point on the chroma axis.
+// BT.2407 Annex 2 gamut mapping in CIELAB. Colours outside BT.709 are
+// projected onto the BT.709 boundary; colours inside BT.709 are unchanged.
+// The lightness mapping moves them along lines towards a focal point on the
+// lightness axis when they sit above the line joining the focal points, or
+// towards a focal point on the chroma axis when they sit below it. The hue
+// mapping of A2.5 lets yellow highlights and cyan leave the radial a*b* path:
+// they follow the sloped loci through the BT.2020 and BT.709 yellow (or cyan)
+// colours, which keeps chroma in yellow highlights and corrects the greenish
+// cast of out-of-gamut cyan.
 //
 // Both focal points come from the cusps of the BT.709 and BT.2020 gamuts. The
 // lightness focal is clamped to a simple flat-ramp-flat profile so the mapping
 // paths do not follow the noisy cusp curve from hue to hue; the chroma focal
 // is the cusp line's chroma-axis intercept, capped where that intercept runs
-// away. Toru's implementation drops the hue mapping stage, so this one does
-// too.
+// away. The lightness mapping follows Toru Yoshihara's implementation.
 //
 // Input is linear BT.2020 and output is linear BT.709, matching the other
 // operators in this directory.
@@ -423,7 +425,14 @@ const uint BOUNDARY_HUE_SIZE = 512u;
 const uint BOUNDARY_LIGHTNESS_SIZE = 256u;
 const uint FOCAL_HUE_SIZE = 1024u;
 const int RAY_ITERATIONS = 12;
+const int HUE_PATH_SCAN_STEPS = 32;
+const int HUE_PATH_ITERATIONS = 12;
 const float CHROMA_EPSILON = 1e-6;
+const float YELLOW_LIGHTNESS = 92.74;
+const float WHITE_LIGHTNESS = 100.0;
+const float PEAK_LIGHTNESS = 106.9;
+const float YELLOW_PATH_ROTATION = 9.137;
+const float CYAN_PATH_ROTATION = 10.13;
 const float TAU = 6.28318530717958647692;
 const float INV_TAU = 1.0 / TAU;
 const float LAB_DELTA = 6.0 / 29.0;
@@ -485,6 +494,73 @@ vec3 lab_to_xyz(vec3 lab) {
     vec3 f_cubed = f * f * f;
     vec3 f_linear = LAB_LINEAR_SCALE * (f - 4.0 / 29.0);
     return mix(f_linear, f_cubed, step(vec3(LAB_DELTA), f)) * D65_WHITE;
+}
+
+bool lab_in_unit_gamut(vec3 lab) {
+    vec3 rgb = lab_to_xyz(lab) * XYZ_TO_BT709;
+    return all(greaterThanEqual(rgb, vec3(0.0))) &&
+           all(lessThanEqual(rgb, vec3(1.0)));
+}
+
+float map_lightness(
+    float lightness,
+    float chroma,
+    float mapped_chroma,
+    float l_focal,
+    float c_focal,
+    bool above
+) {
+    if (above) {
+        return l_focal +
+               (lightness - l_focal) * mapped_chroma / chroma;
+    }
+
+    return lightness * (c_focal - mapped_chroma) /
+           max(c_focal - chroma, CHROMA_EPSILON);
+}
+
+// A2.5: yellow highlights and cyan follow a sloped line in a*b* instead of
+// the radial line through the origin. The direction points away from the
+// gamut, so the search walks along its negative.
+bool hue_path_direction(
+    float hue_degrees,
+    float lightness,
+    out vec2 direction
+) {
+    if (hue_degrees > 0.0 && hue_degrees < 180.0 &&
+        lightness > YELLOW_LIGHTNESS) {
+        float k;
+
+        // The rotation peaks at white and fades to zero at both the yellow
+        // lightness limit and peak white (equation 2-6).
+        if (lightness <= WHITE_LIGHTNESS) {
+            k = (lightness - YELLOW_LIGHTNESS) /
+                (WHITE_LIGHTNESS - YELLOW_LIGHTNESS);
+        } else {
+            k = (PEAK_LIGHTNESS - lightness) /
+                (PEAK_LIGHTNESS - WHITE_LIGHTNESS);
+        }
+
+        k = clamp(k, 0.0, 1.0);
+        float theta = radians(
+            hue_degrees -
+            YELLOW_PATH_ROTATION * k * sin(radians(hue_degrees))
+        );
+        direction = vec2(cos(theta), sin(theta));
+        return true;
+    }
+
+    if (hue_degrees > 180.0 && hue_degrees < 240.0) {
+        float theta = radians(
+            hue_degrees +
+            CYAN_PATH_ROTATION * sin(radians(3.0 * hue_degrees))
+        );
+        direction = vec2(cos(theta), sin(theta));
+        return true;
+    }
+
+    direction = vec2(0.0);
+    return false;
 }
 
 vec2 fetch_focal(int index) {
@@ -549,10 +625,93 @@ vec4 hook() {
     float l_focal = focal.x;
     float c_focal = max(focal.y, CHROMA_EPSILON);
     bool above = lab.x >= l_focal - l_focal * chroma / c_focal;
-    float mapped_lightness;
-    float mapped_chroma;
+    float hue_degrees = degrees(hue);
 
-    if (above) {
+    if (hue_degrees < 0.0) {
+        hue_degrees += 360.0;
+    }
+
+    vec2 path_direction;
+    bool hue_mapped = hue_path_direction(
+        hue_degrees,
+        lab.x,
+        path_direction
+    );
+    float mapped_lightness;
+    vec2 mapped_ab;
+    bool mapped = false;
+
+    if (hue_mapped) {
+        float maximum = chroma + 160.0;
+        float lower = 0.0;
+        float upper = 0.0;
+        float previous = 0.0;
+        bool found = false;
+
+        // The report parameterizes the line by r = b_map / b_out. Walking
+        // along the line's direction is the same path and stays stable when
+        // the line is nearly vertical. The boundary table is indexed by hue,
+        // which changes along this path, so the crossing is bracketed with
+        // the exact BT.709 test instead.
+        for (int i = 1; i <= HUE_PATH_SCAN_STEPS; i++) {
+            float distance = maximum * float(i) /
+                             float(HUE_PATH_SCAN_STEPS);
+            vec2 ab = lab.yz - distance * path_direction;
+            float mapped_chroma = length(ab);
+            float test_lightness = map_lightness(
+                lab.x,
+                chroma,
+                mapped_chroma,
+                l_focal,
+                c_focal,
+                above
+            );
+
+            if (lab_in_unit_gamut(vec3(test_lightness, ab))) {
+                lower = previous;
+                upper = distance;
+                found = true;
+                break;
+            }
+
+            previous = distance;
+        }
+
+        if (found) {
+            for (int i = 0; i < HUE_PATH_ITERATIONS; i++) {
+                float distance = 0.5 * (lower + upper);
+                vec2 ab = lab.yz - distance * path_direction;
+                float mapped_chroma = length(ab);
+                float test_lightness = map_lightness(
+                    lab.x,
+                    chroma,
+                    mapped_chroma,
+                    l_focal,
+                    c_focal,
+                    above
+                );
+
+                if (lab_in_unit_gamut(vec3(test_lightness, ab))) {
+                    upper = distance;
+                } else {
+                    lower = distance;
+                }
+            }
+
+            mapped_ab = lab.yz - upper * path_direction;
+            mapped_lightness = map_lightness(
+                lab.x,
+                chroma,
+                length(mapped_ab),
+                l_focal,
+                c_focal,
+                above
+            );
+            mapped = true;
+        }
+    }
+
+    if (!mapped && above) {
         float lower = 0.0;
         float upper = 1.0;
 
@@ -573,8 +732,8 @@ vec4 hook() {
         }
 
         mapped_lightness = mix(l_focal, lab.x, lower);
-        mapped_chroma = lower * chroma;
-    } else {
+        mapped_ab = (lower * chroma) * hue_direction;
+    } else if (!mapped) {
         float maximum = c_focal / max(c_focal - chroma, CHROMA_EPSILON);
         float lower = 0.0;
         float upper = maximum;
@@ -593,13 +752,11 @@ vec4 hook() {
         }
 
         mapped_lightness = upper * lab.x;
-        mapped_chroma = c_focal + upper * (chroma - c_focal);
+        mapped_ab = (c_focal + upper * (chroma - c_focal)) *
+                    hue_direction;
     }
 
-    vec3 mapped_lab = vec3(
-        mapped_lightness,
-        max(mapped_chroma, 0.0) * hue_direction
-    );
+    vec3 mapped_lab = vec3(mapped_lightness, mapped_ab);
     color.rgb = clamp(
         lab_to_xyz(mapped_lab) * XYZ_TO_BT709,
         0.0,
