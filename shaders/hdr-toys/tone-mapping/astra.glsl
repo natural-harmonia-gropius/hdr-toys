@@ -976,7 +976,7 @@ const uint METERING_ACTIVE_COLUMNS_MIN = 4u;
 const uint METERING_ACTIVE_ROWS_MIN = 3u;
 const float METERING_BORDER_MATRIX_WEIGHT = 0.95;
 
-shared uint histogram_prefix[METERING_REDUCTION_SIZE];
+shared uint histogram_scan[2][METERING_REDUCTION_SIZE];
 shared float average_partial[METERING_REDUCTION_SIZE];
 shared float histogram_average;
 shared uint black_bin;
@@ -1002,17 +1002,20 @@ uint sum_histogram_block(uvec4 counts) {
 }
 
 void scan_histogram_blocks(uint tid, uint block_count) {
-    histogram_prefix[tid] = block_count;
+    histogram_scan[0][tid] = block_count;
     barrier();
 
+    // Ping-pong storage preserves the add order without a pre-write barrier.
+    // The fixed power-of-four size has an even number of rounds: bank 0 wins.
+    uint bank = 0u;
     for (uint offset = 1u; offset < METERING_REDUCTION_SIZE; offset <<= 1u) {
-        uint inclusive = histogram_prefix[tid];
+        uint inclusive = histogram_scan[bank][tid];
         if (tid >= offset) {
-            inclusive += histogram_prefix[tid - offset];
+            inclusive += histogram_scan[bank][tid - offset];
         }
+        histogram_scan[1u - bank][tid] = inclusive;
         barrier();
-        histogram_prefix[tid] = inclusive;
-        barrier();
+        bank = 1u - bank;
     }
 }
 
@@ -1375,9 +1378,9 @@ void publish_coarse_histogram(uint tid) {
     uint first_block = tid * METERING_BLOCKS_PER_COARSE_BIN;
     uint cumulative_before = first_block == 0u
         ? 0u
-        : histogram_prefix[first_block - 1u];
+        : histogram_scan[0][first_block - 1u];
     metered_coarse_histogram[tid] =
-        histogram_prefix[last_block] - cumulative_before;
+        histogram_scan[0][last_block] - cumulative_before;
 }
 
 // A percentile of the declared sample count, floored at one sample so a
@@ -1387,8 +1390,8 @@ uint percentile_target(uint sample_count, float percentile) {
 }
 
 void locate_percentiles(uint tid, uint first, uvec4 counts) {
-    uint cumulative_before = tid == 0u ? 0u : histogram_prefix[tid - 1u];
-    uint cumulative = histogram_prefix[tid];
+    uint cumulative_before = tid == 0u ? 0u : histogram_scan[0][tid - 1u];
+    uint cumulative = histogram_scan[0][tid];
     uint black_target = percentile_target(
         METERING_SAMPLE_COUNT,
         METERING_BLACK_PERCENTILE
@@ -1456,9 +1459,9 @@ void reduce_histogram_statistics(
     publish_coarse_histogram(tid);
     locate_percentiles(tid, first, counts);
 
-    uint global_total = histogram_prefix[METERING_REDUCTION_SIZE - 1u];
+    uint global_total = histogram_scan[0][METERING_REDUCTION_SIZE - 1u];
     uvec2 global_targets = average_trim_targets(global_total);
-    uint global_before = tid == 0u ? 0u : histogram_prefix[tid - 1u];
+    uint global_before = tid == 0u ? 0u : histogram_scan[0][tid - 1u];
 
     reduce_average_partials(
         tid,
@@ -1574,7 +1577,7 @@ const uint TEMPORAL_REFERENCE_KEEP = 0u;
 const uint TEMPORAL_REFERENCE_BLEND = 1u;
 const uint TEMPORAL_REFERENCE_REPLACE = 2u;
 
-shared vec2 temporal_distance_partial[TEMPORAL_HISTOGRAM_SIZE];
+shared vec2 temporal_scan[2][TEMPORAL_HISTOGRAM_SIZE];
 shared uint temporal_frame_operation;
 shared uint temporal_reference_operation;
 shared float temporal_delta_time;
@@ -1644,21 +1647,20 @@ vec2 temporal_measure_delta_and_update_previous(uint index, float current) {
 }
 
 void temporal_scan_distribution_delta(uint tid, vec2 delta) {
-    temporal_distance_partial[tid] = delta;
+    temporal_scan[0][tid] = delta;
     barrier();
 
-    // Inclusive Hillis-Steele scan. The barrier before each write keeps every
-    // read on the previous iteration's shared-memory snapshot.
-    for (uint offset = 1u;
-         offset < TEMPORAL_HISTOGRAM_SIZE;
-         offset <<= 1u) {
-        vec2 inclusive = temporal_distance_partial[tid];
+    // Ping-pong storage preserves the add order without a pre-write barrier.
+    // The fixed power-of-four size has an even number of rounds: bank 0 wins.
+    uint bank = 0u;
+    for (uint offset = 1u; offset < TEMPORAL_HISTOGRAM_SIZE; offset <<= 1u) {
+        vec2 inclusive = temporal_scan[bank][tid];
         if (tid >= offset) {
-            inclusive += temporal_distance_partial[tid - offset];
+            inclusive += temporal_scan[bank][tid - offset];
         }
+        temporal_scan[1u - bank][tid] = inclusive;
         barrier();
-        temporal_distance_partial[tid] = inclusive;
-        barrier();
+        bank = 1u - bank;
     }
 }
 
@@ -1668,21 +1670,21 @@ vec2 temporal_cdf_distance(uint tid) {
     // the first 63 boundaries.
     // Each uniform PQ bin spans 1/64 of the normalized code-value axis.
     return tid + 1u < TEMPORAL_HISTOGRAM_SIZE
-        ? abs(temporal_distance_partial[tid]) /
+        ? abs(temporal_scan[0][tid]) /
           float(TEMPORAL_HISTOGRAM_SIZE)
         : vec2(0.0);
 }
 
 void temporal_reduce_distances(uint tid, vec2 distance) {
-    temporal_distance_partial[tid] = distance;
+    temporal_scan[0][tid] = distance;
     barrier();
 
     for (uint size = TEMPORAL_HISTOGRAM_SIZE >> 1u;
          size > 0u;
          size >>= 1u) {
         if (tid < size) {
-            temporal_distance_partial[tid] +=
-                temporal_distance_partial[tid + size];
+            temporal_scan[0][tid] +=
+                temporal_scan[0][tid + size];
         }
         barrier();
     }
@@ -1984,7 +1986,7 @@ void analyze_metering_temporally() {
     temporal_reduce_distances(index, distance);
 
     if (index == 0u) {
-        temporal_process_distances(temporal_distance_partial[0]);
+        temporal_process_distances(temporal_scan[0][0]);
     }
     barrier();
 
