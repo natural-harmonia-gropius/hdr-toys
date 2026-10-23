@@ -745,6 +745,10 @@ const vec2 MATRIX_METERING_SIZE = vec2(256.0, 144.0);
 // Each entry contains (sum_of_15_bit_values << MATRIX_ZONE_COUNT_BITS)
 // | sample_count.
 shared uint zone_histogram[MATRIX_ZONE_HISTOGRAM_SIZE];
+shared uint zone_prefix[2][MATRIX_ZONE_HISTOGRAM_SIZE];
+shared uint zone_retained_count[MATRIX_ZONE_HISTOGRAM_SIZE];
+shared uint zone_low_bin;
+shared uint zone_high_bin;
 
 // Ordered-comparison sanitizer; see the metering intensity pass.
 float sanitize_bounded(float value, float lower_bound, float upper_bound) {
@@ -816,58 +820,78 @@ uint percentile_target(uint sample_count, float percentile) {
     return max(uint(ceil(float(sample_count) * percentile)), 1u);
 }
 
-void publish_matrix_zone(uint zone_index) {
+void publish_matrix_zone(uint tid, uint zone_index) {
     uint trim = uint(floor(
         float(MATRIX_ZONE_SAMPLE_COUNT) * MATRIX_ZONE_TRIM_PERCENTILE
     ));
-    uint lower_target = trim;
     uint upper_target = MATRIX_ZONE_SAMPLE_COUNT - trim;
     uint low_target = percentile_target(
-        MATRIX_ZONE_SAMPLE_COUNT,
-        MATRIX_ZONE_LOW_PERCENTILE
+        MATRIX_ZONE_SAMPLE_COUNT, MATRIX_ZONE_LOW_PERCENTILE
     );
     uint high_target = percentile_target(
-        MATRIX_ZONE_SAMPLE_COUNT,
-        MATRIX_ZONE_HIGH_PERCENTILE
+        MATRIX_ZONE_SAMPLE_COUNT, MATRIX_ZONE_HIGH_PERCENTILE
     );
 
-    uint cumulative = 0u;
-    uint low_bin = 0u;
-    uint high_bin = MATRIX_ZONE_HISTOGRAM_SIZE - 1u;
-    float sum = 0.0;
+    uint packed_value = 0u;
+    uint sample_count = 0u;
+    if (tid < MATRIX_ZONE_HISTOGRAM_SIZE) {
+        packed_value = zone_histogram[tid];
+        sample_count = matrix_zone_bin_count(packed_value);
+        zone_prefix[0][tid] = sample_count;
+    }
+    if (tid == 0u) {
+        zone_low_bin = 0u;
+        zone_high_bin = MATRIX_ZONE_HISTOGRAM_SIZE - 1u;
+    }
+    barrier();
 
-    for (uint i = 0u; i < MATRIX_ZONE_HISTOGRAM_SIZE; i++) {
-        uint packed_value = zone_histogram[i];
-        uint sample_count = matrix_zone_bin_count(packed_value);
-        uint next = cumulative + sample_count;
-        uint retained = retained_count(
-            cumulative,
-            next,
-            lower_target,
-            upper_target
-        );
-        sum += matrix_zone_retained_sum(
-            packed_value,
-            sample_count,
-            retained
-        );
-
-        if (cumulative < low_target && next >= low_target) {
-            low_bin = i;
+    // Separate read/write banks need only one workgroup barrier per step.
+    uint bank = 0u;
+    for (uint offset = 1u; offset < MATRIX_ZONE_HISTOGRAM_SIZE; offset <<= 1u) {
+        if (tid < MATRIX_ZONE_HISTOGRAM_SIZE) {
+            uint inclusive = zone_prefix[bank][tid];
+            if (tid >= offset) {
+                inclusive += zone_prefix[bank][tid - offset];
+            }
+            zone_prefix[1u - bank][tid] = inclusive;
         }
-        if (cumulative < high_target && next >= high_target) {
-            high_bin = i;
-        }
-
-        cumulative = next;
+        barrier();
+        bank = 1u - bank;
     }
 
-    uint retained_total = upper_target - lower_target;
-    metered_zone_average[zone_index] = sum /
-                                       float(max(retained_total, 1u));
-    metered_zone_spread[zone_index] =
-        float(high_bin - low_bin) /
-        float(MATRIX_ZONE_HISTOGRAM_SIZE - 1u);
+    if (tid < MATRIX_ZONE_HISTOGRAM_SIZE) {
+        uint cumulative = zone_prefix[bank][tid];
+        uint before = cumulative - sample_count;
+        uint retained = retained_count(before, cumulative, trim, upper_target);
+        zone_retained_count[tid] = retained;
+        if (before < low_target && cumulative >= low_target) {
+            zone_low_bin = tid;
+        }
+        if (before < high_target && cumulative >= high_target) {
+            zone_high_bin = tid;
+        }
+    }
+    barrier();
+
+    if (tid == 0u) {
+        // Keep the original contribution expression and accumulation order:
+        // moving float intermediates into shared memory changes contraction
+        // differently in Vulkan and D3D11 shader compilers.
+        float sum = 0.0;
+        for (uint i = 0u; i < MATRIX_ZONE_HISTOGRAM_SIZE; i++) {
+            uint packed = zone_histogram[i];
+            sum += matrix_zone_retained_sum(
+                packed, matrix_zone_bin_count(packed), zone_retained_count[i]
+            );
+        }
+        metered_zone_average[zone_index] = sum /
+            float(max(upper_target - trim, 1u));
+        metered_zone_spread[zone_index] = float(zone_high_bin - zone_low_bin) /
+            float(MATRIX_ZONE_HISTOGRAM_SIZE - 1u);
+        if (zone_index == 0u) {
+            metered_zones_valid = 1u;
+        }
+    }
 }
 
 void analyze_matrix_zone() {
@@ -886,15 +910,10 @@ void analyze_matrix_zone() {
     );
     barrier();
 
-    if (tid == 0u) {
-        uint zone_index = gl_WorkGroupID.y * MATRIX_ZONE_COLUMNS +
-                          gl_WorkGroupID.x;
-        if (zone_index < MATRIX_ZONE_COUNT) {
-            publish_matrix_zone(zone_index);
-            if (zone_index == 0u) {
-                metered_zones_valid = 1u;
-            }
-        }
+    uint zone_index = gl_WorkGroupID.y * MATRIX_ZONE_COLUMNS +
+                      gl_WorkGroupID.x;
+    if (zone_index < MATRIX_ZONE_COUNT) {
+        publish_matrix_zone(tid, zone_index);
     }
 }
 
