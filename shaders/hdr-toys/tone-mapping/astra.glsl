@@ -987,6 +987,8 @@ shared uint diffuse_white_bin;
 shared vec2 matrix_partial[METERING_REDUCTION_SIZE];
 shared uvec4 matrix_active_bounds;
 shared float matrix_border_confidence;
+shared uint matrix_border_columns[MATRIX_ZONE_COLUMNS];
+shared float matrix_border_rows[MATRIX_ZONE_ROWS];
 
 uvec4 load_histogram_block(uint first) {
     return uvec4(
@@ -1099,31 +1101,28 @@ bool matrix_zone_looks_like_border(uint index) {
            metered_zone_spread[index] <= METERING_BORDER_SPREAD_MAX;
 }
 
-// The fraction of a run of zones that look like presentation bars. A column is
-// the same run read with the grid's width as the stride, which is why one
-// counter serves both.
-float border_fraction(uint first, uint stride, uint extent) {
-    uint count = 0u;
-
-    for (uint i = 0u; i < extent; i++) {
-        if (matrix_zone_looks_like_border(first + i * stride)) {
-            count++;
-        }
-    }
-
-    return float(count) / float(max(extent, 1u));
-}
-
+// Each column packs its nine border classifications into a bit mask.
+// Both horizontal and vertical occupancy reuse those exact classifications.
 float matrix_column_black_fraction(uint x) {
-    return border_fraction(x, MATRIX_ZONE_COLUMNS, MATRIX_ZONE_ROWS);
+    return float(bitCount(matrix_border_columns[x])) / float(MATRIX_ZONE_ROWS);
 }
 
-float matrix_row_black_fraction(uint y, uint left, uint right) {
-    return border_fraction(
-        y * MATRIX_ZONE_COLUMNS + left,
-        1u,
-        right - left
-    );
+uvec2 matrix_horizontal_bounds() {
+    uint left = 0u;
+    uint right = MATRIX_ZONE_COLUMNS;
+    for (uint x = 0u; x < MATRIX_ZONE_COLUMNS; x++) {
+        if (matrix_column_black_fraction(x) < METERING_BORDER_OCCUPANCY_MIN) {
+            break;
+        }
+        left = x + 1u;
+    }
+    for (int x = int(MATRIX_ZONE_COLUMNS) - 1; x >= 0; x--) {
+        if (matrix_column_black_fraction(uint(x)) < METERING_BORDER_OCCUPANCY_MIN) {
+            break;
+        }
+        right = uint(x);
+    }
+    return uvec2(left, right);
 }
 
 struct MatrixActiveRegion {
@@ -1138,34 +1137,21 @@ MatrixActiveRegion detect_matrix_active_region() {
     uint bottom = MATRIX_ZONE_ROWS;
 
     if (metered_zones_valid > 0u) {
-        for (uint x = 0u; x < MATRIX_ZONE_COLUMNS; x++) {
-            if (matrix_column_black_fraction(x) <
-                METERING_BORDER_OCCUPANCY_MIN) {
-                break;
-            }
-            left = x + 1u;
-        }
-        for (int x = int(MATRIX_ZONE_COLUMNS) - 1; x >= 0; x--) {
-            if (matrix_column_black_fraction(uint(x)) <
-                METERING_BORDER_OCCUPANCY_MIN) {
-                break;
-            }
-            right = uint(x);
-        }
+        uvec2 horizontal = matrix_horizontal_bounds();
+        left = horizontal.x;
+        right = horizontal.y;
 
         if (right > left &&
             right - left >= METERING_ACTIVE_COLUMNS_MIN) {
             for (uint y = 0u; y < MATRIX_ZONE_ROWS; y++) {
-                if (matrix_row_black_fraction(y, left, right) <
+                if (matrix_border_rows[y] <
                     METERING_BORDER_OCCUPANCY_MIN) {
                     break;
                 }
                 top = y + 1u;
             }
             for (int y = int(MATRIX_ZONE_ROWS) - 1; y >= 0; y--) {
-                if (matrix_row_black_fraction(
-                        uint(y), left, right
-                    ) < METERING_BORDER_OCCUPANCY_MIN) {
+                if (matrix_border_rows[y] < METERING_BORDER_OCCUPANCY_MIN) {
                     break;
                 }
                 bottom = uint(y);
@@ -1195,6 +1181,35 @@ MatrixActiveRegion detect_matrix_active_region() {
 }
 
 void prepare_matrix_active_region(uint tid) {
+    if (tid < MATRIX_ZONE_COLUMNS) {
+        uint mask = 0u;
+        for (uint y = 0u; y < MATRIX_ZONE_ROWS; y++) {
+            if (metered_zones_valid > 0u &&
+                matrix_zone_looks_like_border(y * MATRIX_ZONE_COLUMNS + tid)) {
+                mask |= 1u << y;
+            }
+        }
+        matrix_border_columns[tid] = mask;
+    }
+    // Keep synchronization unconditional for the D3D11 compiler.
+    barrier();
+
+    if (tid < MATRIX_ZONE_ROWS) {
+        // Rows depend on the detected horizontal crop. Repeating this
+        // small scan in nine lanes avoids another scalar handoff/barrier.
+        uvec2 horizontal = matrix_horizontal_bounds();
+        uint count = 0u;
+        uint width = horizontal.y > horizontal.x
+            ? horizontal.y - horizontal.x : 0u;
+        if (width >= METERING_ACTIVE_COLUMNS_MIN) {
+            for (uint x = horizontal.x; x < horizontal.y; x++) {
+                count += (matrix_border_columns[x] >> tid) & 1u;
+            }
+        }
+        matrix_border_rows[tid] = float(count) / float(max(width, 1u));
+    }
+    barrier();
+
     if (tid == 0u) {
         MatrixActiveRegion region = detect_matrix_active_region();
         matrix_active_bounds = region.bounds;
