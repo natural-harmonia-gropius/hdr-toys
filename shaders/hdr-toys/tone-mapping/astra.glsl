@@ -1597,7 +1597,7 @@ shared uint temporal_frame_operation;
 shared uint temporal_reference_operation;
 shared float temporal_delta_time;
 shared float temporal_reference_alpha;
-shared vec2 temporal_zone_support[TEMPORAL_HISTOGRAM_SIZE];
+shared vec4 temporal_partial[TEMPORAL_HISTOGRAM_SIZE];
 shared bool temporal_zone_reversed;
 shared uint temporal_zones_available;
 
@@ -1690,16 +1690,15 @@ vec2 temporal_cdf_distance(uint tid) {
         : vec2(0.0);
 }
 
-void temporal_reduce_distances(uint tid, vec2 distance) {
-    temporal_scan[0][tid] = distance;
+void temporal_reduce_statistics(uint index, vec2 distance, vec2 support) {
+    // Independent reductions share synchronization, not their arithmetic:
+    // preserve each component's original 32,16,...,1 addition tree.
+    temporal_partial[index] = vec4(distance, support);
     barrier();
-
     for (uint size = TEMPORAL_HISTOGRAM_SIZE >> 1u;
-         size > 0u;
-         size >>= 1u) {
-        if (tid < size) {
-            temporal_scan[0][tid] +=
-                temporal_scan[0][tid + size];
+         size > 0u; size >>= 1u) {
+        if (index < size) {
+            temporal_partial[index] += temporal_partial[index + size];
         }
         barrier();
     }
@@ -1733,20 +1732,8 @@ vec2 temporal_update_zone_references(uint index, bool initialize) {
     return support;
 }
 
-void temporal_reduce_zone_support(uint index, vec2 support) {
-    temporal_zone_support[index] = support;
-    barrier();
-    for (uint size = TEMPORAL_HISTOGRAM_SIZE >> 1u;
-         size > 0u; size >>= 1u) {
-        if (index < size) {
-            temporal_zone_support[index] += temporal_zone_support[index + size];
-        }
-        barrier();
-    }
-}
-
 void temporal_update_zone_evidence(bool initialize) {
-    vec2 support = temporal_zone_support[0] / float(TEMPORAL_ZONE_COUNT);
+    vec2 support = temporal_partial[0].zw / float(TEMPORAL_ZONE_COUNT);
     float balance = support.x - support.y;
     float direction = abs(balance) > TEMPORAL_DIRECTION_DEADBAND
         ? sign(balance) : 0.0;
@@ -1806,28 +1793,6 @@ void temporal_rebase_zone_references(uint index) {
     for (uint zone = index; zone < TEMPORAL_ZONE_COUNT;
          zone += TEMPORAL_HISTOGRAM_SIZE) {
         metered_reference_zones[zone] = metered_zone_average[zone];
-    }
-}
-
-void temporal_update_zone_response(uint index) {
-    if (temporal_zones_available == 0u) {
-        if (index == 0u) {
-            temporal_reset_zone_response();
-        }
-        return;
-    }
-
-    bool initialize = temporal_frame_operation == TEMPORAL_FRAME_INITIALIZE ||
-                      metered_reference_zones_valid == 0u;
-    vec2 support = temporal_update_zone_references(index, initialize);
-    temporal_reduce_zone_support(index, support);
-
-    if (index == 0u) {
-        temporal_update_zone_evidence(initialize);
-    }
-    barrier();
-    if (temporal_zone_reversed) {
-        temporal_rebase_zone_references(index);
     }
 }
 
@@ -1986,22 +1951,42 @@ void analyze_metering_temporally() {
         return;
     }
 
-    temporal_update_zone_response(index);
-
+    bool zones_available = temporal_zones_available > 0u;
+    bool initialize = temporal_frame_operation == TEMPORAL_FRAME_INITIALIZE ||
+                      metered_reference_zones_valid == 0u;
+    vec2 support = zones_available
+        ? temporal_update_zone_references(index, initialize) : vec2(0.0);
     float current = temporal_histogram_value(index);
+    bool process = temporal_frame_operation == TEMPORAL_FRAME_PROCESS;
+    vec2 distance = vec2(0.0);
+    if (process) {
+        vec2 delta = temporal_measure_delta_and_update_previous(index, current);
+        temporal_scan_distribution_delta(index, delta);
+        distance = temporal_cdf_distance(index);
+    }
+    if (process || zones_available) {
+        temporal_reduce_statistics(index, distance, support);
+    }
 
-    if (temporal_frame_operation == TEMPORAL_FRAME_INITIALIZE) {
+    // Zone evidence still precedes cut acceptance, which may reset it.
+    if (index == 0u) {
+        if (zones_available) {
+            temporal_update_zone_evidence(initialize);
+        } else {
+            temporal_reset_zone_response();
+        }
+    }
+    barrier();
+    if (zones_available && temporal_zone_reversed) {
+        temporal_rebase_zone_references(index);
+    }
+
+    if (!process) {
         temporal_initialize_histogram(index, current);
         return;
     }
-
-    vec2 delta = temporal_measure_delta_and_update_previous(index, current);
-    temporal_scan_distribution_delta(index, delta);
-    vec2 distance = temporal_cdf_distance(index);
-    temporal_reduce_distances(index, distance);
-
     if (index == 0u) {
-        temporal_process_distances(temporal_scan[0][0]);
+        temporal_process_distances(temporal_partial[0].xy);
     }
     barrier();
 
