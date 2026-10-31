@@ -27,7 +27,7 @@
 //!WIDTH 513
 //!HEIGHT 256
 //!COMPUTE 16 8
-//!DESC gamut mapping (toru, boundary generation)
+//!DESC gamut mapping (BT.2407 annex 2, boundary generation)
 
 const uint BOUNDARY_HUE_SIZE = 512u;
 const uint BOUNDARY_LIGHTNESS_SIZE = 256u;
@@ -151,7 +151,7 @@ void hook() {
 //!HEIGHT 1
 //!COMPUTE 64 1
 //!BIND TORU_BOUNDARY
-//!DESC gamut mapping (toru, focal generation)
+//!DESC gamut mapping (BT.2407 annex 2, focal generation)
 
 const uint BOUNDARY_HUE_SIZE = 512u;
 const uint BOUNDARY_LIGHTNESS_SIZE = 256u;
@@ -306,7 +306,7 @@ void hook() {
 //!HEIGHT 1
 //!COMPUTE 64 1
 //!BIND TORU_FOCAL_RAW
-//!DESC gamut mapping (toru, focal profile)
+//!DESC gamut mapping (BT.2407 annex 2, focal profile)
 
 const uint FOCAL_HUE_SIZE = 1024u;
 const float DIPS_150_START = 115.0 / 360.0;
@@ -419,7 +419,7 @@ void hook() {
 //!BIND HOOKED
 //!BIND TORU_FOCAL
 //!BIND TORU_BOUNDARY
-//!DESC gamut mapping (toru)
+//!DESC gamut mapping (BT.2407 annex 2)
 
 const uint BOUNDARY_HUE_SIZE = 512u;
 const uint BOUNDARY_LIGHTNESS_SIZE = 256u;
